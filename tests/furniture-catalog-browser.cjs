@@ -51,7 +51,16 @@ const web=http.createServer((req,res)=>{
   async function fits(selector){const boxes=await page.locator(selector).evaluateAll(elements=>elements.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,right:r.right,height:r.height};}));for(const box of boxes){assert.ok(box.x>=-1&&box.right<=page.viewportSize().width+1,'control fits viewport: '+JSON.stringify(box));assert.ok(box.height>=40,'control keeps a usable touch target');}assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'no document horizontal overflow');}
   for(const width of [1440,390,320]){
    await page.setViewportSize({width,height:width===320?740:width===390?844:1000});await drawer('table');assert.equal(await page.locator('.inventory-card[data-role="table-card"]').count(),2);assert.equal(await page.locator('.inventory-unmapped').count(),0);
-   await fits('.inventory-card');await page.screenshot({path:path.join(out,'tables-'+width+'.png')});
+   await fits('.inventory-card');
+   if(width<881){
+    const visible=await page.locator('.inventory-card').first().evaluate(el=>{const r=el.getBoundingClientRect(),body=el.closest('.drawer-body').getBoundingClientRect();return r.top>=body.top&&r.bottom<=body.bottom;});
+    assert.ok(visible,'a complete product card is immediately visible on '+width+'px phone');
+    const initial=await page.locator('#drawer').boundingBox();await page.locator('.drawer-size-toggle').click();
+    assert.equal(await page.locator('.drawer-size-toggle').getAttribute('aria-expanded'),'true');
+    assert.ok((await page.locator('#drawer').boundingBox()).height>=initial.height,'expanded sheet retains its size or grows');
+    await page.locator('.drawer-size-toggle').click();assert.equal(await page.locator('.drawer-size-toggle').getAttribute('aria-expanded'),'false');
+   }
+   await page.screenshot({path:path.join(out,'tables-'+width+'.png')});
    await drawer('chair');assert.equal(await page.locator('.inventory-card[data-id="'+models.crossback+'"]').count(),1);assert.match(await page.locator('.inventory-card[data-id="'+models.crossback+'"]').innerText(),/\$14\.00/);await fits('.inventory-card');await page.screenshot({path:path.join(out,'chairs-'+width+'.png')});
   }
   await page.setViewportSize({width:1440,height:1000});
@@ -65,6 +74,24 @@ const web=http.createServer((req,res)=>{
   let lines=await page.evaluate(()=>window.FriendlyBridge.computeLineItems());assert.equal(lines.find(p=>p.productId===ids.white)?.qty,5);assert.equal(lines.find(p=>p.productId===ids.crossback)?.qty,2);
   await page.locator('#inspectorPanel [data-role="insp-chair"]').selectOption(models.crossback);
   lines=await page.evaluate(()=>window.FriendlyBridge.computeLineItems());for(const [productId,qty,unitPrice,amount] of [[ids.plastic,1,13,13],[ids.sweetheart,1,35,35],[ids.crossback,7,14,98]]){const line=lines.find(p=>p.productId===productId);assert.ok(line,'review retains exact product identity');assert.deepEqual([line.qty,line.unitPrice,line.amount],[qty,unitPrice,amount]);}
+  // The real multi-select panel commits an atomic movement and leaves physical metadata intact.
+  const beforeArrange=await page.evaluate(()=>window.FriendlyBridge.getScene().objects);
+  await page.setViewportSize({width:390,height:844});await page.locator('[data-arrange-open]').click();
+  await page.locator('[data-arrange-all]').click();await page.locator('[data-arrange-action]').selectOption('move');
+  await page.locator('[data-arrange-dx]').fill('0.5');await page.locator('[data-arrange-dy]').fill('0.5');
+  await page.locator('[data-arrange-apply]').click();await page.locator('[data-arrange-feedback]').getByText('Arrangement applied.',{exact:false}).waitFor();
+  const afterArrange=await page.evaluate(()=>window.FriendlyBridge.getScene().objects);
+  for(let i=0;i<2;i++){assert.equal(afterArrange[i].x,beforeArrange[i].x+.5);assert.equal(afterArrange[i].y,beforeArrange[i].y+.5);assert.equal(afterArrange[i].widthFt,beforeArrange[i].widthFt);assert.equal(afterArrange[i].productId,beforeArrange[i].productId);}
+  await page.screenshot({path:path.join(out,'arrange-390.png')});
+  await page.locator('[aria-label="Close arrangement tools"]').click();await page.locator('#btnUndo').click();
+  assert.deepEqual(await page.evaluate(()=>window.FriendlyBridge.getScene().objects),beforeArrange,'one Undo restores every selected rental');
+  await page.locator('[data-arrange-open]').click();await page.locator('[data-arrange-none]').click();await page.locator('.arrange-items input[type="checkbox"]').first().check();
+  await page.locator('[data-arrange-action]').selectOption('duplicate');await page.locator('[data-arrange-copy-axis]').selectOption('y');await page.locator('[data-arrange-copies]').fill('1');await page.locator('[data-arrange-gap]').fill('1');
+  await page.locator('[data-arrange-apply]').click();await page.locator('[data-arrange-feedback]').getByText('Copies added.',{exact:false}).waitFor();
+  const duplicateEvidence=await page.evaluate(()=>({objects:window.FriendlyBridge.getScene().objects,lines:window.FriendlyBridge.computeLineItems()}));
+  assert.equal(duplicateEvidence.objects.length,3);assert.notEqual(duplicateEvidence.objects[2].id,plastic.id);assert.equal(duplicateEvidence.objects[2].tableId,models.plastic);assert.equal(duplicateEvidence.lines.find(line=>line.productId===ids.plastic).qty,2);assert.equal(duplicateEvidence.lines.find(line=>line.productId===ids.crossback).qty,12);
+  await page.locator('[aria-label="Close arrangement tools"]').click();await page.locator('#btnUndo').click();assert.deepEqual(await page.evaluate(()=>window.FriendlyBridge.getScene().objects),beforeArrange,'one Undo removes the copied row');
+  await page.setViewportSize({width:1440,height:1000});await select(plastic.id);
   await page.locator('#inspectorPanel [data-role="insp-rotate"]').click();assert.equal(await page.evaluate(id=>window.FriendlyBridge.getScene().objects.find(o=>o.id===id).rotationDeg,plastic.id),90);
   const rotationEvidence=[];
   for(const angle of [0,90,180,270]){

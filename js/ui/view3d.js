@@ -7,11 +7,15 @@ import { createInflatable, createInflatableActivity } from './inflatable3d.js';
 import { createAccessory3d, updateAnimatedAccessories } from './accessory3d.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { SUN_DIRECTION, lightingProfile, createLightingEnvironment } from './scene-lighting.js';
+import { normalizePresentationCamera } from '../core/presentation-views.js';
+import { enhancePlacedVisual } from './packaged-asset-loader.js';
+import { createRenderQuality } from '../core/render-quality.js';
+import { walkSceneContext } from '../core/walk-scene.js';
 import { makeTable as table, makeStandaloneChair, makeDanceFloor as dance, mergeParts } from './equipment3d.js';
 import { createEnvironment, createPhotoEnvironment, disposeGroup } from './scene-environment.js';
 import { createPhotoWorld360 } from './photo-world360.js';
-import { createVenueScanWorld, disposeVenueScanWorld, hasMetricSpaceScan } from './venue-scan3d.js';
+import { createVenueScanWorld, disposeVenueScanWorld, applyScanCaptureCamera, hasMetricSpaceScan } from './venue-scan3d.js';
 import { createFirstPersonWalk } from './first-person-walk.js';
 import { createWeather } from './scene-weather.js';
 import { createGuests } from './scene-guests.js';
@@ -31,7 +35,7 @@ function cyl(r,h,m,n=16){return new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,
 function box(w,h,d,m){return new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m)}
 function tube(a,b,r,m,n=10){const d=new THREE.Vector3().subVectors(b,a),q=cyl(r,d.length(),m,n);q.position.copy(a).add(b).multiplyScalar(.5);q.quaternion.setFromUnitVectors(UP,d.clone().normalize());return q}
 function canvasTexture(draw,size=256){const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');draw(x,size);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;return t}
-function sky(night,raining=false){const c=document.createElement('canvas');c.width=8;c.height=256;const x=c.getContext('2d'),gr=x.createLinearGradient(0,0,0,256);if(night){gr.addColorStop(0,'#07101e');gr.addColorStop(.55,'#16263d');gr.addColorStop(1,'#334257')}else if(raining){gr.addColorStop(0,'#586b7e');gr.addColorStop(.5,'#8e9ea9');gr.addColorStop(1,'#ced8d8')}else{gr.addColorStop(0,'#79b5df');gr.addColorStop(.5,'#c5e1ef');gr.addColorStop(1,'#edf2e8')}x.fillStyle=gr;x.fillRect(0,0,8,256);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t}
+function sky(night,raining=false){const c=document.createElement('canvas');c.width=8;c.height=256;const x=c.getContext('2d'),gr=x.createLinearGradient(0,0,0,256);if(night){gr.addColorStop(0,'#07101e');gr.addColorStop(.55,'#16263d');gr.addColorStop(1,'#334257')}else if(raining){gr.addColorStop(0,'#586b7e');gr.addColorStop(.5,'#8e9ea9');gr.addColorStop(1,'#ced8d8')}else{gr.addColorStop(0,'#92b4ce');gr.addColorStop(.5,'#c9dbe4');gr.addColorStop(1,'#e3e7df')}x.fillStyle=gr;x.fillRect(0,0,8,256);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t}
 function lighting(tent, id) {
   const option=lightingById(id),group=new THREE.Group();
   if(!option||option.visual==='none')return group;
@@ -73,14 +77,15 @@ function lighting(tent, id) {
     glow.position.set((col+.5)/cols*tent.widthFt-hw,h-1,(row+.5)/rows*tent.lengthFt-hl);group.add(glow);lights.push(glow);
   }
   let nightActive=false;group.userData.update=t=>{if(nightActive)bulb.emissiveIntensity=7+Math.sin(t*.7)*.08;};
-  group.userData.setNight=value=>{nightActive=value;lights.forEach(glow=>{glow.intensity=value?165:12;});bulb.emissiveIntensity=value?7:.7;};
+  group.userData.setNight=value=>{nightActive=value;lights.forEach(glow=>{glow.intensity=value?42:2;});bulb.emissiveIntensity=value?7:.7;};
   return group;
 }
 
 export function init(container,callbacks={}) {
   const mobile=window.matchMedia?.('(max-width: 880px)').matches;
   const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,mobile?1.5:2));
+  const renderQuality=createRenderQuality({maxRatio:Math.min(window.devicePixelRatio||1,mobile?1.5:2),minRatio:Math.min(window.devicePixelRatio||1,1)});
+  renderer.setPixelRatio(renderQuality.ratio);
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=false;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.domElement.style.cursor='grab';renderer.domElement.setAttribute('aria-label','Interactive 3D event layout');
@@ -95,6 +100,8 @@ export function init(container,callbacks={}) {
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
   let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let equipmentTime=0;
+  let viewportWidth=Math.max(1,container.clientWidth||800),viewportHeight=Math.max(1,container.clientHeight||600);
+  let lastAnimatedShadow=0,lastWeatherUpdate=0;
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',scanWorldKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
@@ -105,10 +112,11 @@ export function init(container,callbacks={}) {
   const photoForeground=createPhotoForegroundLayer();scene.add(photoForeground.mesh);
   let photoImage=null,photoUrl='',photoLoadSeq=0;
   let marketingFootprint=null,marketingDetails=null;
-  const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room,.04);
-  scene.environment=env.texture;room.dispose();pmrem.dispose();
+  const environments=new Map();
+  function syncLightingEnvironment(){const photo=hasVenuePhoto(),key=photo?'photo':night?'night':weatherMode==='rain'?'rain':'day';if(!environments.has(key))environments.set(key,createLightingEnvironment(renderer,{night:photo?false:night,rain:photo?false:weatherMode==='rain'}));scene.environment=environments.get(key).texture;}
+  syncLightingEnvironment();
   const hemi=new THREE.HemisphereLight(0xeaf6ff,0x667052,1.65);scene.add(hemi);
-  const sun=new THREE.DirectionalLight(0xfff3df,3.2);sun.position.set(-35,48,28);sun.castShadow=true;
+  const sun=new THREE.DirectionalLight(0xfff3df,3.2);sun.position.set(...SUN_DIRECTION);sun.castShadow=true;
   sun.shadow.mapSize.set(mobile?1024:2048,mobile?1024:2048);sun.shadow.bias=-.00015;sun.shadow.normalBias=.04;scene.add(sun);
   const fill=new THREE.DirectionalLight(0xcde3ff,.55);fill.position.set(30,18,-25);scene.add(fill);
   const selection=new THREE.Box3Helper(new THREE.Box3(),0x43775a);selection.visible=false;scene.add(selection);
@@ -116,9 +124,9 @@ export function init(container,callbacks={}) {
   function hasVenuePhoto(){return !state?.photoLayoutModel&&!!(state?.backgroundPhoto&&/^https?:\/\//i.test(state.backgroundPhoto.url||''));}
   const walk=createFirstPersonWalk({
     camera,controls,domElement:renderer.domElement,container,mobile,
-    getSite:()=>state?.photoSite||state?.tent||{widthFt:50,lengthFt:60},
-    getObstacles:()=>[...(state?.photoGeometry||[]),...(state?.scanGeometry||[])],
-    getItems:()=>state?(state.objects||[]).map(o=>({...o,...modelDimensionsFor(o),...photoPlacementFor(o)})):[],
+    getSite:()=>walkSceneContext(state||{}).site,
+    getObstacles:()=>walkSceneContext(state||{}).obstacles,
+    getItems:()=>walkSceneContext(state||{}).items,
     onChange:invalidate,
     onMode:value=>callbacks.onWalkMode?.(value)
   });
@@ -237,7 +245,7 @@ export function init(container,callbacks={}) {
     createVenueScanWorld({scan:state.venueScan,site:state.photoSite,calibration:state.photoCalibration,mobile,signal:controller.signal}).then(world=>{
       if(destroyed||controller.signal.aborted||seq!==scanWorldSeq)return;
       disposeVenueScanWorld(scanWorld);scanWorld.add(world);
-      scanWorld.userData={...world.userData,loading:false};
+      scanWorld.userData=world.userData;scanWorld.userData.loading=false;
       scanWorld.userData.setNight?.(night);
       callbacks.onScanReconstruction?.(scanWorld.userData);
       syncPhotoPresentation();
@@ -344,12 +352,13 @@ export function init(container,callbacks={}) {
     // The single photo remains available for Matched View and as a fallback while
     // reconstruction is still loading.
     photoStage.visible=immersive&&!metric;photoContinuation.visible=false;local360.visible=immersive&&!metric;scanWorld.visible=metric;
-    if(metric)scanWorld.userData.setPresentationMode?.(cameraMode);
+    if(metric)scanWorld.userData.setPresentationMode?.(scanWorld.userData.navigationPolicy?.allowOrbit===false?'captured':cameraMode);
     // Matched View is an exact camera registration. Walk Mode owns the camera directly.
-    controls.enabled=!matched&&!walking;
-    controls.enablePan=!matched&&!walking;
-    controls.enableZoom=!matched&&!walking;
-    controls.enableRotate=!matched&&!walking&&!state?.placement;
+    const captured=metric&&scanWorld.userData.navigationPolicy?.allowOrbit===false;
+    controls.enabled=!matched&&!walking&&!captured;
+    controls.enablePan=!matched&&!walking&&!captured;
+    controls.enableZoom=!matched&&!walking&&!captured;
+    controls.enableRotate=!matched&&!walking&&!captured&&!state?.placement;
     environment?.userData.setImmersive?.(immersive);
     syncPhotoFog();
     if(immersive){
@@ -372,7 +381,7 @@ export function init(container,callbacks={}) {
     if(!iw||!ih)return false;
     const rect=photoImageRect(w,h,iw,ih,p);
     photoCtx.fillStyle='#17211d';photoCtx.fillRect(0,0,w,h);photoCtx.drawImage(photoImage,rect.x,rect.y,rect.width,rect.height);
-    const baseShade=Math.max(0,Math.min(.45,Number(p.shade)||0)),shade=Math.min(.62,baseShade+(night?.16:0));
+    const baseShade=Math.max(0,Math.min(.45,Number(p.shade)||0)),shade=baseShade;
     if(shade>0){photoCtx.fillStyle='rgba(0,0,0,'+shade+')';photoCtx.fillRect(0,0,w,h);}
     photoTexture.needsUpdate=true;
     photoForeground.update({sourceCanvas:photoCanvas,rect,imageWidth:iw,composition:state.photoComposition,sourceKey:photoUrl+'|'+shade,visible:cameraMode==='outside'});
@@ -401,21 +410,10 @@ export function init(container,callbacks={}) {
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='photo360'){
       const site=state.photoSite||t,r=Math.max(Math.max(20,site.widthFt),Math.max(20,site.lengthFt));
       if(hasReadyMetricScan()){
-        const origin=scanWorld.userData.cameraOrigin||{x:0,y:5.6,z:-site.lengthFt/2-8};
-        // 3D Scan is an overview, not a second Walk mode. Starting directly at
-        // eye level on the reconstruction origin magnified every depth artifact
-        // and made a good capture feel like a rough point-cloud demo.
-        camera.fov=46;camera.updateProjectionMatrix();
-        camera.position.set(origin.x,Math.max(9.5,origin.y+4.2),origin.z-2.5);
-        controls.target.set(0,Math.min(4.2,origin.y*.58),Math.min(site.lengthFt*.20,12));
-        controls.minDistance=6;controls.maxDistance=Math.max(82,r*1.35);controls.maxPolarAngle=Math.PI*.48;
-        controls.update();
-        // Captured geometry exists only in the photographed forward sector.
-        // Keep the overview within that evidence instead of exposing an empty
-        // or invented rear hemisphere.
-        const theta=controls.getAzimuthalAngle?.()||0,half=(Number(scanWorld.userData.captureConeDeg)||118)*Math.PI/360;
-        controls.minAzimuthAngle=theta-half;controls.maxAzimuthAngle=theta+half;
-        syncPhotoPresentation();invalidate();return;
+        const policy=scanWorld.userData.navigationPolicy;
+        if(policy?.allowOrbit===false){showCapturedView(policy.initialFrameIndex);return;}
+        // No solved camera coverage is available: retain the original viewpoint.
+        matchPhoto();return;
       }
       const view=immersivePhotoCamera(site,state.photoCalibration);
       // Open 360 World in the photographed direction at human eye height.
@@ -521,7 +519,7 @@ export function init(container,callbacks={}) {
       disposeGroup(ghost);
       if(data.placement){
         const items=data.placement.objects;
-        if(['equipment','accessory','chair','inflatable','table'].includes(items[0]?.kind))ghost.add(placedModel({...items[0],x:0,y:0}));
+        if(['equipment','accessory','chair','inflatable','table'].includes(items[0]?.kind))ghost.add(placedModel({...items[0],x:0,y:0},{preview:true}));
         else{const q=dance(items.map(o=>({...o,x:o.x-data.placement.x,y:o.y-data.placement.y})),{widthFt:data.placement.widthFt,lengthFt:data.placement.depthFt});if(q)ghost.add(q);}
         ghost.traverse(o=>{if(o.material){o.material.transparent=true;o.material.opacity=.64;o.material.depthWrite=false;}o.castShadow=false;});
       }ghostKey=nextGhost;
@@ -597,7 +595,14 @@ export function init(container,callbacks={}) {
     if(marketingFootprint)marketingFootprint.visible=p>.04&&p<.89;
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
-  function resize(){const w=Math.max(1,container.clientWidth||800),h=Math.max(1,container.clientHeight||600),aspect=w/h,changed=Math.abs(camera.aspect-aspect)>.01;camera.aspect=aspect;camera.updateProjectionMatrix();renderer.setSize(w,h,false);if(hasVenuePhoto())paintVenuePhoto();if(state?.tent&&(changed||hasVenuePhoto()&&cameraMode==='outside'))frame(state.tent);invalidate();}
+  function resize(){
+    const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;
+    viewportWidth=w;viewportHeight=h;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);
+    if(hasVenuePhoto())paintVenuePhoto();
+    if(state?.tent&&hasVenuePhoto()&&cameraMode==='outside')frame(state.tent);
+    else if(cameraMode==='photo360'&&scanWorld.userData.navigationPolicy?.allowOrbit===false)showCapturedView(scanWorld.userData.activeReferenceIndex);
+    invalidate();
+  }
   let measureMode=false,measureA=null,measureB=null,measureResult=null;
   function makeMeasureLabel(text){
     const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;
@@ -806,48 +811,51 @@ export function init(container,callbacks={}) {
     const local=objectLocalDimensions(item);
     return {modelWidthFt:local.widthFt,modelDepthFt:local.depthFt};
   }
-  function placedModel(item){
+  function placedModel(item,{preview=false}={}){
     const unrotated={...item,...modelDimensionsFor(item),rotationDeg:0};
     const model=item.kind==='equipment'?createEquipment(unrotated,{mobile}):item.kind==='accessory'?createAccessory3d(item):item.kind==='inflatable'?createInflatable(unrotated):item.kind==='chair'?makeStandaloneChair(unrotated):table(unrotated);
     model.rotation.y=-(Number(item.rotationDeg)||0)*Math.PI/180;
     model.traverse(part=>{if(part.isMesh)part.userData.itemId=item.id;});
-    return model;
+    const enhanced=preview?null:enhancePlacedVisual(model,unrotated,{mobile,onReady:()=>{renderer.shadowMap.needsUpdate=true;invalidate();}});
+    return enhanced?.group||model;
   }
   function loop(now=0){
     if(destroyed)return;
     raf=requestAnimationFrame(loop);
     const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;
-    if(walk.isActive()){if(walk.update(dt))dirty=true;}else if(!(hasVenuePhoto()&&cameraMode==='outside'))controls.update();
+    if(walk.isActive()){if(walk.update(dt))dirty=true;}else if(controls.enabled&&!(hasVenuePhoto()&&cameraMode==='outside'))controls.update();
     if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){
       if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;
       if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){
         equipmentTime+=animationTime;
         // A single traversal advances current equipment, saved accessories and
         // inflatable visuals exactly once, using a clock that pauses with motion.
-        if(updateAnimatedAccessories(furniture,equipmentTime))renderer.shadowMap.needsUpdate=true;
-        lightGroup?.userData.update?.(equipmentTime);
-        weather?.userData.update(animationTime);
-        if(showGuests){guests?.userData.update(animationTime);inflatableActivity?.userData.update(animationTime);renderer.shadowMap.needsUpdate=true;}
-        animationTime=0;dirty=true;
+        const changedEquipment=updateAnimatedAccessories(furniture,equipmentTime);
+        if(changedEquipment){dirty=true;if(now-lastAnimatedShadow>100){renderer.shadowMap.needsUpdate=true;lastAnimatedShadow=now;}}
+        if(night&&lightGroup){lightGroup.userData.update?.(equipmentTime);dirty=true;}
+        if(weatherMode==='rain'||now-lastWeatherUpdate>100){weather?.userData.update((now-lastWeatherUpdate)/1000);lastWeatherUpdate=now;if(!hasVenuePhoto()||weatherMode==='rain')dirty=true;}
+        if(showGuests){guests?.userData.update(animationTime);inflatableActivity?.userData.update(equipmentTime);dirty=true;if(now-lastAnimatedShadow>100){renderer.shadowMap.needsUpdate=true;lastAnimatedShadow=now;}}
+        animationTime=0;
       }
-      if(dirty){updatePhotoStageViewFade();scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);dirty=false;}
+      if(dirty){updatePhotoStageViewFade();scanWorld.userData.updateView?.(camera);const start=performance.now();renderer.render(scene,camera);const ratio=renderQuality.sample(performance.now()-start);if(ratio!==null){renderer.setPixelRatio(ratio);renderer.setSize(Math.max(1,container.clientWidth),Math.max(1,container.clientHeight),false);renderer.domElement.dataset.renderQuality=ratio.toFixed(2);}dirty=ratio!==null;}
     }
   }
   loop();document.addEventListener('visibilitychange',invalidate);
   function applySceneLighting(){
-    const photo=hasVenuePhoto(),light=normalizePhotoComposition(state?.photoComposition).lighting;
-    hemi.groundColor.setHex(photo?0xb7b8b4:0x667052);sun.color.setHex(photo?0xfffbf5:0xfff3df);
+    const photo=hasVenuePhoto(),light=normalizePhotoComposition(state?.photoComposition).lighting,profile=lightingProfile({night:photo?false:night,rain:weatherMode==='rain'});
+    syncLightingEnvironment();
+    hemi.groundColor.set(photo?0xb7b8b4:profile.ground);sun.color.set(photo?0xfffbf5:profile.sun);
     if(photo){const position=photoLightingPosition(light);sun.position.set(position.x,position.y,position.z);}
-    else sun.position.set(-35,48,28);
-    hemi.intensity=photo?light.ambient*(night?.38:1):night?.7:weatherMode==='rain'?1.25:1.65;
-    sun.intensity=photo?light.intensity*(night?.104:weatherMode==='rain'?.27:1):night?.25:weatherMode==='rain'?.65:3.2;
-    fill.intensity=photo?light.ambient*.46*(night?.47:1):night?.4:.7;
+    else sun.position.set(...SUN_DIRECTION);
+    hemi.intensity=photo?light.ambient:profile.ambient;
+    sun.intensity=photo?light.intensity:profile.key;
+    fill.intensity=photo?light.ambient*.32:profile.fill;
     // PCF supports a controllable filter radius; PCFSoft ignores radius.
     const shadowType=photo?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
     if(renderer.shadowMap.type!==shadowType){renderer.shadowMap.type=shadowType;scene.traverse(part=>{for(const material of (Array.isArray(part.material)?part.material:[part.material]))if(material)material.needsUpdate=true;});}
     sun.shadow.radius=photo?light.shadowSoftness:1;
     const catcher=environment?.getObjectByName('Venue photo shadow catcher');if(catcher)catcher.material.opacity=light.shadowOpacity;
-    renderer.toneMappingExposure=night?1.18:1.05;renderer.shadowMap.needsUpdate=true;
+    renderer.toneMappingExposure=photo?1.05:profile.exposure;renderer.shadowMap.needsUpdate=true;
   }
   function previewPhotoComposition(value){
     if(!state||destroyed)return;
@@ -869,13 +877,14 @@ export function init(container,callbacks={}) {
   function orbit360(){if(!state?.tent||!hasVenuePhoto()||!hasReadyMetricScan())return false;if(measureMode)setMeasureMode(false);stopWalk();cameraMode='photo360';rebuildPhotoStage();syncPhotoPresentation();frame(state.photoSite||state.tent);return true;}
   function walkWorld(){
     if(measureMode)setMeasureMode(false);
-    if(!state?.tent||!hasVenuePhoto()||!hasReadyMetricScan())return false;
+    if(!state?.tent)return false;
+    if(hasVenuePhoto()&&(!hasReadyMetricScan()||scanWorld.userData.navigationPolicy?.allowFreeWalk!==true))return false;
     cameraMode='walk';rebuildPhotoStage();syncPhotoPresentation();
     const ok=walk.enter();syncPhotoPresentation();invalidate();return ok;
   }
   function exitWalk(){
     if(!walk.isActive())return false;
-    walk.exit();cameraMode='photo360';syncPhotoPresentation();invalidate();return true;
+    walk.exit();cameraMode=hasVenuePhoto()?'photo360':'outside';syncPhotoPresentation();invalidate();return true;
   }
   function toggleWalk(){if(walk.isActive()){exitWalk();return false;}return walkWorld();}
   function isWalking(){return walk.isActive();}
@@ -987,11 +996,47 @@ export function init(container,callbacks={}) {
     }
     cameraAnimationFrame=requestAnimationFrame(tick);
   }
+  function getPresentationCamera(){
+    if(hasVenuePhoto()||walk.isActive())return null;
+    return normalizePresentationCamera({mode:cameraMode,position:camera.position.toArray(),target:controls.target.toArray(),fov:camera.fov});
+  }
+  function setPresentationCamera(value){
+    const saved=normalizePresentationCamera(value);if(!saved||hasVenuePhoto()||!state?.tent)return false;
+    stopWalk();cancelAnimationFrame(cameraAnimationFrame);cameraMode=saved.mode;delete camera.userData.photoProjection;
+    const damping=controls.enableDamping;controls.enableDamping=false;controls.update();controls.enableDamping=damping;
+    controls.minDistance=.25;controls.maxDistance=Math.max(260,Math.hypot(...saved.position.map((v,i)=>v-saved.target[i]))*2);controls.minAzimuthAngle=-Infinity;controls.maxAzimuthAngle=Infinity;
+    camera.position.fromArray(saved.position);controls.target.fromArray(saved.target);camera.fov=saved.fov;camera.updateProjectionMatrix();controls.update();syncPhotoPresentation();invalidate();return true;
+  }
+  function focusSelection(){
+    if(hasVenuePhoto())return false;
+    const item=rendered.get(state?.selectedId);if(!item)return false;
+    const bounds=new THREE.Box3().setFromObject(item),center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
+    stopWalk();cameraMode='outside';camera.fov=40;camera.updateProjectionMatrix();
+    const fit=fitTentCamera({widthFt:Math.max(2,size.x),lengthFt:Math.max(2,size.z)},Math.max(2,size.y),camera.aspect,camera.fov,.4);
+    camera.position.set(...fit.position).add(center.clone().sub(new THREE.Vector3(...fit.target)));controls.target.copy(center);controls.minDistance=2;controls.update();syncPhotoPresentation();invalidate();return true;
+  }
+  function showCapturedView(referenceIndex){
+    const frame=scanWorld.userData.setReferenceView?.(referenceIndex);if(!frame)return false;
+    cameraMode='photo360';
+    applyScanCaptureCamera(camera,frame,scanWorld.userData.navigationPolicy,{width:viewportWidth,height:viewportHeight});
+    syncPhotoPresentation();invalidate();return true;
+  }
+  function stepCapturedView(delta=1){
+    const frames=scanWorld.userData.navigationPolicy?.frames||[];if(!frames.length)return false;
+    let i=frames.findIndex(f=>f.referenceIndex===scanWorld.userData.activeReferenceIndex);i=(Math.max(0,i)+delta+frames.length)%frames.length;
+    return showCapturedView(frames[i].referenceIndex);
+  }
   function captureImage(){
     if(destroyed||!state?.tent)return null;
-    try{scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);return renderer.domElement.toDataURL('image/jpeg',.9);}catch(_){return null;}
+    const previousRatio=renderer.getPixelRatio?.()||renderQuality.ratio;
+    const helpers=[selection,measurementGroup,ghost],visibility=helpers.map(group=>group.visible);helpers.forEach(group=>group.visible=false);
+    try{
+      renderer.setPixelRatio(Math.min(3,2048/Math.max(viewportWidth,viewportHeight)));renderer.setSize(viewportWidth,viewportHeight,false);
+      scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);return renderer.domElement.toDataURL('image/jpeg',.95);
+    }catch(_){return null;}
+    finally{helpers.forEach((group,i)=>group.visible=visibility[i]);renderer.setPixelRatio(previousRatio);renderer.setSize(viewportWidth,viewportHeight,false);invalidate();}
   }
-  const api={inside,reception,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env.dispose();container.replaceChildren();}};
+  const api={getPresentationCamera,setPresentationCamera,focusSelection,showCapturedView,stepCapturedView,inside,reception,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();environments.forEach(target=>target.dispose());container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }

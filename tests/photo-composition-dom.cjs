@@ -10,6 +10,7 @@ const {JSDOM}=require('jsdom'),repo=path.resolve(__dirname,'..');
  let data=initial,changes=[],history=[],calibrations=[];
  photo.mount(w.document.getElementById('editor'),data,{onCalibration:next=>{data={...data,photoCalibration:next};calibrations.push(next);},onCompositionChange:next=>{history.push(data.photoComposition);data={...data,photoComposition:next};changes.push(next);}});
  const $=selector=>w.document.querySelector(selector),stage=$('.photo-workspace-stage');stage.getBoundingClientRect=()=>({left:10,top:20,width:800,height:500});
+ assert.equal($('[data-photo-calibration-panel]').hidden,false,'an uncalibrated photo starts at measured ground setup');
  function pointer(target,type,x,y){const event=new w.MouseEvent(type,{bubbles:true,cancelable:true,clientX:10+x*800,clientY:20+y*500});Object.defineProperty(event,'pointerId',{value:1});target.dispatchEvent(event);}
  photo.setTool('mask');assert.equal($('[data-photo-mask-panel]').hidden,false);assert.equal($('[data-photo-calibration-panel]').hidden,true);
  for(const p of [[.2,.3],[.65,.3],[.65,.7],[.2,.7]])pointer($('.photo-workspace-overlay'),'pointerdown',...p);
@@ -28,6 +29,7 @@ const {JSDOM}=require('jsdom'),repo=path.resolve(__dirname,'..');
  photo.setTool('calibrate');assert.equal($('[data-photo-mask-panel]').hidden,true);assert.equal($('[data-mask-id]'),null,'masks are not treated as geometric scale guides');
  let previews=[],commits=[];photo.syncLightingControls($('#scene'),{...data,photoComposition:beforeRemove},{onPreview:v=>previews.push(v),onChange:v=>commits.push(v)});
  const input=$('[data-photo-light="azimuthDeg"]');input.value='90';input.dispatchEvent(new w.Event('input',{bubbles:true}));input.value='120';input.dispatchEvent(new w.Event('input',{bubbles:true}));assert.equal(previews.length,2);assert.equal(commits.length,0);input.dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(commits.length,1);assert.equal(commits[0].lighting.azimuthDeg,120);assert.equal(commits[0].foregroundMasks[0].id,firstId,'lighting preserves foreground masks');
+ $('[data-photo-light-preset="overcast"]').click();assert.equal(commits.length,2);assert.equal(commits[1].lighting.azimuthDeg,120,'a lighting starting point preserves the matched direction');assert.equal(commits[1].lighting.intensity,.65);assert.equal(commits[1].foregroundMasks[0].id,firstId);
  photo.syncLightingControls($('#scene'),{...data,photoLayoutModel:true},{});assert.equal($('.photo-lighting-controls').hidden,true,'image-only lighting is not offered for dimensioned model');
  // Keyboard refinements preserve focus through rebuilt SVG controls and move
  // in screen pixels, independent of the source image's aspect ratio.

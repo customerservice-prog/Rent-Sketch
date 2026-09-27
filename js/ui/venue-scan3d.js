@@ -1,8 +1,28 @@
 import { scanCaptureGuidance } from '../core/capture-quality.js';
 import { evaluateScanValidation, scanInputFingerprint, scanFrameFingerprint, SCAN_MEASUREMENT_POLICY } from '../core/scan-validation.js';
 import { cachedScanReconstruction } from './scan-job-client.js';
+import { scanNavigationPolicy } from '../core/scan-navigation.js';
 import * as THREE from 'three';
 import { stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
+
+// Match the solver's actual camera intrinsics. Its +X is image-right and +Z
+// forward, whereas Three's camera looks along local -Z. The mirrored projection
+// preserves existing layout coordinates; installPhotoProjectionParity handles
+// front-face culling just as it does for the fixed-photo projection.
+export function applyScanCaptureCamera(camera,frame,policy,{width=1,height=1}={}){
+  if(!camera||!frame?.position||!policy)return null;
+  const viewportWidth=Math.max(1,Number(width)||1),viewportHeight=Math.max(1,Number(height)||1);
+  const imageWidth=policy.imageWidth,imageHeight=policy.imageHeight,fit=Math.min(viewportWidth/imageWidth,viewportHeight/imageHeight);
+  const fitX=imageWidth*fit/viewportWidth,fitY=imageHeight*fit/viewportHeight;
+  const focal=imageWidth/(2*Math.tan(policy.horizontalFovDeg*Math.PI/360)),near=camera.near;
+  const {x,y,z}=frame.position;camera.position.set(x,y,z);camera.up.set(0,1,0);camera.lookAt(x,y,z+20);camera.rotateZ(-(Number(frame.rollDeg)||0)*Math.PI/180);
+  camera.aspect=viewportWidth/viewportHeight;camera.fov=policy.fovDeg;
+  camera.projectionMatrix.makePerspective(imageWidth/2/focal*near,-imageWidth/2/focal*near,policy.horizonY*imageHeight/focal*near,-(1-policy.horizonY)*imageHeight/focal*near,near,camera.far);
+  camera.projectionMatrix.elements[0]*=fitX;camera.projectionMatrix.elements[5]*=fitY;camera.projectionMatrix.elements[9]*=fitY;
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  camera.userData.photoProjection={accuracy:'unverified',heightEstimated:true,mirrored:true,scanCapture:true};camera.updateMatrixWorld(true);
+  return {x:(viewportWidth-imageWidth*fit)/2,y:(viewportHeight-imageHeight*fit)/2,width:imageWidth*fit,height:imageHeight*fit};
+}
 
 function loadImage(url){
   return new Promise((resolve,reject)=>{
@@ -172,7 +192,7 @@ export async function createVenueScanWorld({
       rg.setAttribute('uv',new THREE.BufferAttribute(rr.uvs,2));
       rg.setIndex(new THREE.BufferAttribute(rr.indices,1));rg.computeVertexNormals();rg.computeBoundingSphere();
       const rt=textureFromImage(image),edgeFade=scanFeatherMask(),balancedColor=exposureMatchColor(centerRgb,averageImageRgb(image));
-      const rm=new THREE.MeshBasicMaterial({map:rt,alphaMap:edgeFade,side:THREE.DoubleSide,transparent:true,alphaTest:.025,depthWrite:true,color:balancedColor,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,toneMapped:false});
+      const rm=new THREE.MeshBasicMaterial({map:rt,alphaMap:edgeFade,side:THREE.DoubleSide,transparent:true,alphaTest:.025,depthWrite:true,color:balancedColor,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,toneMapped:false,fog:false});
       const refMesh=new THREE.Mesh(rg,rm);refMesh.name='Metric venue reference mesh '+ref.referenceIndex;
       refMesh.castShadow=false;refMesh.receiveShadow=false;
       const rollRad=Number(ref.rollRad)||0;
@@ -240,6 +260,9 @@ export async function createVenueScanWorld({
     minHeightFt:1.4,
     minConfidence:fusion?.surfelCount ? .12 : .16
   });
+  const cameraOrigin={x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8};
+  const navigationPolicy=scanNavigationPolicy({origin:cameraOrigin,fovDeg:Number(scan.fovDeg)||62,imageWidth:width,imageHeight:height,horizonY:jobInput.horizonY,trackedPath,
+    references:referenceMeshes.map(ref=>({referenceIndex:ref.userData.referenceIndex,offsetFt:ref.userData.referenceOffsetFt,rollDeg:(Number(ref.userData.referenceRollRad)||0)*180/Math.PI}))});
   group.userData={
     mode:'estimated-stereo-preview',
     ready:true,
@@ -255,7 +278,7 @@ export async function createVenueScanWorld({
     requestedBaselineFt,
     baselineFactor,
     captureMethod:scan.captureMethod||'manual',
-    captureConeDeg:118,
+    navigationPolicy,
     knownBounds:worldBounds,
     obstacles,
     quality:captureQuality,
@@ -264,10 +287,11 @@ export async function createVenueScanWorld({
     reconstructionMode,
     photoFaithfulMaterial:true,
     referenceViewCount:referenceMeshes.length,
-    cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},
+    cameraOrigin,
+    photoLightingPolicy:'preserve-capture',
     presentationMode:'overview',
     setPresentationMode(mode){
-      group.userData.presentationMode=mode==='walk'?'walk':'overview';
+      group.userData.presentationMode=mode==='captured'?'captured':'overview';
       if(group.userData.presentationMode==='overview'){
         const anchor=referenceMeshes[0];
         for(const candidate of referenceMeshes)candidate.visible=candidate===anchor;
@@ -275,39 +299,28 @@ export async function createVenueScanWorld({
         group.userData.activeReferenceOffsetFt=anchor.userData.referenceOffsetFt;
       }
     },
+    setReferenceView(index){
+      const frame=navigationPolicy.frames.find(candidate=>candidate.referenceIndex===Number(index));
+      if(!frame)return null;
+      for(const candidate of referenceMeshes)candidate.visible=candidate.userData.referenceIndex===frame.referenceIndex;
+      group.userData.presentationMode='captured';
+      group.userData.activeReferenceIndex=frame.referenceIndex;
+      group.userData.activeReferenceOffsetFt=frame.offsetFt;
+      return frame;
+    },
     updateView(camera){
       if(referenceMeshes.length<2||!camera)return;
-      if(group.userData.presentationMode!=='walk'){
-        const anchor=referenceMeshes[0];
-        for(const candidate of referenceMeshes)candidate.visible=candidate===anchor;
-        group.userData.activeReferenceIndex=anchor.userData.referenceIndex;
-        group.userData.activeReferenceOffsetFt=anchor.userData.referenceOffsetFt;
-        return;
-      }
-      const cameraX=Number(camera.position?.x)||0,cameraZ=Number(camera.position?.z)||0;
-      let best=referenceMeshes[0],bestDistance=Infinity;
-      for(const candidate of referenceMeshes){
-        const dx=cameraX-(Number(candidate.userData.referenceOffsetFt)||0);
-        const dz=cameraZ-(-siteLength/2-8);
-        const distance=dx*dx+dz*dz*.10;
-        if(distance<bestDistance){bestDistance=distance;best=candidate;}
-      }
-      const current=referenceMeshes.find(candidate=>candidate.visible)||referenceMeshes[0];
-      const currentDx=cameraX-(Number(current.userData.referenceOffsetFt)||0);
-      const currentDz=cameraZ-(-siteLength/2-8);
-      const currentDistance=currentDx*currentDx+currentDz*currentDz*.10;
-      const chosen=best!==current&&bestDistance<currentDistance*.68?best:current;
-      for(const candidate of referenceMeshes)candidate.visible=candidate===chosen;
-      group.userData.activeReferenceIndex=chosen.userData.referenceIndex;
-      group.userData.activeReferenceOffsetFt=chosen.userData.referenceOffsetFt;
+      if(group.userData.presentationMode==='captured')return;
+      const anchor=referenceMeshes[0];
+      for(const candidate of referenceMeshes)candidate.visible=candidate===anchor;
+      group.userData.activeReferenceIndex=anchor.userData.referenceIndex;
+      group.userData.activeReferenceOffsetFt=anchor.userData.referenceOffsetFt;
     },
     setNight(value){
-      for(const refMesh of referenceMeshes)refMesh.material?.color?.setScalar(value?.48:1);
-      groundMaterial.color.copy(groundDay).multiplyScalar(value?.62:1);
-      groundMaterial.opacity=value?.10:.16;
-      for(const child of group.children){
-        if(child.isPoints&&child.material)child.material.opacity=value?.12:.20;
-      }
+      // A daytime photograph cannot be relit by darkening its pixels. Preserve
+      // each reference's exposure match and source lighting in every mode.
+      groundMaterial.color.copy(groundDay);groundMaterial.opacity=.16;
+      group.userData.requestedNight=!!value;
     }
   };
   return group;

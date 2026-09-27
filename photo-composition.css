@@ -28,6 +28,12 @@
 .photo-lighting-fields label { position:relative; padding-top:17px; }
 .photo-lighting-fields output { position:absolute; right:0; top:0; font-variant-numeric:tabular-nums; color:#6e7f71; }
 .photo-lighting-direction { margin-top:7px!important; }
+.photo-lighting-presets { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+.photo-lighting-presets .btn-chip { flex:1 1 80px; padding:7px 8px; }
+.photo-lighting-guide { padding:9px 10px; border-radius:8px; background:#eff4ef; }
+.photo-calibration-guide { font-size:12px; line-height:1.45; color:#4b6453; margin:0 0 10px; }
+.photo-calibration-feedback { min-height:1.4em; font-size:11px; color:#365340; margin:5px 0 0; }
+.photo-preview-action { margin-left:auto; }
 @media(max-width:900px) { .photo-mask-fields { grid-template-columns:1fr 1fr; } }
 @media(max-width:650px) {
   .photo-mask-panel p { font-size:10px; margin-bottom:5px; }

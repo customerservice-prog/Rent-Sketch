@@ -94,7 +94,7 @@ const DETAILED_EQUIPMENT = new Set(['foam-machine','fan','cooler','fill-chill','
 for (const visual of VISUAL_LIBRARY) if (visual.category === 'equipment') {
   const operation = EQUIPMENT_OPERATIONS[visual.id] || 'static';
   visual.animated = operation !== 'static';
-  visual.asset = { schemaVersion:1, assetId:'procedural/'+visual.id, version:'2026.09.26.1',
+  visual.asset = { schemaVersion:1, assetId:'procedural/'+visual.id, version:'2026.09.27.1',
     units:'feet', origin:'ground-center', forwardAxis:'+Z',
     fidelity:DETAILED_EQUIPMENT.has(visual.id)?'detailed-procedural':'illustrative-procedural',
     source:{kind:'procedural-profile',productId:null,externalId:null,referenceUrl:null},
@@ -102,6 +102,20 @@ for (const visual of VISUAL_LIBRARY) if (visual.category === 'equipment') {
     operatingClearance:{status:'unverified'},
     operation:{id:operation,supported:visual.animated,defaultState:visual.animated?'running':'off',previewOnly:true}
   };
+}
+
+// Read-only inspection metadata. This is a software release review, never a
+// declaration that a tenant's product dimensions or installation are approved.
+for (const visual of VISUAL_LIBRARY) {
+  if(!visual.asset)visual.asset={schemaVersion:1,assetId:'procedural/'+visual.id,version:'2026.09.27.1',format:'procedural',units:'feet',origin:'ground-center',forwardAxis:'+Z',source:{kind:'procedural-profile'},dimensions:{status:visual.dimensionsConfirmed===true?'catalog-supplied':'unverified',independentlyVerified:false},planning:{footprintSource:'placed-item',resizePlacement:false}};
+  visual.review = {
+    previewSupported:['equipment','chair','table','tent'].includes(visual.category),
+    format:visual.id==='stanchion'?'glb-with-procedural-fallback':'procedural',
+    dimensionStatus:visual.dimensionsConfirmed===true?'catalog-supplied':'unverified',
+    manufacturerVerified:false,
+    planningFootprint:'independent-of-visual',
+  };
+  if(visual.id==='stanchion')visual.asset.delivery={format:'glb',assetId:'stanchion-black',version:'2026.09.27.1',fidelity:'authored-illustration',fallback:'procedural/stanchion'};
 }
 
 // GET /api/visual-library

@@ -1,18 +1,31 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { byId, inflatableZones, resolvedInflatableDefinition } from '../data/inflatables.js';
+import { vinylMaterial, waterMaterial, physicalSurfaceUV } from './rental-materials.js';
 const UP=new THREE.Vector3(0,1,0);
 export function slidePoint(zone,lane,t){
  const u=Math.max(0,Math.min(1,t)),ease=(1-Math.cos(Math.PI*Math.min(1,u/.82)))/2;
  return {x:zone.x+(lane+.5)/zone.lanes*zone.width-zone.width/2,z:zone.z0+(zone.z1-zone.z0)*u,y:zone.y0+(zone.y1-zone.y0)*ease};
 }
-function vinyl(color,marble=false){
- let map=null;
- if(marble){const c=document.createElement('canvas');c.width=c.height=128;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,128,128);for(let i=0;i<20;i++){ctx.strokeStyle=i%2?'rgba(60,65,90,.20)':'rgba(130,145,155,.26)';ctx.lineWidth=1+i%3;ctx.beginPath();for(let y=0;y<=128;y+=4){const x=i*9+Math.sin(y*.06+i)*7+Math.sin(y*.025)*11;y?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}map=new THREE.CanvasTexture(c);map.wrapS=map.wrapT=THREE.RepeatWrapping;map.repeat.set(2,3);map.colorSpace=THREE.SRGBColorSpace;}
- return new THREE.MeshPhysicalMaterial({color,map,roughness:.43,metalness:0,clearcoat:.28,clearcoatRoughness:.48});
+function vinyl(color,marble=false){return vinylMaterial(color,{marble});}
+function panelFlex(material,clock,height){
+ // The base and lower walls stay fixed. Only upper vinyl receives a small,
+ // continuous flex; rigid whole-object scale/roll never changes the footprint.
+ material.userData.flex={clock,anchoredBelowFt:1.6,maxDisplacementFt:.035};
+ material.onBeforeCompile=shader=>{
+  shader.uniforms.rentalFlexClock=clock;
+  shader.vertexShader='uniform float rentalFlexClock;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+   vec3 rentalWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+   float rentalMask = smoothstep(1.6, ${Math.max(3,height*.7).toFixed(3)}, rentalWorld.y);
+   transformed.x += sin(rentalFlexClock * 1.3 + rentalWorld.y * .43 + rentalWorld.z * .2) * .024 * rentalMask;
+   transformed.z += sin(rentalFlexClock * 1.1 + rentalWorld.y * .39 + rentalWorld.x * .18) * .019 * rentalMask;
+  `);
+ };
+ material.customProgramCacheKey=()=>`rental-vinyl-flex-1-${height}`;
 }
-function rounded(w,h,d,material,r=.28){return new THREE.Mesh(new RoundedBoxGeometry(w,h,d,2,Math.min(r,w/3,h/3,d/3)),material);}
-function tube(points,r,mat){return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),Math.max(12,points.length*3),r,10,false),mat);}
+function rounded(w,h,d,material,r=.28){return new THREE.Mesh(physicalSurfaceUV(new RoundedBoxGeometry(w,h,d,2,Math.min(r,w/3,h/3,d/3)),material),material);}
+function tube(points,r,mat){return new THREE.Mesh(physicalSurfaceUV(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),Math.max(12,points.length*3),r,10,false),mat),mat);}
 function netMaterial(){
  const c=document.createElement('canvas');c.width=c.height=32;const ctx=c.getContext('2d');ctx.strokeStyle='#394348';ctx.lineWidth=2;ctx.strokeRect(0,0,32,32);const texture=new THREE.CanvasTexture(c);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(28,18);
  return new THREE.MeshStandardMaterial({map:texture,transparent:true,alphaTest:.2,side:THREE.DoubleSide,roughness:.8});
@@ -22,17 +35,18 @@ export function createInflatable(item,definition=byId(item.inflatableId)){
  const root=new THREE.Group();root.name=definition?.name||'Inflatable';root.userData.kind='inflatable';root.userData.itemId=item.id;
  if(!definition)return root;
  const p=definition,w=p.widthFt,d=p.depthFt,h=p.heightFt,group=new THREE.Group();group.rotation.y=-(item.rotationDeg||0)*Math.PI/180;root.add(group);
- const mats=p.colors.map(color=>vinyl(color,!!p.marble)),dark=vinyl('#29323d'),white=vinyl('#fff7de'),water=new THREE.MeshPhysicalMaterial({color:'#49bed4',roughness:.15,transparent:true,opacity:.83,clearcoat:1});
- const add=(mesh,x,y,z)=>{mesh.position.set(x,y,z);group.add(mesh);return mesh;};
+ const mats=p.colors.map(color=>vinyl(color,!!p.marble)),dark=vinyl('#29323d'),white=vinyl('#fff7de'),water=waterMaterial(),flow=waterMaterial(),clock={value:0},bouncePanels=[];
+ for(const material of [...mats,dark,white])panelFlex(material,clock,h);
+ const add=(mesh,x,y,z)=>{physicalSurfaceUV(mesh.geometry,mesh.material);mesh.position.set(x,y,z);group.add(mesh);return mesh;};
  const cushion=(x,y,z,cw,ch,cd,mat=mats[0],r=.3)=>add(rounded(cw,ch,cd,mat,r),x,y,z);
  const zones=inflatableZones(p);
- cushion(0,.5,0,w,1,d,mats[0],.45);
+ const base=cushion(0,.5,0,w,1,d,mats[0],.45);base.name='Anchored inflatable base';
  // Parallel welded ribs give the inflated vinyl its volume at close range.
  for(let x=-w/2+1;x<w/2;x+=1.1)cushion(x,1.02,0,.95,.35,d-1,mats[0],.16);
  if(zones.bounce){
   const b=zones.bounce,front=b.z+b.d/2,back=b.z-b.d/2,top=p.combo?h*.66:h*.72;
   cushion(b.x,b.floor-.32,b.z,b.w,.65,b.d,mats[1],.35);
-  for(let z=back+.65;z<front;z+=1)cushion(0,b.floor-.06,z,b.w-.4,.2,.82,mats[2],.09);
+  for(let z=back+.65;z<front;z+=1){const panel=cushion(0,b.floor-.06,z,b.w-.4,.2,.82,mats[2],.09);panel.name='Bounce floor panel';bouncePanels.push({panel,y:panel.position.y,z});}
   const posts=[[-b.w/2,back],[b.w/2,back],[-b.w/2,front],[b.w/2,front]];
   posts.forEach(([x,z],i)=>{
    const color=p.style==='crayon'?mats[i%4]:p.style==='white'?mats[0]:mats[i%2?2:0];
@@ -65,7 +79,14 @@ export function createInflatable(item,definition=byId(item.inflatableId)){
    add(new THREE.Mesh(geo,mats[0]),first.x-laneW/2,0,0);
    const vertices=[],indices=[];
    for(let i=0;i<=n;i++){const pt=slidePoint(s,lane,i/n);vertices.push(pt.x-laneW/2,pt.y+.035,pt.z,pt.x+laneW/2,pt.y+.035,pt.z);if(i<n){const a=i*2;indices.push(a,a+2,a+1,a+1,a+2,a+3);}}
-   const surface=new THREE.BufferGeometry();surface.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));surface.setIndex(indices);surface.computeVertexNormals();group.add(new THREE.Mesh(surface,mats[2]));
+   const surface=new THREE.BufferGeometry();surface.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));surface.setIndex(indices);surface.computeVertexNormals();physicalSurfaceUV(surface,mats[2]);group.add(new THREE.Mesh(surface,mats[2]));
+   // A thin transparent film follows the actual descent, with UV distance
+   // running downhill. It never becomes a detached animated blue slab.
+   const film=surface.clone(),filmP=film.attributes.position,filmUV=[];let distance=0,previous=null;
+   for(let i=0;i<=n;i++){const point=slidePoint(s,lane,i/n);if(previous)distance+=Math.hypot(point.y-previous.y,point.z-previous.z);previous=point;
+    for(let edge=0;edge<2;edge++){const index=i*2+edge;filmP.setY(index,filmP.getY(index)+.009);filmUV.push(edge*laneW/flow.userData.surface.tileFeet,distance/flow.userData.surface.tileFeet);}}
+   film.setAttribute('uv',new THREE.Float32BufferAttribute(filmUV,2));film.userData.physicalUV=true;
+   const filmMesh=new THREE.Mesh(film,flow);filmMesh.name='Downhill water film';filmMesh.castShadow=false;filmMesh.renderOrder=1;group.add(filmMesh);
    for(const side of [-1,1]){
     const pts=[];for(let i=0;i<=n;i++){const pt=slidePoint(s,lane,i/n);pts.push([pt.x+side*laneW/2,pt.y+.48,pt.z]);}group.add(tube(pts,.43,mats[1]));
    }
@@ -98,7 +119,18 @@ export function createInflatable(item,definition=byId(item.inflatableId)){
   cushion(w*.15,h-2,z,w*.42,2.4,.10,dark,.04);cushion(w*.13,h-2,z+.07,.65,.6,.05,white,.04);
   for(const side of [-1,1]){const q=new THREE.Mesh(new THREE.TorusGeometry(.85,.2,8,20),mats[1]);add(q,side*w*.29,3.3,-d*.40);}
  }
- root.traverse(o=>{if(o.isMesh){o.castShadow=o.receiveShadow=true;o.userData.itemId=item.id;}});root.userData.profile=p;root.userData.zones=zones;root.userData.update=time=>{const breathe=Math.sin(time*1.75+(item.id?.length||0))*.008,wobble=Math.sin(time*1.17+(item.x||0)*.1)*.004;group.scale.set(1+breathe*.35,1+breathe,1-breathe*.22);group.rotation.z=wobble;if(water)water.opacity=.80+Math.sin(time*2.2)*.035;};return root;
+ root.traverse(o=>{if(o.isMesh){o.castShadow=!o.material.transparent;o.receiveShadow=true;o.userData.itemId=item.id;}});
+ root.userData.profile=p;root.userData.zones=zones;root.userData.motion={anchored:true,flowDirection:'downhill',maxFloorDeflectionFt:.027};
+ root.userData.update=time=>{
+  const t=Math.max(0,Number(time)||0);clock.value=t;
+  for(const {panel,y,z} of bouncePanels){const impact=Math.pow(Math.max(0,Math.cos(t*3.5+z*.31)),10);panel.position.y=y-impact*.027;}
+  // Absolute clock keeps repeated frames and save/reopen deterministic. Negative
+  // texture offset moves each ripple toward increasing (downhill) surface V.
+  water.bumpMap.offset.set(.018*Math.sin(t*.27),-t*.09);water.roughnessMap.offset.copy(water.bumpMap.offset);
+  flow.bumpMap.offset.set(0,-t*.52);flow.roughnessMap.offset.copy(flow.bumpMap.offset);
+ };
+ if(!zones.slide){for(const material of [water,flow]){material.bumpMap.dispose();material.roughnessMap.dispose();material.dispose();}}
+ return root;
 }
 
 // Child-sized articulated figures. Activities are decorative and stay in the

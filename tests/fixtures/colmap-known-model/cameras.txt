@@ -1,0 +1,2 @@
+# Synthetic calibrated camera for artifact-contract tests, not a real venue.
+1 PINHOLE 100 100 50 50 50 50

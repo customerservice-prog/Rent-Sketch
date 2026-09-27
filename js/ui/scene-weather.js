@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SUN_DIRECTION } from './scene-lighting.js';
 
 // Small, local textures and one rain draw call. Weather never changes rental data.
 function canvasMap(draw, width=256, height=256) {
@@ -24,7 +25,7 @@ export function createWeather(tent,{mobile=false}={}) {
     ctx.fillStyle=g;ctx.fillRect(0,0,w,w);
   });
   const sun=new THREE.Sprite(new THREE.SpriteMaterial({map:glowMap,depthWrite:false,fog:false,toneMapped:false}));
-  sun.name='Visible sun';sun.position.set(-215,55,-280);sun.scale.set(65,65,1);group.add(sun);
+  sun.name='Visible sun';sun.position.set(...SUN_DIRECTION).normalize().multiplyScalar(350);sun.scale.set(65,65,1);group.add(sun);
   const disk=new THREE.Sprite(new THREE.SpriteMaterial({map:canvasMap((ctx,w)=>{ctx.fillStyle='#fff7d5';ctx.beginPath();ctx.arc(w/2,w/2,w*.44,0,Math.PI*2);ctx.fill();}),depthWrite:false,fog:false,toneMapped:false}));
   disk.position.copy(sun.position);disk.scale.set(9,9,1);group.add(disk);
   const moon=new THREE.Sprite(new THREE.SpriteMaterial({map:canvasMap((ctx,w)=>{

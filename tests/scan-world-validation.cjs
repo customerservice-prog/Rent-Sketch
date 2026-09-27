@@ -26,6 +26,18 @@ const {pathToFileURL}=require('node:url'),{JSDOM}=require('jsdom');
   assert.equal(first.userData.ready,true);assert.equal(first.userData.validation.status,'valid');assert.equal(first.userData.metric,false);
   assert.equal(first.userData.presentationMode,'overview','upstream presentation contract survives worker integration');
   assert.equal(first.userData.execution,'main-thread-limited');assert.ok(first.getObjectByName('Metric venue reconstruction mesh').geometry.index.count>90);
+  const policy=first.userData.navigationPolicy;assert.equal(policy.allowFreeWalk,false);assert.equal(policy.allowOrbit,false);assert.equal('captureConeDeg' in first.userData,false);
+  const photograph=first.getObjectByName('Metric venue reconstruction mesh'),originalColor=photograph.material.color.clone();first.userData.setNight(true);assert.equal(photograph.material.color.equals(originalColor),true,'night does not darken actual photo pixels');
+  assert.equal(first.userData.setReferenceView(999),null);const frame=first.userData.setReferenceView(policy.initialFrameIndex);assert.equal(frame.position.y,5.6,'capture keeps recorded estimated eye height');
+  const camera=new THREE.PerspectiveCamera(36,1,.1,1200),focal=policy.imageWidth/(2*Math.tan(policy.horizontalFovDeg*Math.PI/360));
+  for(const viewport of [{width:1440,height:900},{width:390,height:844},{width:320,height:640}])for(const rollDeg of [0,7,-7]){
+    const selected={...frame,rollDeg},rect=mod.namespace.applyScanCaptureCamera(camera,selected,policy,viewport),u=.73,v=.61,depth=25;
+    const point=new THREE.Vector3((u*policy.imageWidth-policy.imageWidth/2)/focal*depth,-(v-policy.horizonY)*policy.imageHeight/focal*depth,depth).applyAxisAngle(new THREE.Vector3(0,0,1),rollDeg*Math.PI/180).add(new THREE.Vector3(selected.position.x,selected.position.y,selected.position.z));
+    const screen=point.project(camera),actualX=(screen.x+1)/2*viewport.width,actualY=(1-screen.y)/2*viewport.height;
+    assert.ok(Math.abs(actualX-(rect.x+u*rect.width))<1e-7,'image-right stays right across capture roll and portrait viewport');
+    assert.ok(Math.abs(actualY-(rect.y+v*rect.height))<1e-7,'horizon and vertical lens perspective match the actual solver');
+    assert.equal(camera.userData.photoProjection.mirrored,true,'render parity contract is retained');
+  }
   const geometry=first.getObjectByName('Metric venue reconstruction mesh').geometry,original=geometry.attributes.position.array[0];geometry.attributes.position.array[0]=original+999;
   const second=await mod.namespace.createVenueScanWorld({...input,scan:{...scan,validationCheck:{...fixture.check,distanceFt:fixture.check.distanceFt*1.25}}});
   assert.equal(second.userData.validation.status,'failed');assert.equal(second.userData.inputFingerprint,first.userData.inputFingerprint,'held-out check does not enter reconstruction input');
@@ -33,5 +45,5 @@ const {pathToFileURL}=require('node:url'),{JSDOM}=require('jsdom');
   const third=await mod.namespace.createVenueScanWorld({...input,scan:{...scan,baselineFt:9}});
   assert.notEqual(third.userData.inputFingerprint,first.userData.inputFingerprint);assert.equal(third.userData.validation.status,'failed','changed scale forces a new prediction');
   mod.namespace.disposeVenueScanWorld(first);mod.namespace.disposeVenueScanWorld(second);mod.namespace.disposeVenueScanWorld(third);
-  console.log('PASS scan world validation: actual Three geometry, held-out verdict, cache isolation, scale invalidation, preserved overview presentation.');
+  console.log('PASS scan world validation: actual Three geometry, held-out verdict, cache isolation, captured positions, photo preservation and exact camera projection across roll and mobile letterboxing.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

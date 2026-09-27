@@ -32,6 +32,7 @@ jobs:
       - run: NODE_PATH=/tmp/guided-qa/node_modules node tests/photo-match-browser.cjs
       - run: NODE_PATH=/tmp/guided-qa/node_modules node tests/guided-preview-browser.cjs
       - run: NODE_PATH=/tmp/guided-qa/node_modules node tests/wedding-story-browser.cjs
+      - run: NODE_PATH=/tmp/guided-qa/node_modules RENTSKETCH_QA_OUT=qa-visual-production node tests/visual-production-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -42,3 +43,4 @@ jobs:
             qa-photo-match/
             qa-guided-preview/
             qa-wedding-story/
+            qa-visual-production/

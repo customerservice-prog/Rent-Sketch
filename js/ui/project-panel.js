@@ -49,6 +49,7 @@
       (data.newShare ? '<label class="rs-project-link">New private viewing link<input readonly data-share-url value="' + esc(data.newShare) + '"></label>' + button('copy-share', 'Copy link') : '') +
       '<ul class="rs-project-list">' + (shares.length ? shares.map(function (s) { var ended = !!s.revokedAt || Date.parse(s.expiresAt) <= Date.now(); return '<li><div><strong>' + (s.revokedAt ? 'Revoked' : ended ? 'Expired' : 'Active view-only link') + '</strong><small>Expires ' + esc(date(s.expiresAt)) + '</small></div>' + (ended ? '' : button('revoke', 'Revoke', 'data-id="' + esc(s.id) + '"')) + '</li>'; }).join('') : '<li class="rs-project-empty">No managed links created yet.</li>') + '</ul>' +
       (data.legacySharesEnabled ? '<p class="rs-project-fine">Older viewing links may still work.</p>' + button('revoke-legacy', 'Revoke older viewing links') : '') + '</section>' +
+      '<section><h3>Event presentation</h3><p>Create a presentation with your current view, a floor plan and rental quantities. Contact information and private crew notes are excluded.</p>' + button('presentation', 'Open presentation') + '</section>' +
       '<section><h3>Installation handoff</h3><p>Print the rental quantities, planned dimensions and unresolved site checks. This is a planning sheet; staff must confirm installation requirements.</p>' +
       (staff() ? '<form data-form="crew"><label>Private crew notes <span>Staff only; excluded from viewing links</span><textarea name="crewNotes" rows="4" maxlength="8000" placeholder="Crew instructions, loading order, or items to verify">' + esc(project.crewNotes) + '</textarea></label><button' + (busy ? ' disabled' : '') + '>Save crew notes</button></form>' : '') +
       '<label class="rs-project-check"><input type="checkbox" data-include-photo> Include the venue photo in the printed sheet</label>' + button('print', 'Print installation sheet') + '</section></div>') + '</div>';
@@ -96,6 +97,7 @@
       if (action === 'request-access' || action === 'recover-access') { close(); if (action === 'request-access') window.RentSketchEventPass?.requestAccess?.(); else window.RentSketchEventPass?.showRecovery?.(); return; }
       if (!allowed()) return;
       if (action === 'copy-share') { var input = panel.querySelector('[data-share-url]'); input?.select(); navigator.clipboard?.writeText(input.value).catch(function () {}); return; }
+      if (action === 'presentation') { if (!window.RentSketchPresentation) { message='Presentation tools are still loading. Try again in a moment.';render();return; } close();window.RentSketchPresentation.open().catch(function(error){window.alert(error.message||'The presentation could not be opened.');});return; }
       if (action === 'print') return printCrewSheet({ includePhoto: panel.querySelector('[data-include-photo]').checked });
       run(async function () {
         if (action === 'sync') await auto().flush();

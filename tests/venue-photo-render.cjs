@@ -21,7 +21,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
   constructor(camera){control=this;this.camera=camera;this.target=new THREE.Vector3();this.touches={};}
   addEventListener(){}update(){this.camera.lookAt(this.target);this.camera.updateMatrixWorld(true);}dispose(){}
  }
- class PMREM{fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
+ class PMREM{fromEquirectangular(){return{texture:new THREE.Texture(),dispose(){}};}fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
  class FakeImage{
   constructor(){this.naturalWidth=1600;this.naturalHeight=1000;this.width=1600;this.height=1000;this.decoding='async';}
   set src(v){this._src=v;this.onload?.();}

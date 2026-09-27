@@ -40,6 +40,7 @@ let pxPerFt = 20;
 // narrow" can still be framed as a wide, landscape-filling floor plan on a
 // landscape canvas (and vice versa). See computeStageSize().
 let rotate90 = false;
+let orientationSpace = null;
 let zoom=1,gridVisible=false,scrollEl=null,sheetEl=null,toolbarEl=null;
 let placementPointer=null;
 const placementPointers=new Set();
@@ -75,7 +76,13 @@ function computeStageSize(tent) {
   const availH = Math.max(80, rawH);
   const scaleNormal = Math.min(availW / tent.widthFt, availH / tent.lengthFt);
   const scaleRotated = Math.min(availW / tent.lengthFt, availH / tent.widthFt);
-  rotate90 = scaleRotated > scaleNormal;
+  // Choose the presentation once per space. A drawer, selected item, or phone
+  // resize must not silently turn the customer's plan while they are editing.
+  const spaceKey = [tent.id || tent.name || 'site', tent.widthFt, tent.lengthFt].join('|');
+  if (orientationSpace !== spaceKey) {
+    rotate90 = scaleRotated > scaleNormal;
+    orientationSpace = spaceKey;
+  }
   const scale = rotate90 ? scaleRotated : scaleNormal;
   // Large tents must fit short phone canvases too. A four-pixel minimum per
   // foot made a 100-foot tent taller than the entire visible preview.
@@ -296,6 +303,10 @@ function render(data) {
   stageEl.classList.toggle('is-outdoor',!!tent.isSite||!!tent.planningArea);
 
   stageEl.dataset.dimensions = area.widthFt+' × '+area.lengthFt+' ft';
+  stageEl.dataset.orientation = rotate90 ? 'turned' : 'default';
+  const front=document.createElement('span');front.className='plan-front-reference'+(rotate90?' is-turned':'');
+  front.textContent='Front · reference edge';front.title='Planning reference edge only. The actual venue entrance is not inferred.';
+  front.setAttribute('aria-label','Front reference edge. Not a confirmed venue entrance.');stageEl.appendChild(front);
   stageEl.dataset.surface=data.surfaceType==='concrete'||data.surfaceType==='asphalt'?'paved':'grass';
   const dimension=document.createElement('span');dimension.className='plan-dimension plan-dimension-width';dimension.textContent=(rotate90?area.lengthFt:area.widthFt)+' ft';stageEl.appendChild(dimension);
   const length=document.createElement('span');length.className='plan-dimension plan-dimension-length';length.textContent=(rotate90?area.widthFt:area.lengthFt)+' ft';stageEl.appendChild(length);
@@ -584,8 +595,8 @@ export function mount(containerEl, data, cbs) {
   stageEl.addEventListener('pointercancel',placementUp);
   zoom=1;
   toolbarEl=document.createElement('div');toolbarEl.className='plan-tools';toolbarEl.setAttribute('aria-label','Plan controls');
-  toolbarEl.innerHTML='<span class="plan-view-label">OVERHEAD PLAN</span><div><button type="button" data-plan="grid" aria-pressed="false">5 ft grid</button><button type="button" data-plan="out" aria-label="Zoom out">−</button><output aria-label="Plan zoom">100%</output><button type="button" data-plan="in" aria-label="Zoom in">+</button><button type="button" data-plan="fit">Fit</button></div>';
-  toolbarEl.addEventListener('click',e=>{const action=e.target.closest('[data-plan]')?.dataset.plan;if(!action)return;if(action==='grid'){gridVisible=!gridVisible;e.target.setAttribute('aria-pressed',String(gridVisible));}else zoom=action==='fit'?1:Math.max(1,Math.min(3,zoom+(action==='in'?.5:-.5)));render(currentData);if(action!=='grid'&&scrollEl){scrollEl.scrollLeft=Math.max(0,(scrollEl.scrollWidth-scrollEl.clientWidth)/2);scrollEl.scrollTop=Math.max(0,(scrollEl.scrollHeight-scrollEl.clientHeight)/2);}});
+  toolbarEl.innerHTML='<span class="plan-view-label">OVERHEAD PLAN</span><div><button type="button" data-plan="turn" aria-label="Turn plan view; rental positions stay unchanged">Turn plan</button><button type="button" data-plan="grid" aria-pressed="false">5 ft grid</button><button type="button" data-plan="out" aria-label="Zoom out">−</button><output aria-label="Plan zoom">100%</output><button type="button" data-plan="in" aria-label="Zoom in">+</button><button type="button" data-plan="fit">Fit</button></div>';
+  toolbarEl.addEventListener('click',e=>{const action=e.target.closest('[data-plan]')?.dataset.plan;if(!action)return;if(action==='grid'){gridVisible=!gridVisible;e.target.setAttribute('aria-pressed',String(gridVisible));}else if(action==='turn'){rotate90=!rotate90;}else zoom=action==='fit'?1:Math.max(1,Math.min(3,zoom+(action==='in'?.5:-.5)));render(currentData);if(action!=='grid'&&scrollEl){scrollEl.scrollLeft=Math.max(0,(scrollEl.scrollWidth-scrollEl.clientWidth)/2);scrollEl.scrollTop=Math.max(0,(scrollEl.scrollHeight-scrollEl.clientHeight)/2);}});
   scrollEl=document.createElement('div');scrollEl.className='plan-scroll';sheetEl=document.createElement('div');sheetEl.className='plan-sheet';sheetEl.appendChild(stageEl);scrollEl.appendChild(sheetEl);container.append(toolbarEl,scrollEl);
 
   currentData = data;

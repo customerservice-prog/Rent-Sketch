@@ -85,10 +85,9 @@ const root=path.resolve(__dirname,'..');
  const tent={type:'pole',widthFt:20,lengthFt:20};
  const weather=weatherModule.namespace.createWeather(tent,{mobile:true});
  assert.ok(weather.getObjectByName('Visible sun').visible);assert.ok(!weather.getObjectByName('Moon').visible);
- for(const aspect of [390/550,1440/740]){
-  const fit=framing.namespace.fitTentCamera(tent,16,aspect,36,5),camera=new THREE.PerspectiveCamera(36,aspect,.1,1200);camera.position.set(...fit.position);camera.lookAt(new THREE.Vector3(...fit.target));camera.updateMatrixWorld(true);
-  const point=weather.getObjectByName('Visible sun').position.clone().project(camera);assert.ok(Math.abs(point.x)<1&&Math.abs(point.y)<1,'sun is in the opening view: '+JSON.stringify(point));
- }
+ const lightProfile=await load(path.join(root,'js/ui/scene-lighting.js'));await lightProfile.evaluate();
+ const sunDirection=new THREE.Vector3(...lightProfile.namespace.SUN_DIRECTION).normalize();
+ assert.ok(weather.getObjectByName('Visible sun').position.clone().normalize().dot(sunDirection)>.9999,'visible sun must agree with shadow-casting light direction');
  weather.userData.setNight(true);assert.ok(weather.getObjectByName('Moon').visible);assert.ok(!weather.getObjectByName('Visible sun').visible);
  weather.userData.setWeather('rain');weather.userData.update(.033);
  const rain=weather.getObjectByName('Rain outside the canopy');assert.ok(rain.visible);assert.equal(rain.geometry.attributes.position.count,720);

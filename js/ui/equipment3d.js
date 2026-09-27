@@ -1,5 +1,6 @@
 import { equipmentAssetDescriptor } from '../data/asset-registry.js';
 import { makeTabletop } from './tabletop3d.js';
+import { woodMaterial, linenMaterial, physicalSurfaceUV } from './rental-materials.js';
 // Detailed rental geometry, in feet. The existing layout store remains authoritative.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -11,7 +12,7 @@ import { linenColorHex, byId as linenById } from '../data/linens.js';
 
 const UP=new THREE.Vector3(0,1,0);
 const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.65,...extra});
-function add(g,geometry,material,x=0,y=0,z=0,name='') {const mesh=new THREE.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.name=name;mesh.castShadow=mesh.receiveShadow=true;g.add(mesh);return mesh;}
+function add(g,geometry,material,x=0,y=0,z=0,name='') {physicalSurfaceUV(geometry,material);const mesh=new THREE.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.name=name;mesh.castShadow=mesh.receiveShadow=true;g.add(mesh);return mesh;}
 function box(g,w,h,d,m,x=0,y=0,z=0,r=.025) {return add(g,r?new RoundedBoxGeometry(w,h,d,1,r):new THREE.BoxGeometry(w,h,d),m,x,y,z);}
 function rod(g,a,b,r,m,segments=8){const from=new THREE.Vector3(...a),to=new THREE.Vector3(...b),delta=to.clone().sub(from);const mesh=add(g,new THREE.CylinderGeometry(r,r,delta.length(),segments),m);mesh.position.copy(from).add(to).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(UP,delta.normalize());return mesh;}
 function roundPath(w,h,r,Path=THREE.Shape){const p=new Path(),x=-w/2,y=-h/2;p.moveTo(x+r,y);p.lineTo(x+w-r,y);p.quadraticCurveTo(x+w,y,x+w,y+r);p.lineTo(x+w,y+h-r);p.quadraticCurveTo(x+w,y+h,x+w-r,y+h);p.lineTo(x+r,y+h);p.quadraticCurveTo(x,y+h,x,y+h-r);p.lineTo(x,y+r);p.quadraticCurveTo(x,y,x+r,y);return p;}
@@ -27,7 +28,7 @@ export function mergeParts(group) {
   group.updateMatrixWorld(true);const buckets=new Map(),originals=new Set();
   group.traverse(o=>{if(!o.isMesh)return;const geometry=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();geometry.applyMatrix4(o.matrixWorld);originals.add(o.geometry);const list=buckets.get(o.material)||[];list.push(geometry);buckets.set(o.material,list);});
   group.clear();
-  for(const [material,parts] of buckets){const geometry=mergeGeometries(parts,false);parts.forEach(p=>p.dispose());const mesh=add(group,geometry,material);mesh.name=material.name || 'Equipment detail';}
+  for(const [material,parts] of buckets){const geometry=mergeGeometries(parts,false);geometry.userData.physicalUV=true;parts.forEach(p=>p.dispose());const mesh=add(group,geometry,material);mesh.name=material.name || 'Equipment detail';}
   originals.forEach(g=>g.dispose());return group;
 }
 function curvedRod(g,points,r,material,segments=16){
@@ -46,7 +47,7 @@ function makeCrossbackChair(def){
   // The catalog photo has a solid timber seat, broad X slats and arched
   // stretchers. These are visual proportions, not additional measured specs.
   const g=new THREE.Group(),w=def.seatWidthFt||1.55,d=def.seatDepthFt||1.6,h=def.backHeightFt||2.9,seatY=1.48;
-  const wood=mat(def.frameColor||'#ac7846',{map:woodMap('#faf6ed'),roughness:.57,metalness:0}),hardware=mat('#3b3326',{metalness:.45,roughness:.5});
+  const wood=woodMaterial(def.frameColor||'#ac7846',{roughness:.66}),hardware=mat('#3b3326',{metalness:.45,roughness:.5});
   wood.name='Cross-back solid wood';hardware.name='Cross-back fasteners and glides';
   g.name=def.name||'Cross-Back Farmhouse Chair';g.userData.silhouette='crossback';
   horizontalSlab(g,roundPath(w,d,Math.min(w,d)*.20),.11,wood,seatY+.06);
@@ -155,9 +156,7 @@ export function makeChair(def={}) {
   for(const x of [-w*.42,w*.42])for(const z of [-d*.43,d*.43])add(g,new THREE.CylinderGeometry(.058,.067,.065,8),feet,x,.032,z);
   return mergeParts(g);
 }
-function texture(draw,w=256,h=256){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t;}
-function woodMap(base='#d6b58c'){return texture((c,w,h)=>{c.fillStyle=base;c.fillRect(0,0,w,h);for(let i=0;i<100;i++){const y=(i*37)%h;c.strokeStyle=i%3?'rgba(89,52,20,.13)':'rgba(255,243,204,.22)';c.lineWidth=.4+(i%3)*.3;c.beginPath();c.moveTo(0,y);c.bezierCurveTo(w*.3,y+Math.sin(i)*4,w*.7,y-Math.cos(i)*5,w,y+Math.sin(i)*2);c.stroke();}},512,128);}
-function fabricMaterial(color){const map=texture((c,w,h)=>{c.fillStyle='#fff';c.fillRect(0,0,w,h);for(let i=0;i<w;i+=4){c.fillStyle='rgba(65,65,65,.045)';c.fillRect(i,0,1,h);c.fillRect(0,i,w,1);}},128,128);map.repeat.set(6,6);const m=new THREE.MeshPhysicalMaterial({color:linenColorHex(color),map,roughness:.94,sheen:.65,sheenRoughness:.9,side:THREE.DoubleSide});m.name='Linen fabric';return m;}
+function fabricMaterial(color){return linenMaterial(linenColorHex(color));}
 export function tableProfile(o) {
   const definition=tableById(o.tableId),silhouette=definition?.silhouette || (o.shape==='round'?'dining-round':'banquet-rect');
   const height=silhouette==='cocktail-pedestal'?3.5:2.5,w=(silhouette==='sweetheart-half-round'?o.modelWidthFt:0)||o.widthFt||5,d=(silhouette==='sweetheart-half-round'?o.modelDepthFt:0)||o.depthFt||5;
@@ -194,29 +193,44 @@ function halfRoundRim(g,p,material){
   const rim=add(g,geometry,material);rim.name='Half-round silver edge';
 }
 function drape(g,o,p,m) {
-  const round=o.shape==='round',halfRound=p.silhouette==='sweetheart-half-round',segments=round?72:80,rows=12,vertices=[],uv=[],indices=[];
+  const round=o.shape==='round',halfRound=p.silhouette==='sweetheart-half-round';
+  const perimeter=round?Math.PI*(3*(p.w+p.d)/2-Math.sqrt((3*p.w+p.d)*(p.w+3*p.d))/2):halfRound?p.w+Math.PI*Math.sqrt((p.w*p.w/4+p.d*p.d)/2):2*(p.w+p.d);
+  // Sampling follows real edge distances; rectangle corners get exact vertices
+  // instead of cutting diagonally across the table's corners.
+  const fractions=Array.from({length:97},(_,i)=>i/96);
+  if(!round&&!halfRound)fractions.push(p.w/perimeter,(p.w+p.d)/perimeter,(2*p.w+p.d)/perimeter);
+  if(halfRound)fractions.push(.4);
+  const edge=[...new Set(fractions)].sort((a,b)=>a-b),segments=edge.length-1,rows=16,vertices=[],uv=[],indices=[];
+  const tile=m.userData.surface.tileFeet;
   for(let j=0;j<=rows;j++)for(let i=0;i<=segments;i++){
-    const t=j/rows,a=i/segments*Math.PI*2;
-    let x,z,nx,nz,drop;
+    const t=j/rows,f=edge[i],a=f*Math.PI*2;
+    let x,z,nx,nz,drop,corner=0;
     if(round){nx=Math.cos(a);nz=Math.sin(a);x=nx*p.w/2;z=nz*p.d/2;drop=p.drop;}
-    else if(halfRound){({x,z,nx,nz}=halfRoundPerimeter(p.w,p.d,i/segments));drop=p.drop;}
-    else {const perimeter=2*(p.w+p.d),s=i/segments*perimeter;
+    else if(halfRound){({x,z,nx,nz}=halfRoundPerimeter(p.w,p.d,f));drop=p.drop;}
+    else {const s=f*perimeter;
       if(s<p.w){x=-p.w/2+s;z=-p.d/2;nx=0;nz=-1;}
       else if(s<p.w+p.d){x=p.w/2;z=-p.d/2+s-p.w;nx=1;nz=0;}
       else if(s<2*p.w+p.d){x=p.w/2-(s-p.w-p.d);z=p.d/2;nx=0;nz=1;}
       else{x=-p.w/2;z=p.d/2-(s-2*p.w-p.d);nx=-1;nz=0;}
       const atLongEdge=p.w>=p.d?nz!==0:nx!==0;drop=atLongEdge?p.sideDrop:p.endDrop;
+      corner=Math.pow(Math.min(Math.abs(x)/(p.w/2),Math.abs(z)/(p.d/2)),6);
     }
-    const fold=Math.sin(a*(round?18:24)+.4)*.055*Math.pow(t,.65)+Math.sin(a*7)*.015*t;
-    const inset=.04+(p.stretch?-.48*Math.sin(Math.PI*Math.max(0,(t-.06)/.94)):.04*t);
-    x+=nx*(fold+inset);z+=nz*(fold+inset);
-    vertices.push(x,p.height+.015-drop*t,z);uv.push(i/segments,t);
+    // Unequal fold widths and broad gathers read as hanging fabric, with a
+    // smooth roll over the tabletop. No fixed 24-pleat cylindrical skirt.
+    const folds=Math.max(8,Math.round(perimeter/.95));
+    const phase=a*folds+.6*Math.sin(a*3)+.24*Math.sin(a*7);
+    const amplitude=(round?.060:.025+corner*.067)*Math.pow(t,1.15);
+    const fold=(Math.sin(phase)*.70+Math.sin(phase*2+a)*.20+Math.sin(a*5)*.17)*amplitude;
+    let inset=.032+.026*t+fold,hemLift=.006*(.5+.5*Math.sin(a*5))*t*t;
+    if(p.stretch){inset=.025-Math.min(p.w,p.d)*.20*Math.sin(Math.PI*t)+fold*.12;hemLift=.48*Math.pow(Math.abs(Math.sin(a*2)),1.6)*Math.pow(t,5);}
+    x+=nx*inset;z+=nz*inset;
+    vertices.push(x,Math.max(.02,p.height+.022-drop*t+hemLift),z);uv.push(f*perimeter/tile,drop*t/tile);
     if(i<segments&&j<rows){const k=j*(segments+1)+i;indices.push(k,k+1,k+segments+1,k+1,k+segments+2,k+segments+1);}
   }
-  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();add(g,geometry,m,0,0,0,'Draped linen');
-  if(round)add(g,new THREE.CylinderGeometry(p.w/2+.045,p.w/2+.045,.025,72),m,0,p.height+.02,0,'Linen tabletop');
-  else if(halfRound)horizontalSlab(g,halfRoundShape(p.w+.09,p.d+.09),.025,m,p.height+.033);
-  else box(g,p.w+.09,.025,p.d+.09,m,0,p.height+.02,0,.012);
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.userData.physicalUV=true;add(g,geometry,m,0,0,0,'Draped linen');
+  if(round)add(g,new THREE.CylinderGeometry(p.w/2+.033,p.w/2+.033,.025,72),m,0,p.height+.02,0,'Linen tabletop');
+  else if(halfRound)horizontalSlab(g,halfRoundShape(p.w+.066,p.d+.066),.025,m,p.height+.033);
+  else box(g,p.w+.066,.025,p.d+.066,m,0,p.height+.02,0,.012);
 }
 function tableLegs(g,p,metal,feet){
   const long=Math.max(p.w,p.d),short=Math.min(p.w,p.d),turned=p.d>p.w;
@@ -229,7 +243,7 @@ function tableLegs(g,p,metal,feet){
   }
 }
 export function makeTable(o) {
-  const p=tableProfile(o),g=new THREE.Group(),wood=mat('#fff',{map:woodMap(p.silhouette==='sweetheart-half-round'?'#b77d50':'#d6b58c'),roughness:.62}),metal=mat('#6d7475',{metalness:.65,roughness:.32}),feet=mat('#303536');
+  const p=tableProfile(o),g=new THREE.Group(),wood=woodMaterial(p.silhouette==='sweetheart-half-round'?'#ae7950':'#bd986d'),metal=mat('#6d7475',{metalness:.65,roughness:.32}),feet=mat('#303536');
   g.name=tableById(o.tableId)?.name || 'Table';g.userData={itemId:o.id,kind:'table',profile:p};
   const definition=tableById(o.tableId),visualModelId=definition?.visualModelId||definition?.id||o.tableId||'';
   const plastic=p.silhouette==='banquet-rect'&&visualModelId.split('--')[0]==='banquet-6ft',topMat=plastic?mat('#f3f1e7',{roughness:.62}):wood;
@@ -305,7 +319,7 @@ export function makeTable(o) {
 export function makeDanceFloor(items,tent) {
   if(!items.length)return null;
   const minX=Math.min(...items.map(o=>o.x)),minY=Math.min(...items.map(o=>o.y)),maxX=Math.max(...items.map(o=>o.x+o.widthFt)),maxY=Math.max(...items.map(o=>o.y+o.depthFt)),cx=(minX+maxX)/2,cz=(minY+maxY)/2;
-  const g=new THREE.Group(),grain=woodMap(),woods=['#ae7847','#bf8c56','#c59663'].map(color=>mat(color,{map:grain,roughness:.4,metalness:.02})),rim=mat('#8d9493',{metalness:.65,roughness:.32}),base=mat('#42392f');
+  const g=new THREE.Group(),woods=['#a97c50','#b88b5c','#bf9669'].map(color=>woodMaterial(color,{roughness:.5,metalness:0})),rim=mat('#8d9493',{metalness:.65,roughness:.32}),base=mat('#42392f');
   woods.forEach(m=>m.name='Parquet oak');rim.name='Floor edge trim';
   const occupied=(x,y)=>items.some(o=>x>o.x+.001&&x<o.x+o.widthFt-.001&&y>o.y+.001&&y<o.y+o.depthFt-.001);
   for(const o of items){const x=o.x+o.widthFt/2-cx,z=o.y+o.depthFt/2-cz;
@@ -315,7 +329,7 @@ export function makeDanceFloor(items,tent) {
       const sx=turned?tw/6:tw,sz=turned?td:td/6;
       const px=x-o.widthFt/2+qx*tw+(turned?(strip+.5)*sx:tw/2),pz=z-o.depthFt/2+qz*td+(turned?td/2:(strip+.5)*sz);
       const plank=box(g,sx-.009,.027,sz-.009,woods[(strip+qx+qz)%3],px,.114,pz,0);
-      if(turned){plank.geometry.dispose();plank.geometry=new THREE.BoxGeometry(sz-.009,.027,sx-.009);plank.rotation.y=Math.PI/2;}
+      if(turned){plank.geometry.dispose();plank.geometry=physicalSurfaceUV(new THREE.BoxGeometry(sz-.009,.027,sx-.009),plank.material);plank.rotation.y=Math.PI/2;}
     }
     for(const side of [-1,1]){
       if(!occupied(o.x+o.widthFt/2,o.y+(side<0?-.02:o.depthFt+.02)))box(g,o.widthFt+.08,.09,.12,rim,x,.06,z+side*o.depthFt/2,.02);

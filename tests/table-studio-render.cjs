@@ -11,7 +11,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  let renderer,control,clock=0,callbacks=[],frames=new Map(),resizeScene;
  class Renderer{constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:800,height:600});this.shadowMap={};}setPixelRatio(){}setSize(){}render(scene,camera){this.scene=scene;this.camera=camera;}dispose(){this.disposed=true;}}
  class Controls{constructor(camera){control=this;this.camera=camera;this.target=new THREE.Vector3();this.touches={};}addEventListener(){}update(){this.camera.lookAt(this.target);this.camera.updateMatrixWorld(true);}dispose(){}}
- class PMREM{fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
+ class PMREM{fromEquirectangular(){return{texture:new THREE.Texture(),dispose(){}};}fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
  const context=vm.createContext({console,document:w.document,window:w,ResizeObserver:class{constructor(fn){resizeScene=fn;}observe(){}disconnect(){}},requestAnimationFrame:fn=>{frames.set(++clock,fn);return clock;},cancelAnimationFrame:id=>frames.delete(id),performance:{now:()=>0}}),cache=new Map();
  const overrides={WebGLRenderer:Renderer,PMREMGenerator:PMREM};
  const three=new vm.SyntheticModule(Object.keys(THREE),function(){for(const key of Object.keys(THREE))this.setExport(key,overrides[key]||THREE[key]);},{context});

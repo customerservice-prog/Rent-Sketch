@@ -39,7 +39,7 @@ export function createFirstPersonWalk({
 
   function site(){
     const s=getSite?.()||{};
-    return {widthFt:Math.max(8,finite(s.widthFt,50)),lengthFt:Math.max(8,finite(s.lengthFt,60))};
+    return {widthFt:Math.max(8,finite(s.widthFt,50)),lengthFt:Math.max(8,finite(s.lengthFt,60)),worldOffsetX:finite(s.worldOffsetX),worldOffsetZ:finite(s.worldOffsetZ)};
   }
   function navigationContext(){
     return {
@@ -51,13 +51,13 @@ export function createFirstPersonWalk({
     };
   }
   function blocksWorldPosition(worldX,worldZ){
-    return walkPositionBlocked({worldX,worldZ,...navigationContext()}).blocked;
+    const s=site();return walkPositionBlocked({worldX:worldX-s.worldOffsetX,worldZ:worldZ-s.worldOffsetZ,...navigationContext()}).blocked;
   }
   function safeStart(){
-    return findSafeWalkStart({
-      preferredWorldPoint:{x:camera.position.x,z:camera.position.z},
+    const s=site(),point=findSafeWalkStart({
+      preferredWorldPoint:{x:camera.position.x-s.worldOffsetX,z:camera.position.z-s.worldOffsetZ},
       ...navigationContext()
-    });
+    });return {...point,x:point.x+s.worldOffsetX,z:point.z+s.worldOffsetZ};
   }
   function syncRotation(){
     camera.rotation.order='YXZ';camera.rotation.x=pitch;camera.rotation.y=yaw;camera.rotation.z=0;camera.updateMatrixWorld(true);
@@ -96,11 +96,13 @@ export function createFirstPersonWalk({
 
   function keyDown(e){
     if(!active||e.ctrlKey||e.metaKey||e.altKey)return;
+    if(e.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]')){keys.clear();return;}
     const k=String(e.key||'').toLowerCase();
     if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','shift'].includes(k)){keys.add(k);e.preventDefault();}
     if(k==='escape'){exit();e.preventDefault();}
   }
   function keyUp(e){keys.delete(String(e.key||'').toLowerCase());}
+  function clearInput(){keys.clear();pressedDirections.clear();}
   function pointerDown(e){
     if(!active||e.target.closest?.('.walk-pad'))return;
     if(e.button!==undefined&&e.button!==0)return;
@@ -121,6 +123,8 @@ export function createFirstPersonWalk({
 
   window.addEventListener('keydown',keyDown,{passive:false});
   window.addEventListener('keyup',keyUp);
+  window.addEventListener('blur',clearInput);
+  window.addEventListener('focusin',clearInput);
   domElement.addEventListener('pointerdown',pointerDown,true);
   domElement.addEventListener('pointermove',pointerMove,true);
   domElement.addEventListener('pointerup',pointerUp,true);
@@ -143,15 +147,16 @@ export function createFirstPersonWalk({
     if(move.lengthSq()>1)move.normalize();
     const speed=walkSpeedFtPerSecond({sprint:keys.has('shift'),mobile})*Math.max(0,Math.min(.05,finite(dt)));
     move.multiplyScalar(speed);
-    const from={x:camera.position.x,z:camera.position.z},to={x:from.x+move.x,z:from.z+move.z};
+    const s=site(),from={x:camera.position.x-s.worldOffsetX,z:camera.position.z-s.worldOffsetZ},to={x:from.x+move.x,z:from.z+move.z};
     const step=resolveWalkStep({from,to,...navigationContext()});
     if(!step.moved)return false;
-    camera.position.set(step.x,eyeHeight,step.z);syncRotation();onChange();return true;
+    camera.position.set(step.x+s.worldOffsetX,eyeHeight,step.z+s.worldOffsetZ);syncRotation();onChange();return true;
   }
 
   function destroy(){
     exit();
     window.removeEventListener('keydown',keyDown);window.removeEventListener('keyup',keyUp);
+    window.removeEventListener('blur',clearInput);window.removeEventListener('focusin',clearInput);
     domElement.removeEventListener('pointerdown',pointerDown,true);domElement.removeEventListener('pointermove',pointerMove,true);
     domElement.removeEventListener('pointerup',pointerUp,true);domElement.removeEventListener('pointercancel',pointerUp,true);
     removePad();
