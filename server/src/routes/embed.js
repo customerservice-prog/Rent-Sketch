@@ -44,9 +44,10 @@ router.post('/validate', async (req, res) => {
     return res.status(403).json({ ok: false, error: 'This website is not approved for this RentSketch tenant' });
   }
 
-  // Internal/comped and active/trialing tenants remain usable. Do not make the
-  // embed loader responsible for billing decisions beyond obvious expiry.
-  if (tenant.subscription_status === 'expired' || tenant.subscription_status === 'canceled') {
+  // A CRM-provisioned workspace stays locked until Party Rental CRM confirms
+  // its add-on billing item. Only active subscriptions and unexpired trials
+  // may render publicly.
+  if (!['active', 'trialing'].includes(tenant.subscription_status)) {
     return res.status(402).json({ ok: false, error: 'RentSketch subscription is not active' });
   }
   if (tenant.subscription_status === 'trialing' && tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date()) {

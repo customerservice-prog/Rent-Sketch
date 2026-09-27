@@ -73,6 +73,8 @@ router.get('/:slug/billing/status', requireBillingAccess, async (req, res) => {
     status: t.subscription_status || null,
     trialEndsAt: t.trial_ends_at || null,
     friendlyFree: t.slug === 'friendly',
+    managedExternally: t.billing_source === 'party_rental_crm',
+    billingSource: t.billing_source || 'rentsketch',
     subscription: sub.rows[0] || null,
   });
   } catch (_) { res.status(503).json({ error: 'Billing status is temporarily unavailable. Please try again.' }); }
@@ -87,6 +89,10 @@ router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req,
     const stripe = stripeClient();
     if (!stripe) return res.status(503).json({ error: 'Payments are not configured.' });
     const tenant = req.tenant;
+
+    if (tenant.billing_source === 'party_rental_crm') {
+      return res.status(409).json({ error: 'RentSketch billing is managed through your Party Rental CRM subscription.' });
+    }
 
     // Friendly is intentionally free during the current rollout and must never
     // accidentally enter the paid SaaS checkout flow.
@@ -217,6 +223,10 @@ router.post('/:slug/billing/portal-session', requireBillingAccess, async (req, r
   const stripe = stripeClient();
   if (!stripe) return res.status(503).json({ error: 'Payments are not configured.' });
   const tenant = req.tenant;
+
+  if (tenant.billing_source === 'party_rental_crm') {
+    return res.status(409).json({ error: 'RentSketch billing is managed through your Party Rental CRM subscription.' });
+  }
 
   if (tenant.slug === 'friendly') {
     return res.status(400).json({ error: 'Friendly Party Rental currently has free RentSketch access.' });
