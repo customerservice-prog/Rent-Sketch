@@ -1,0 +1,361 @@
+{
+  "fullRun": {
+    "scenarios": [
+      {
+        "event": "backyard",
+        "width": 1440,
+        "counts": {
+          "objects": 7,
+          "tables": 2,
+          "tentId": null,
+          "seats": 12
+        },
+        "webgl": {
+          "width": 1364,
+          "height": 844,
+          "lost": false
+        },
+        "plan": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 1222,
+          "bytes": 232249
+        },
+        "day": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 3881,
+          "bytes": 1055811
+        },
+        "night": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 8384,
+          "bytes": 761981
+        }
+      },
+      {
+        "event": "backyard",
+        "width": 390,
+        "counts": {
+          "objects": 7,
+          "tables": 2,
+          "tentId": null,
+          "seats": 12
+        },
+        "webgl": {
+          "width": 390,
+          "height": 602,
+          "lost": false
+        },
+        "plan": {
+          "width": 390,
+          "height": 844,
+          "variance": 1332,
+          "bytes": 73692
+        },
+        "day": {
+          "width": 390,
+          "height": 844,
+          "variance": 4026,
+          "bytes": 249182
+        },
+        "night": {
+          "width": 390,
+          "height": 844,
+          "variance": 10284,
+          "bytes": 186461
+        }
+      },
+      {
+        "event": "reception",
+        "width": 1440,
+        "counts": {
+          "objects": 6,
+          "tables": 5,
+          "tentId": "pole-20x40",
+          "seats": 34
+        },
+        "webgl": {
+          "width": 1364,
+          "height": 844,
+          "lost": false
+        },
+        "plan": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 486,
+          "bytes": 372599
+        },
+        "day": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 4277,
+          "bytes": 1051464
+        },
+        "night": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 7987,
+          "bytes": 818238
+        }
+      },
+      {
+        "event": "reception",
+        "width": 390,
+        "counts": {
+          "objects": 6,
+          "tables": 5,
+          "tentId": "pole-20x40",
+          "seats": 34
+        },
+        "webgl": {
+          "width": 390,
+          "height": 602,
+          "lost": false
+        },
+        "plan": {
+          "width": 390,
+          "height": 844,
+          "variance": 1073,
+          "bytes": 100643
+        },
+        "day": {
+          "width": 390,
+          "height": 844,
+          "variance": 4677,
+          "bytes": 241704
+        },
+        "night": {
+          "width": 390,
+          "height": 844,
+          "variance": 9513,
+          "bytes": 190964
+        }
+      },
+      {
+        "event": "corporate",
+        "width": 1440,
+        "counts": {
+          "objects": 11,
+          "tables": 6,
+          "tentId": "frame-30x40",
+          "seats": 32
+        },
+        "webgl": {
+          "width": 1364,
+          "height": 844,
+          "lost": false
+        },
+        "plan": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 450,
+          "bytes": 291915
+        },
+        "day": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 4453,
+          "bytes": 1031000
+        },
+        "night": {
+          "width": 1440,
+          "height": 1000,
+          "variance": 8416,
+          "bytes": 746065
+        }
+      },
+      {
+        "event": "corporate",
+        "width": 390,
+        "counts": {
+          "objects": 11,
+          "tables": 6,
+          "tentId": "frame-30x40",
+          "seats": 32
+        },
+        "webgl": {
+          "width": 390,
+          "height": 602,
+          "lost": false
+        },
+        "plan": {
+          "width": 390,
+          "height": 844,
+          "variance": 919,
+          "bytes": 71666
+        },
+        "day": {
+          "width": 390,
+          "height": 844,
+          "variance": 4641,
+          "bytes": 234264
+        },
+        "night": {
+          "width": 390,
+          "height": 844,
+          "variance": 10090,
+          "bytes": 175045
+        }
+      },
+      {
+        "packagedAsset": {
+          "ready": true,
+          "state": "ready",
+          "asset": {
+            "id": "stanchion-black",
+            "version": "2026.09.27.1",
+            "format": "glb",
+            "quality": "standard",
+            "fidelity": "authored-illustration",
+            "dimensionsVerified": false
+          },
+          "position": [
+            13,
+            0,
+            17
+          ],
+          "footprint": [
+            1.2,
+            1.2
+          ],
+          "cache": {
+            "entries": 1,
+            "bytes": 740640,
+            "pending": 0
+          }
+        },
+        "blockedAsset": {
+          "ready": false,
+          "state": "fallback",
+          "visibleFallback": true
+        }
+      },
+      {
+        "actualPngDownload": {
+          "width": 2048,
+          "height": 1267,
+          "variance": 1850,
+          "bytes": 3198505
+        },
+        "presentationPreservesScene": true,
+        "savedCameraView": true,
+        "openingViewSurvivesReload": true,
+        "printedPdf": true
+      },
+      {
+        "photoSetup": "synthetic interaction fixture only",
+        "measuredScale": true,
+        "overcastPresetPreservesDirection": true
+      },
+      {
+        "modelReview": "versioned GLB visible; front/side/back/overview controls; desktop/mobile"
+      }
+    ],
+    "pageErrors": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "savedRevision": 9,
+    "saveWrites": 8,
+    "api": "isolated",
+    "catalog": "QA subset using supported Friendly visual profiles; no live stock/pricing assertions",
+    "gpu": "software Chromium; performance targets require representative physical devices"
+  },
+  "focusedFollowup": {
+    "scope": "presentation-assets-photo",
+    "scenarios": [
+      {
+        "packagedAsset": {
+          "ready": true,
+          "state": "ready",
+          "asset": {
+            "id": "stanchion-black",
+            "version": "2026.09.27.1",
+            "format": "glb",
+            "quality": "standard",
+            "fidelity": "authored-illustration",
+            "dimensionsVerified": false
+          },
+          "position": [
+            13,
+            0,
+            17
+          ],
+          "footprint": [
+            1.2,
+            1.2
+          ],
+          "cache": {
+            "entries": 1,
+            "bytes": 740640,
+            "pending": 0
+          }
+        },
+        "blockedAsset": {
+          "ready": false,
+          "state": "fallback",
+          "visibleFallback": true
+        }
+      },
+      {
+        "walkSearchTyping": true
+      },
+      {
+        "actualPngDownload": {
+          "width": 2048,
+          "height": 1267,
+          "variance": 1850,
+          "bytes": 3198505
+        },
+        "presentationPreservesScene": true,
+        "savedCameraView": true,
+        "openingViewSurvivesReload": true,
+        "printedPdf": true
+      },
+      {
+        "photoSetup": "synthetic interaction fixture only",
+        "measuredScale": true,
+        "overcastPresetPreservesDirection": true
+      },
+      {
+        "photoArrangementDuplicate": true,
+        "canonicalScenePreserved": true,
+        "rotatedPhotoFootprintGap": true,
+        "atomicUndo": true
+      },
+      {
+        "modelReview": "versioned GLB visible; front/side/back/overview controls; desktop/mobile"
+      }
+    ],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "failedHttp": [
+      {
+        "status": 401,
+        "path": "/staff-api/api/auth/me"
+      },
+      {
+        "status": 401,
+        "path": "/staff-api/api/auth/me"
+      }
+    ],
+    "savedRevision": 6,
+    "saveWrites": 5,
+    "api": "isolated",
+    "catalog": "QA subset using supported Friendly visual profiles; no live stock/pricing assertions",
+    "gpu": "software Chromium; performance targets require representative physical devices"
+  },
+  "followupReason": "Added Walk editable-field keyboard guard and photo duplicate canonical-state/atomic-undo coverage; also supplied isolated analytics-config.js response to remove fixture-only404s.",
+  "pdfInspection": {
+    "pages": 3,
+    "nonemptyPages": 3,
+    "contents": [
+      "cover image",
+      "vector floor plan",
+      "rental quantities"
+    ]
+  }
+}

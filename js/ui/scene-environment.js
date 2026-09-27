@@ -19,13 +19,21 @@ function texture(draw, size = 256) {
 }
 function lawnTexture() {
   return texture((ctx, size, rand) => {
-    ctx.fillStyle = '#849766'; ctx.fillRect(0,0,size,size);
-    for (let i=0;i<13000;i++) {
-      const x=rand()*size,y=rand()*size;
-      ctx.strokeStyle = rand()>.45 ? 'rgba(34,60,22,.22)' : 'rgba(209,221,153,.32)';
-      ctx.lineWidth=.5+rand()*.7; ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+(rand()-.5)*3,y-1-rand()*4);ctx.stroke();
+    ctx.fillStyle = '#657653'; ctx.fillRect(0,0,size,size);
+    // Soft broad variation plus fine blades, with no repeating half-tile stripe.
+    for(let i=0;i<90;i++){
+      const x=rand()*size,y=rand()*size,r=24+rand()*95;
+      for(const dx of [-size,0,size])for(const dy of [-size,0,size]){
+        const g=ctx.createRadialGradient(x+dx,y+dy,0,x+dx,y+dy,r);
+        g.addColorStop(0,i%2?'rgba(38,58,27,.045)':'rgba(174,167,101,.045)');g.addColorStop(1,'rgba(92,113,67,0)');
+        ctx.fillStyle=g;ctx.fillRect(x+dx-r,y+dy-r,r*2,r*2);
+      }
     }
-    ctx.fillStyle='rgba(232,234,184,.065)';ctx.fillRect(0,0,size/2,size);
+    for(let i=0;i<18000;i++){
+      const x=rand()*size,y=rand()*size;
+      ctx.strokeStyle=rand()>.48?'rgba(25,48,17,.16)':'rgba(182,191,127,.18)';
+      ctx.lineWidth=.35+rand()*.5;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+(rand()-.5)*2,y-1-rand()*3);ctx.stroke();
+    }
   },512);
 }
 function pavingTexture() {
@@ -66,7 +74,7 @@ function instances(group, geometry, mat, transforms, {shadow = true} = {}) {
   mesh.castShadow=shadow;mesh.receiveShadow=true;mesh.instanceMatrix.needsUpdate=true;group.add(mesh);return mesh;
 }
 function fence(group, bounds) {
-  const wood=material('#b0a48a'),posts=[],boards=[],rails=[];
+  const wood=material('#9d9783'),posts=[],boards=[],rails=[];
   const {side,back,front}=bounds;
   // Rear and side boundaries; the foreground remains open for the camera.
   for(let x=-side;x<=side;x+=.7)boards.push({x,y:2.5,z:-back});
@@ -82,9 +90,18 @@ function fence(group, bounds) {
 }
 function trees(group,bounds) {
   group.add(createBoundaryTrees(bounds));
-  const hedges=[];
-  for(let x=-bounds.side+4;x<bounds.side-3;x+=2.8)hedges.push({x,y:1.25,z:-bounds.back+2.5,sx:1.8,sy:1.7,sz:1.5,color:x%3?'#567046':'#657d50'});
-  instances(group,new THREE.IcosahedronGeometry(1,1),material('#65784b'),hedges);
+  const rand=random(728),hedges=[],beds=[];
+  // Broken planting groups with asymmetric silhouettes, kept beyond the site.
+  for(let x=-bounds.side+4;x<bounds.side-3;x+=5.3+rand()*2.8){
+    const z=-bounds.back+2.1,base=.65+rand()*.45;
+    beds.push({x,y:-.015,z,sx:2.1+rand(),sy:.075,sz:1.35+rand()*.3});
+    for(let i=0;i<3;i++){
+      const angle=i*2.4+rand()*.6,r=.35+rand()*.7,h=base*(.65+rand()*.45);
+      hedges.push({x:x+Math.cos(angle)*r,y:h*.67,z:z+Math.sin(angle)*r,sx:.75+rand()*.55,sy:h,sz:.75+rand()*.4,ry:rand()*3,color:['#435b38','#536b42','#627548','#3f5737'][Math.floor(rand()*4)]});
+    }
+  }
+  instances(group,new THREE.IcosahedronGeometry(1,1),material('#fff',{roughness:1}),hedges);
+  instances(group,new THREE.SphereGeometry(1,8,4),material('#514b38'),beds,{shadow:false});
 }
 function house(group,bounds,setting,nightMaterials) {
   const home=new THREE.Group();home.name='Background home';
@@ -104,7 +121,7 @@ function house(group,bounds,setting,nightMaterials) {
     roof.rotation.x=sign*pitch;
   }
   const gableShape=new THREE.Shape();gableShape.moveTo(-10,0);gableShape.lineTo(10,0);gableShape.lineTo(0,5);gableShape.closePath();
-  for(const x of [-19,19]){const gable=new THREE.Mesh(new THREE.ShapeGeometry(gableShape),new THREE.MeshStandardMaterial({color:'#d5d0bc',side:THREE.DoubleSide}));gable.rotation.y=Math.PI/2;gable.position.set(x,11,0);home.add(gable);}
+  for(const x of [-19,19]){const gable=new THREE.Mesh(new THREE.ShapeGeometry(gableShape),new THREE.MeshStandardMaterial({color:'#c6c4b8',side:THREE.DoubleSide}));gable.rotation.y=Math.PI/2;gable.position.set(x,11,0);home.add(gable);}
   block(home,1.8,4.5,2.2,material('#8e6d57'),-11,15,0);
   for(const x of [-13,0,13]){
     block(home,4.4,5.1,.3,trim,x,6.4,10.12);
@@ -228,6 +245,7 @@ export function createEnvironment(tent, surface) {
 export function disposeGroup(group) {
   const geometries=new Set(),materials=new Set(),textures=new Set();
   group.traverse(object=>{
+    object.userData?.cancelAssetLoad?.();
     if(object.geometry)geometries.add(object.geometry);
     (Array.isArray(object.material)?object.material:[object.material]).filter(Boolean).forEach(mat=>{materials.add(mat);Object.values(mat).forEach(value=>{if(value?.isTexture)textures.add(value);});});
     if(object.isInstancedMesh)object.dispose();

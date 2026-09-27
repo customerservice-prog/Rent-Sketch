@@ -11,7 +11,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  let renderer,control,clock=0,callbacks=[],frames=new Map(),resizeScene;
  class Renderer{constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:800,height:600});this.shadowMap={};}setPixelRatio(){}setSize(){}render(scene,camera){this.scene=scene;this.camera=camera;}dispose(){this.disposed=true;}}
  class Controls{constructor(camera){control=this;this.camera=camera;this.target=new THREE.Vector3();this.touches={};}addEventListener(){}update(){this.camera.lookAt(this.target);this.camera.updateMatrixWorld(true);}dispose(){}}
- class PMREM{fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
+ class PMREM{fromEquirectangular(){return{texture:new THREE.Texture(),dispose(){}};}fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
  const context=vm.createContext({console,document:w.document,window:w,Image:w.Image,ResizeObserver:class{constructor(fn){resizeScene=fn;}observe(){}disconnect(){}},requestAnimationFrame:fn=>{frames.set(++clock,fn);return clock;},cancelAnimationFrame:id=>frames.delete(id),performance:{now:()=>0}}),cache=new Map();
  const overrides={WebGLRenderer:Renderer,PMREMGenerator:PMREM};
  const three=new vm.SyntheticModule(Object.keys(THREE),function(){for(const key of Object.keys(THREE))this.setExport(key,overrides[key]||THREE[key]);},{context});
@@ -25,7 +25,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  view.rebuild(data);view.setScene({night:true,weather:'rain',guests:true,motion:true});
  const scene=renderer.scene;assert.equal(scene.fog.density,.004,'rain softens the background');
  assert.ok(scene.getObjectByName('Preview guests').visible);assert.ok(scene.getObjectByName('Rain outside the canopy').visible);assert.ok(!scene.getObjectByName('Visible sun').visible);
- assert.ok(scene.children.flatMap(g=>g.children).filter(o=>o.isPointLight).every(o=>o.intensity>65));
+ assert.ok(scene.children.flatMap(g=>g.children).filter(o=>o.isPointLight).every(o=>Number.isFinite(o.intensity)&&o.intensity>2&&o.intensity<65));
  view.setScene({night:true,weather:'clear',guests:false,motion:false});assert.equal(scene.fog.density,.002);assert.ok(scene.getObjectByName('Moon').visible);assert.ok(!scene.getObjectByName('Preview guests').visible);
  view.inside();assert.equal(renderer.camera.position.y,5.6);assert.equal(renderer.camera.fov,50);view.fitCamera();assert.equal(renderer.camera.fov,36);
  view.rebuild({...data,objects:[{...table,x:2}]});assert.ok(scene.getObjectByName('Moon').visible);assert.ok(!scene.getObjectByName('Preview guests').visible,'editing preserves scene preferences');

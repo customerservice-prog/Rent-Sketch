@@ -1,7 +1,8 @@
+import { packagedAssetDelivery } from './packaged-assets.js';
 // Versioned visual evidence for procedural assets. A reviewed catalog photograph
 // informs appearance; it does not verify dimensions, engineering or availability.
 export const ASSET_SCHEMA_VERSION=1;
-export const EQUIPMENT_ASSET_VERSION='2026.09.26.1';
+export const EQUIPMENT_ASSET_VERSION='2026.09.27.1';
 export const HERO_EQUIPMENT_TYPES=['foam-machine','fan','cooler','fill-chill','stanchion','podium','cotton-candy','popcorn','snow-cone'];
 const references={
   'foam-machine':['fpr:foam-party-machine','foam-party-machine','Yellow tapered cannon, black tripod, handle and supply hose.'],
@@ -19,6 +20,16 @@ const operational={
   'cotton-candy':'spinner-rotation',popcorn:'kettle-agitation','snow-cone':'ice-shaving','chocolate-fountain':'liquid-flow',fountain:'liquid-flow',generator:'engine-idle',heater:'heat-glow',speaker:'speaker-playback',karaoke:'screen-playback',screen:'screen-playback',photobooth:'photo-preview',
 };
 export function canonicalEquipmentType(type){return {'photo-booth':'photobooth','tumbling-blocks':'tumbling-timbers','service-table':'fill-chill'}[type]||type||'generic';}
+export function proceduralVisualDescriptor(definition={},category='equipment'){
+  const id=definition.visualModelId||definition.visual_model_id||definition.id||definition.type||'generic';
+  return {
+    schemaVersion:ASSET_SCHEMA_VERSION,assetId:'procedural/'+id,version:EQUIPMENT_ASSET_VERSION,
+    category,format:'procedural',units:'feet',origin:'ground-center',forwardAxis:'+Z',
+    source:{kind:'procedural-profile',notes:definition.dimensionsNote||'Representative configurable visual; confirm product-specific details.'},
+    dimensions:{status:definition.dimensionsConfirmed===true?'catalog-supplied':'unverified',independentlyVerified:false},
+    planning:{footprintSource:'placed-item',resizePlacement:false},
+  };
+}
 export function equipmentOperationProfile(type){
   const key=canonicalEquipmentType(type),id=operational[key]||'static';
   return {id,supported:id!=='static',defaultState:id==='static'?'off':'running',description:id==='static'?'Static rental equipment':'Visual operating preview; power, water and installation are not verified'};
@@ -35,5 +46,6 @@ export function equipmentAssetDescriptor(product={},type){
     source:{kind:matching?'catalog-photo':'procedural-profile',productId:product.isPreview?null:product.productId||product.id||null,externalId,referenceUrl:matching?'https://www.friendlypartyrental.com/api/item-image/'+source[1]:null,referenceReviewedAt:matching?'2026-09-26':null,notes:matching?source[2]:'Representative model; not a verified reproduction of this SKU.'},
     dimensions:{status:supplied?'catalog-supplied':'unverified',source:supplied?'tenant-catalog':'illustrative-profile',independentlyVerified:false},
     operatingClearance:{status:'unverified'},operation:equipmentOperationProfile(type),
+    delivery:packagedAssetDelivery(type),
   };
 }

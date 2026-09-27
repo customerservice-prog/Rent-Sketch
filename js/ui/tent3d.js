@@ -2,21 +2,12 @@ import * as THREE from 'three';
 import { mergeParts } from './equipment3d.js';
 import { structuralProfile, computePerimeterStations } from '../data/tentStructure.js';
 import { canopyHeight, crownPoints } from '../core/tent-canopy.js';
+import { vinylMaterial, physicalSurfaceUV } from './rental-materials.js';
 
 const UP=new THREE.Vector3(0,1,0);
 const box=(w,h,d,m)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
 const cyl=(r,h,m,n=16)=>new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,n),m);
 function tube(a,b,r,m,n=10){const d=new THREE.Vector3().subVectors(b,a),q=cyl(r,d.length(),m,n);q.position.copy(a).add(b).multiplyScalar(.5);q.quaternion.setFromUnitVectors(UP,d.clone().normalize());return q;}
-function vinylWeave(){
-  const canvas=document.createElement('canvas');canvas.width=canvas.height=128;
-  const ctx=canvas.getContext('2d');ctx.fillStyle='#808080';ctx.fillRect(0,0,128,128);
-  // Coated fabric is nearly smooth. A fine bump, not dirty stripes painted into
-  // albedo, catches grazing light without turning the roof into patterned plastic.
-  for(let i=0;i<128;i+=4){ctx.fillStyle=i%8?'#838383':'#7d7d7d';ctx.fillRect(i,0,1,128);ctx.fillRect(0,i,128,1);}
-  const texture=new THREE.CanvasTexture(canvas);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
-  texture.repeat.set(12,12);return texture;
-}
-function fabricMaterial(bump){return new THREE.MeshPhysicalMaterial({color:0xfafaf8,roughness:.82,metalness:0,clearcoat:0,specularIntensity:.25,sheen:.08,sheenColor:0xffffff,sheenRoughness:1,envMapIntensity:.35,bumpMap:bump,bumpScale:.002,side:THREE.DoubleSide});}
 function gridAxis(half,spacing,extras=[]){
   const count=Math.ceil(half*2/spacing),values=Array.from({length:count+1},(_,i)=>-half+2*half*i/count);
   for(const value of extras)if(Number.isFinite(value)&&value>-half&&value<half)values.push(value);
@@ -24,9 +15,9 @@ function gridAxis(half,spacing,extras=[]){
 }
 export function makeRoof(t,p,material){
   const crowns=crownPoints(t),xs=gridAxis(t.widthFt/2,.5,[0,...crowns.map(c=>c.x)]),zs=gridAxis(t.lengthFt/2,.75,[0,...crowns.map(c=>c.z)]),vertices=[],uv=[],indices=[];
-  for(const z of zs)for(const x of xs){vertices.push(x,canopyHeight(t,p,x,z),z);uv.push((x+t.widthFt/2)/t.widthFt,(z+t.lengthFt/2)/t.lengthFt);}
+  for(const z of zs)for(const x of xs){vertices.push(x,canopyHeight(t,p,x,z),z);uv.push(x/material.userData.surface.tileFeet,z/material.userData.surface.tileFeet);}
   for(let row=0;row<zs.length-1;row++)for(let col=0;col<xs.length-1;col++){const a=row*xs.length+col,b=a+1,c=a+xs.length,d=c+1;indices.push(a,c,b,b,c,d);}
-  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.userData.physicalUV=true;
   const mesh=new THREE.Mesh(geometry,material);mesh.name='Continuous tensioned vinyl canopy';mesh.castShadow=mesh.receiveShadow=true;mesh.userData.buildStage='roof';return mesh;
 }
 function makeValance(t,p,material){
@@ -37,7 +28,7 @@ function makeValance(t,p,material){
     for(let i=0;i<=count;i++){
       const f=i/count,along=(f-.5)*length,fold=.009*Math.sin(along*Math.PI*2),drop=p.valanceDropFt+.075*Math.sin(f*length/2.5*Math.PI)**2;
       const x=horizontal?along:(side==='left'?-hw:hw)+fold,z=horizontal?(side==='front'?-hl:hl)+fold:along;
-      v.push(x,p.eaveHeightFt,z,x,p.eaveHeightFt-drop,z);uv.push(f,1,f,0);
+      v.push(x,p.eaveHeightFt,z,x,p.eaveHeightFt-drop,z);const tile=material.userData.surface.tileFeet;uv.push(along/tile,p.eaveHeightFt/tile,along/tile,(p.eaveHeightFt-drop)/tile);
       if(i<count){const a=i*2;indices.push(a,a+1,a+2,a+1,a+3,a+2);}
     }
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(v,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();
@@ -50,10 +41,10 @@ function makeSidewalls(t,p,sidewalls){
   const group=new THREE.Group();group.name='Sidewalls';
   if(!Array.isArray(sidewalls)||!sidewalls.length)return group;
   const hw=t.widthFt/2,hl=t.lengthFt/2,h=Math.max(6,p.eaveHeightFt-.35),th=.06;
-  const solid=new THREE.MeshPhysicalMaterial({color:0xfffdf8,roughness:.72,metalness:0,side:THREE.DoubleSide});
+  const solid=vinylMaterial('#fffdf8',{tent:true});
   const glass=new THREE.MeshPhysicalMaterial({color:0xbcd9e8,roughness:.2,metalness:0,transparent:true,opacity:.34,transmission:.2,side:THREE.DoubleSide});
   const frame=new THREE.MeshStandardMaterial({color:0xf7f4ec,roughness:.68});
-  function addBox(w,hh,d,mat,x,y,z){const q=box(w,hh,d,mat);q.position.set(x,y,z);q.castShadow=true;q.receiveShadow=true;q.userData.kind='sidewall';q.userData.buildStage='sidewalls';group.add(q);return q;}
+  function addBox(w,hh,d,mat,x,y,z){const q=box(w,hh,d,mat);physicalSurfaceUV(q.geometry,mat);q.position.set(x,y,z);q.castShadow=true;q.receiveShadow=true;q.userData.kind='sidewall';q.userData.buildStage='sidewalls';group.add(q);return q;}
   sidewalls.forEach(function(seg){
     if(!seg||!['solid','window'].includes(seg.type))return;
     const len=Math.max(.1,Number(seg.lengthFt)||10),start=Number(seg.startFt)||0,windowWall=seg.type==='window';
@@ -61,7 +52,16 @@ function makeSidewalls(t,p,sidewalls){
     if(seg.side==='front'||seg.side==='back'){x=-hw+start+len/2;z=seg.side==='front'?-hl:hl;w=len;d=th;}
     else if(seg.side==='left'||seg.side==='right'){x=seg.side==='left'?-hw:hw;z=-hl+start+len/2;w=th;d=len;}
     else return;
-    if(!windowWall){addBox(w,h,d,solid,x,h/2,z);return;}
+    if(!windowWall){
+      const geometry=new THREE.PlaneGeometry(len,h,Math.max(16,Math.ceil(len*4)),10),positions=geometry.attributes.position;
+      for(let i=0;i<positions.count;i++){
+        const along=positions.getX(i),drop=(h/2-positions.getY(i))/h,fold=(Math.sin(along*8.7)+.3*Math.sin(along*17.3+.7))*.018*Math.sin(Math.PI*drop*.85);
+        positions.setZ(i,fold);positions.setY(i,positions.getY(i)-.028*Math.sin(Math.PI*(along/len+.5))*Math.pow(1-drop,3));
+      }
+      geometry.computeVertexNormals();physicalSurfaceUV(geometry,solid);
+      const panel=new THREE.Mesh(geometry,solid);panel.position.set(x,h/2,z);if(seg.side==='left'||seg.side==='right')panel.rotation.y=Math.PI/2;
+      panel.name='Hanging vinyl sidewall';panel.castShadow=panel.receiveShadow=true;panel.userData.kind='sidewall';panel.userData.buildStage='sidewalls';group.add(panel);return;
+    }
     addBox(w,h,d,glass,x,h/2,z);
     const horizontal=seg.side==='front'||seg.side==='back';
     if(horizontal){
@@ -78,7 +78,7 @@ function makeSidewalls(t,p,sidewalls){
 export function makeTent(t,anchor,sidewalls=[]){
   const p=structuralProfile(t.type,t.widthFt,t.lengthFt),group=new THREE.Group(),hw=t.widthFt/2,hl=t.lengthFt/2;
   group.name='Event tent';group.userData.kind='tent';
-  const fabric=fabricMaterial(vinylWeave());group.add(makeRoof(t,p,fabric));
+  const fabric=vinylMaterial('#fafaf8',{tent:true});group.add(makeRoof(t,p,fabric));
   const frame=new THREE.Group();frame.name='Tent structural poles and rafters';frame.userData.buildStage='frame';group.add(frame);
   const steel=new THREE.MeshStandardMaterial({color:0xc7cbd0,roughness:.36,metalness:.72}),black=new THREE.MeshStandardMaterial({color:0x383a3b,roughness:.75}),strap=new THREE.MeshStandardMaterial({color:0xe8e7e0,roughness:.95});
   const stations=computePerimeterStations(t.widthFt,t.lengthFt).map(s=>[s.x-hw,s.y-hl]);

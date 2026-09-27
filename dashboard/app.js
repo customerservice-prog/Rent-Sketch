@@ -38,6 +38,24 @@ function esc(s) {
    return html;
  }
 
+ function openVisualReview(visual, product, trigger) {
+   if (!visual || !visual.review || !visual.review.previewSupported) return;
+   var dialog = document.createElement('dialog');
+   dialog.setAttribute('aria-labelledby', 'visualReviewTitle');
+   dialog.style.cssText = 'width:min(1000px,96vw);max-width:96vw;height:min(780px,94dvh);max-height:94dvh;padding:0;border:1px solid #d5dfd8;border-radius:14px;box-shadow:0 24px 80px #172c3540;overflow:hidden';
+   dialog.innerHTML = '<div style="height:100%;display:flex;flex-direction:column"><header style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #d5dfd8"><div style="flex:1;min-width:0"><strong id="visualReviewTitle">'+esc(product.name)+' · visual review</strong><div style="font-size:12px;color:#5b685f">Inspection preview. Measured product dimensions and installation clearance require separate confirmation.</div></div><button type="button" class="btn-primary" data-close-review style="min-height:40px">Close</button></header><div style="display:flex;gap:12px;align-items:center;padding:10px 16px;background:#f7f9f6;font-size:12px"><div data-product-photo></div><div><strong>Catalog dimensions:</strong> '+esc(Number(product.width_ft)>0?Number(product.width_ft)+' ft wide':'width not supplied')+' · '+esc(Number(product.length_ft)>0?Number(product.length_ft)+' ft deep':'depth not supplied')+'<br><strong>Model:</strong> '+esc(visual.name)+' · '+esc(visual.review.format)+'<br>Source photo and model proportions are separate from verified measurements.</div></div><iframe title="Interactive visual inspection" referrerpolicy="no-referrer" style="border:0;width:100%;flex:1;min-height:0"></iframe></div>';
+   dialog.querySelector('iframe').src = '/designer/model-review.html?visual=' + encodeURIComponent(visual.id);
+   var photo = product.photo_url || product.photoUrl;
+   if (typeof photo === 'string' && (/^https:\/\//i.test(photo) || /^\/(?!\/)/.test(photo))) {
+     var image=document.createElement('img');image.src=photo;image.alt=product.name+' catalog photo';image.referrerPolicy='no-referrer';image.style.cssText='width:70px;height:62px;object-fit:contain;background:white;border-radius:6px';image.addEventListener('error',function(){image.remove();},{once:true});dialog.querySelector('[data-product-photo]').appendChild(image);
+   }
+   appEl().appendChild(dialog);
+   function close(){dialog.remove();if(trigger.isConnected)trigger.focus();}
+   dialog.querySelector('[data-close-review]').addEventListener('click',close);dialog.addEventListener('close',close,{once:true});
+   if (dialog.showModal) dialog.showModal(); else { dialog.setAttribute('open','');dialog.style.position='fixed';dialog.style.inset='3vh 2vw';dialog.style.zIndex='1000'; }
+   dialog.querySelector('[data-close-review]').focus();
+ }
+
  async function api(path, opts) { return session.json(path, opts); }
 
  var state = { user: null, tenants: [], tenant: null };
@@ -410,7 +428,7 @@ function esc(s) {
                            '<td>' + esc(p.sku || '') + '</td>' +
                            '<td>' + money(p.price_per_day) + '</td>' +
                            '<td>' + (p.capacity || '\u2014') + '</td>' +
-                           '<td><select class="visual-select" data-id="' + esc(p.id) + '">' + visualOptionsHtml(visuals, p.visual_model_id) + '</select>' + (unknownVisual ? '<br><span class="muted">Unknown visual id: ' + esc(p.visual_model_id) + '</span>' : '') + '</td>' +
+                           '<td><select class="visual-select" data-id="' + esc(p.id) + '">' + visualOptionsHtml(visuals, p.visual_model_id) + '</select>' + (unknownVisual ? '<br><span class="muted">Unknown visual id: ' + esc(p.visual_model_id) + '</span>' : '') + '<br><button type="button" class="btn-link" data-review-visual="'+esc(p.id)+'" style="padding:7px 0;min-height:36px"'+(hasVisual&&visualsById[p.visual_model_id].review&&visualsById[p.visual_model_id].review.previewSupported?'':' hidden')+'>Inspect model</button></td>' +
                            '<td>' + (needsVisual ? (hiddenFromDesigner ? '<span class="status-badge status-hidden" title="This item needs a visual review. The designer may use a labeled approximate footprint or list it as needing configuration.">Visual review needed</span>' : '<span class="status-badge status-visible">Visible to customers</span>') : '<span class="muted">Illustrative profile / footprint</span>') + '</td>' +
                            '<td><button class="btn-link" data-action="toggle-active" data-id="' + esc(p.id) + '" data-active="' + (p.active ? '1' : '0') + '">' + (p.active ? 'Active' : 'Inactive') + '</button></td>' +
                            '<td><button class="btn-link btn-danger" data-action="delete" data-id="' + esc(p.id) + '">Remove</button></td>' +
@@ -463,13 +481,25 @@ function esc(s) {
      Array.prototype.forEach.call(document.querySelectorAll('.visual-select'), function (sel) {
        sel.addEventListener('change', async function () {
          sel.disabled = true;
+         var product=products.find(function(value){return String(value.id)===sel.getAttribute('data-id');});
          try {
            await api('/api/tenants/' + state.tenant + '/products/' + sel.getAttribute('data-id'), { method: 'PATCH', body: { visualModelId: sel.value || null } });
+           if(product)product.visual_model_id=sel.value||null;
+           var selected=visualsById[sel.value],reviewButton=sel.parentElement.querySelector('[data-review-visual]');
+           if(reviewButton)reviewButton.hidden=!(selected&&selected.review&&selected.review.previewSupported);
          } catch (err) {
+           if(product)sel.value=product.visual_model_id||'';
            window.alert('Could not update visual: ' + err.message);
          } finally {
            sel.disabled = false;
          }
+       });
+     });
+     Array.prototype.forEach.call(document.querySelectorAll('[data-review-visual]'), function (button) {
+       button.addEventListener('click',function(){
+         var product=products.find(function(value){return String(value.id)===button.getAttribute('data-review-visual');});
+         var selection=button.parentElement.querySelector('.visual-select');
+         if(product&&selection)openVisualReview(visualsById[selection.value],product,button);
        });
      });
      Array.prototype.forEach.call(document.querySelectorAll('[data-action="toggle-active"]'), function (btn) {

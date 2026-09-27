@@ -13,7 +13,7 @@ export function environmentBounds(tent) {
     side: Math.max(36, tent.widthFt / 2 + clearance + 19),
     back: Math.max(38, tent.lengthFt / 2 + clearance + 22),
     front: Math.max(46, tent.lengthFt / 2 + 28),
-    ground: Math.max(280, tent.widthFt + 200, tent.lengthFt + 200),
+    ground: Math.max(1200, tent.widthFt + 600, tent.lengthFt + 600),
     driveWidth: tent.widthFt + 12,
   };
 }

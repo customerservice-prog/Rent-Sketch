@@ -1,8 +1,8 @@
 // Fit the complete tent envelope to the real viewport, including portrait phones.
 // The returned camera looks toward target with the world's Y axis up.
 export function fitTentCamera(tent, peakHeight, aspect, fovDegrees, clearance = 0) {
-  // A lower eye line keeps the sky and horizon visible behind the tent.
-  const direction = [.85, .25, 1];
+  // An elevated three-quarter view reveals the event layout and ground contact.
+  const direction = aspect < .8 ? [.18, .66, 1] : [.85, .42, 1];
   const length = Math.hypot(...direction);
   const forward = direction.map(n => n / length);
   const rightLength = Math.hypot(forward[0], forward[2]);

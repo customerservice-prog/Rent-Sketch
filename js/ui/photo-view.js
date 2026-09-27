@@ -71,12 +71,12 @@ export function setTool(next){
 }
 function renderToolbar(){
   toolbar.innerHTML=
-    '<div class="photo-workspace-title"><strong>Adjust photo</strong><span data-photo-scale-status>Scale not set</span></div>'+
+    '<div class="photo-workspace-title"><strong>Match your venue</strong><span data-photo-scale-status>Scale not set</span></div>'+
     '<div class="photo-workspace-tools">'+
-      '<button type="button" class="btn-chip active" data-photo-tool="move">Move rentals</button>'+
-      '<button type="button" class="btn-chip" data-photo-tool="calibrate">Set scale</button>'+
-      '<button type="button" class="btn-chip" data-photo-done>Preview</button>'+
-      '<button type="button" class="btn-chip" data-photo-tool="mask">Foreground</button>'+
+      '<button type="button" class="btn-chip" data-photo-tool="calibrate">1 · Set scale</button>'+
+      '<button type="button" class="btn-chip active" data-photo-tool="move">2 · Place rentals</button>'+
+      '<button type="button" class="btn-chip" data-photo-tool="mask">3 · Foreground</button>'+
+      '<button type="button" class="btn-chip photo-preview-action" data-photo-done>Preview</button>'+
       '<details class="photo-mark-tools"><summary>Obstacles</summary><div class="photo-workspace-tools">'+
         '<select class="photo-geometry-type" data-photo-geometry-type aria-label="Obstacle type">'+
         '<option value="house">House / building</option><option value="fence">Fence / wall</option><option value="tree">Tree / tall object</option><option value="obstacle">Obstacle</option><option value="no-place">No-place zone</option></select>'+
@@ -84,9 +84,10 @@ function renderToolbar(){
         '<button type="button" class="btn-chip" data-photo-remove-geometry disabled>Remove selected</button></div></details>'+
     '</div>'+
     '<div class="photo-calibration-panel" data-photo-calibration-panel hidden>'+
+      '<p class="photo-calibration-guide">Use a real rectangle on level ground, such as a patio. Match its four labeled corners, then enter its measured width and depth. The rectangle is your reference; it does not need to cover the whole venue.</p>'+
       '<div class="photo-reference-fields"><label>Rectangle width (ft)<input data-photo-reference-width type="number" min="1" max="500" step="0.5" inputmode="decimal"></label>'+
       '<label>Rectangle depth (ft)<input data-photo-reference-depth type="number" min="1" max="500" step="0.5" inputmode="decimal"></label>'+
-      '<button type="button" class="btn-chip" data-photo-confirm-scale>Apply measurements</button></div>'+
+      '<button type="button" class="btn-chip" data-photo-confirm-scale>Apply measurements</button></div><p class="photo-calibration-feedback" data-photo-calibration-feedback aria-live="polite"></p>'+
       '<details class="photo-perspective-tools"><summary>Perspective &amp; horizon</summary><div class="photo-perspective-fields"><label>Eye-level horizon<input data-photo-horizon type="range" min="15" max="70" step="1"></label>'+
       '<label>Lens perspective<input data-photo-lens type="range" min="35" max="85" step="1"></label>'+
       '<button type="button" class="btn-chip" data-photo-auto>Reset estimates</button></div>'+
@@ -101,9 +102,11 @@ function renderToolbar(){
     if(e.target.closest('[data-photo-auto]')){referenceInputsDirty=false;applyCalibration(defaultPhotoCalibration(photoSpace(),currentData.backgroundPhoto));return;}
     if(e.target.closest('[data-photo-confirm-scale]')){
       const width=Number(root.querySelector('[data-photo-reference-width]').value),depth=Number(root.querySelector('[data-photo-reference-depth]').value);
-      if(!(width>=1&&width<=500&&depth>=1&&depth<=500))return;
+      const feedback=root.querySelector('[data-photo-calibration-feedback]');
+      if(!(width>=1&&width<=500&&depth>=1&&depth<=500)){feedback.textContent='Enter a width and depth between 1 and 500 ft.';return;}
       const cal=calibration(),r=cal.reference||{x:0,y:0,widthFt:photoSpace().widthFt,lengthFt:photoSpace().lengthFt};
-      referenceInputsDirty=false;applyCalibration({...cal,version:2,reference:{...r,widthFt:width,lengthFt:depth},scaleConfirmed:true,calibratedAt:new Date().toISOString()});return;
+      referenceInputsDirty=false;applyCalibration({...cal,version:2,reference:{...r,widthFt:width,lengthFt:depth},scaleConfirmed:true,calibratedAt:new Date().toISOString()});
+      feedback.textContent='Ground measurements applied. Choose Place rentals next; height and lens perspective remain estimated.';return;
     }
     if(e.target.closest('[data-photo-remove-geometry]')&&selectedGeomId){callbacks.onGeometryRemove?.(selectedGeomId);selectedGeomId=null;renderOverlay();}
   });
@@ -301,7 +304,7 @@ export function mount(containerEl,data,cbs){
   img=el('img','photo-workspace-image');img.alt='Uploaded venue photo';img.crossOrigin='anonymous';img.decoding='async';
   svg=svgEl('svg',{viewBox:'0 0 1000 1000',preserveAspectRatio:'none','class':'photo-workspace-overlay','aria-label':'Photo placement workspace'});
   stage.append(img,svg);viewport.appendChild(stage);root.append(toolbar,viewport);container.replaceChildren(root);
-  renderToolbar();renderImage();
+  renderToolbar();renderImage();setTool(currentData.photoCalibration.scaleConfirmed?'move':'calibrate');
   img.addEventListener('load',()=>{fitStage();if(!data.photoCalibration){const cal=defaultPhotoCalibration(photoSpace(),currentData.backgroundPhoto);currentData={...currentData,photoCalibration:cal};callbacks.onCalibration?.(cal);}renderOverlay();});
   stage.addEventListener('keydown',calibrationKeydown);stage.addEventListener('pointerdown',pointerDown);stage.addEventListener('pointermove',pointerMove);stage.addEventListener('pointerup',pointerUp);stage.addEventListener('pointercancel',pointerUp);
   window.addEventListener('pointerup',pointerUp,true);window.addEventListener('pointercancel',pointerUp,true);

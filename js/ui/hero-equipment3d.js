@@ -50,9 +50,15 @@ export function createHeroEquipment(product,item={}, {mobile=false}={}){
     for(const x of [-.225,.225]){const bolt=cyl(.022,.022,.016,dark,x,-.09,0,head,12);bolt.rotation.z=Math.PI/2;}
     curve([[.13,.75,-.28],[.23,.50,-.32],[.28,.1,-.32],[.34,.025,-.18]],.008,steel);curve([[-.1,.73,-.25],[-.13,.30,-.13],[-.17,.03,.18],[-.34,.015,.32]],.006,dark);
     mergeParts(head);
-    const count=mobile?84:150,geometry=new THREE.IcosahedronGeometry(.027,1),foam=new THREE.MeshStandardMaterial({color:0xf9ffff,roughness:.98,transparent:true,opacity:.86,depthWrite:false});
+    const count=mobile?96:180,geometry=new THREE.SphereGeometry(.027,8,6),foam=new THREE.MeshStandardMaterial({color:0xf7faf8,roughness:.96,transparent:true,opacity:.84,depthWrite:false});
     const particles=new THREE.InstancedMesh(geometry,foam,count);particles.name='Foam operating preview';particles.userData.effect=true;particles.frustumCulled=false;model.add(particles);effects.push(particles);const dummy=new THREE.Object3D();
-    animate=t=>{for(let i=0;i<count;i++){const u=(t*.56+i/count)%1,angle=i*2.39996,spread=.025+u*.36;dummy.position.set(Math.sin(angle)*spread,head.position.y+u*.15-u*u*.58, .355+u*1.8);dummy.rotation.set(angle,u*3,angle*.4);dummy.scale.setScalar(.35+Math.sin(Math.PI*u)*1.6);dummy.updateMatrix();particles.setMatrixAt(i,dummy.matrix);}particles.instanceMatrix.needsUpdate=true;};
+    for(let i=0;i<count;i++)particles.setColorAt(i,new THREE.Color().setRGB(.91+(i%7)*.012,.94+(i%5)*.010,.95+(i%3)*.015));
+    animate=t=>{for(let i=0;i<count;i++){
+      const u=(t*.34+i/count)%1,angle=i*2.39996,spread=.024+u*u*.38,drift=Math.sin(t*.8+i*.3)*u*.024;
+      const y=Math.max(.026,head.position.y+u*.17-u*u*1.45),settled=y<=.027,fade=Math.min(1,u*14)*Math.min(1,(1-u)*9),size=(.45+u*1.45)*fade;
+      dummy.position.set(Math.sin(angle)*spread+drift,y,.355+u*2.3);dummy.rotation.set(angle,u*2,angle*.4);
+      dummy.scale.set(size*(1+(i%3)*.15),size*(settled?.40:.72+(i%4)*.14),size*(settled?1.3:1));dummy.updateMatrix();particles.setMatrixAt(i,dummy.matrix);
+    }particles.instanceMatrix.needsUpdate=true;};
   }else if(type==='fan'){
     lathe([[0,0],[.38,0],[.41,.018],[.39,.045],[.30,.055],[.04,.068]],dark);cyl(.025,.034,.61,dark,0,.365,0);cyl(.038,.038,.04,steel,0,.41,0);
     const head=new THREE.Group();head.position.set(0,1-.47*width/height,0);head.scale.set(2,2*width/height,1);model.add(head);const cage=new THREE.Group();head.add(cage);
@@ -62,7 +68,8 @@ export function createHeroEquipment(product,item={}, {mobile=false}={}){
     const rotor=new THREE.Group();head.add(rotor);rotor.name='Fan rotor';
     for(let i=0;i<3;i++){const shape=new THREE.Shape();shape.moveTo(.02,.015);shape.bezierCurveTo(.05,.03,.08,.12,.055,.207);shape.bezierCurveTo(.012,.22,-.047,.194,-.049,.156);shape.bezierCurveTo(-.04,.087,-.025,.026,.02,.015);const blade=add(new THREE.ExtrudeGeometry(shape,{depth:.005,bevelEnabled:false,curveSegments:10}),steel,0,0,0,rotor);blade.rotation.z=i*Math.PI*2/3;}
     mergeParts(rotor);const hub=cyl(.043,.043,.020,chrome,0,0,.079,cage);hub.rotation.x=Math.PI/2;mergeParts(cage);
-    animate=t=>{rotor.rotation.z=t*14;};
+    const blur=new THREE.Mesh(new THREE.RingGeometry(.048,.211,48),new THREE.MeshBasicMaterial({color:'#a5b0b3',transparent:true,opacity:.10,side:THREE.DoubleSide,depthWrite:false}));blur.name='Running fan blade blur';blur.position.z=.006;blur.userData.effect=true;head.add(blur);effects.push(blur);
+    animate=t=>{rotor.rotation.z=t*30;};
   }else if(type==='cooler'){
     feet([-.33,.33],[-.31,.31]);box(.88,.72,.84,navy,0,.40,0,body,.06);box(.94,.092,.92,white,0,.806,0,body,.025);box(.88,.016,.86,dark,0,.751,0);
     for(const x of [-1,1]){box(.02,.17,.27,navy,x*.448,.59,0);curve([[x*.46,.65,-.12],[x*.487,.55,-.12],[x*.487,.55,.12],[x*.46,.65,.12]],.019,dark);}

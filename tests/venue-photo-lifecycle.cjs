@@ -23,6 +23,8 @@ async function harness(){
  const cache=new Map();function moduleFor(file){if(cache.has(file))return cache.get(file);const mod=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,mod);return mod;}
  const venue=moduleFor(path.join(root,'js/ui/venue-photo.js'));await venue.link((spec,ref)=>moduleFor(path.resolve(path.dirname(ref.identifier),spec)));await venue.evaluate();
  context.normalizeVenuePhoto=venue.namespace.normalizeVenuePhoto;context.normalizeVenueScan=venue.namespace.normalizeVenueScan;
+ const views=moduleFor(path.join(root,'js/core/presentation-views.js'));await views.link(()=>{throw new Error('Unexpected presentation-view dependency');});await views.evaluate();
+ context.normalizePresentationViews=views.namespace.normalizePresentationViews;
  vm.runInContext(coordinator+'\n'+restore,context);
  return {context,state,identity,pending,removed,notices,window,autosave,setFlush:fn=>{flush=fn;},setExtract:fn=>{extract=fn;},
    upload:(role,file)=>context.chooseVenueScanPhoto(role,file||role),single:file=>context.chooseVenuePhoto({name:file}),video:()=>context.chooseVenueScanVideo('video'),
