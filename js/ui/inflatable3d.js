@@ -56,6 +56,35 @@ export function createInflatable(item,definition=byId(item.inflatableId)){
   cushion(entryX,.75,entryZ,p.combo?2.8:3.8,.6,3,mats[0]);
   if(!p.combo){const pts=[];for(let i=0;i<=16;i++){const a=i/16*Math.PI;pts.push([Math.cos(a)*1.8,1.2+Math.sin(a)*2.8,entryZ]);}group.add(tube(pts,.34,mats[2]));}
  }
+ // Product-specific silhouette/details for Friendly inflatables. These do not
+ // change the planning footprint; they make each live rental visually distinct
+ // instead of recoloring one generic castle/slide shell.
+ if(p.variant==='rainbow-castle'){
+   for(let i=0;i<4;i++){const a=Math.PI*(i/3),pts=[];for(let j=0;j<=18;j++){const t=j/18*Math.PI;pts.push([Math.cos(t)*(2.1+i*.20),1.35+Math.sin(t)*(2.6+i*.20),d/2-.55+i*.03]);}group.add(tube(pts,.16,mats[i%mats.length]));}
+ }
+ if(p.variant==='pink-princess'){
+   for(const x of [-w*.34,w*.34]){add(new THREE.Mesh(new THREE.CylinderGeometry(.78,.9,2.4,14),mats[1]),x,h*.63,d/2-1);add(new THREE.Mesh(new THREE.ConeGeometry(1.05,1.55,14),mats[0]),x,h*.78,d/2-1);}
+   cushion(0,h*.56,d/2-.55,w*.38,1.1,.35,mats[1],.28);
+ }
+ if(p.variant==='patriotic'){
+   const z=d/2-.52;for(let i=0;i<6;i++)cushion(-w*.32+i*w*.13,2.1,z,w*.105,2.8,.22,i%2?mats[1]:mats[2],.06);
+   cushion(0,4.05,z,w*.72,.45,.22,mats[0],.06);
+ }
+ if(p.variant==='wedding-white'){
+   const pts=[];for(let i=0;i<=20;i++){const a=i/20*Math.PI;pts.push([Math.cos(a)*2.3,1.2+Math.sin(a)*3.4,d/2-.58]);}group.add(tube(pts,.28,mats[0]));
+   for(const x of [-2.55,2.55])cushion(x,2.3,d/2-.58,.42,4.2,.42,mats[0],.18);
+ }
+ if(p.variant==='tidal-wave'||p.variant==='lava-wave'){
+   const crestMat=p.variant==='lava-wave'?mats[1]:mats[2],pts=[];for(let i=0;i<=24;i++){const t=i/24*Math.PI;pts.push([(i/24-.5)*w*.92,h*.72+Math.sin(t)*2.1,-d*.29]);}group.add(tube(pts,.50,crestMat));
+   for(const side of [-1,1]){const curl=[];for(let i=0;i<=18;i++){const t=i/18*Math.PI*1.35;curl.push([side*(w*.38+Math.cos(t)*1.0),h*.72+Math.sin(t)*1.1,-d*.29]);}group.add(tube(curl,.32,crestMat));}
+ }
+ if(p.variant==='fire-marble'){
+   for(const side of [-1,1])for(let i=0;i<4;i++){const flame=new THREE.Mesh(new THREE.ConeGeometry(.48,1.4+i*.18,10),i%2?mats[1]:mats[2]);flame.rotation.z=side*.22;add(flame,side*(w*.38+i*.22),h*.62+i*.28,-d*.30-i*.15);}
+ }
+ if(p.variant==='purple-tropical'){
+   cushion(0,h*.60,-d*.31,w*.42,1.1,.42,mats[1],.25);
+   for(const x of [-w*.27,w*.27])add(new THREE.Mesh(new THREE.SphereGeometry(.72,12,8),vinyl('#31a451')),x,h*.75,-d*.31);
+ }
  if(zones.slide){
   const s=zones.slide,n=32;
   for(let lane=0;lane<s.lanes;lane++){
