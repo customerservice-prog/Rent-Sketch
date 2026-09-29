@@ -38,7 +38,7 @@ export function createPhotoReferencedInflatable(item,p){
   root.userData.visualReference='friendly-catalog-photo-2026-09-29';root.userData.visualApproval='pending';
   const w=p.widthFt,d=p.depthFt,h=p.heightFt,zones=inflatableZones(p),v=p.variant;
   const palette=PALETTES[v],m=palette.map(material),dark=material('#25313b'),white=material('#fbf8ed');
-  const water=new THREE.MeshPhysicalMaterial({color:'#59bcd3',roughness:.14,transparent:true,opacity:.8,clearcoat:1});
+  const water=new THREE.MeshPhysicalMaterial({color:'#59bcd3',roughness:.14,transparent:true,opacity:.8,clearcoat:1,side:THREE.DoubleSide});
   const put=(mesh,x,y,z,name)=>{mesh.position.set(x,y,z);if(name)mesh.name=name;body.add(mesh);return mesh;};
   const pad=(x,y,z,a,b,c,mat=m[0],r=.5,name='Inflated vinyl')=>put(new THREE.Mesh(new RoundedBoxGeometry(Math.max(.025,a),Math.max(.025,b),Math.max(.025,c),3,Math.min(r,a*.45,b*.45,c*.45)),mat),x,y,z,name);
   function pipe(pts,r,mat=m[0],name='Inflated seam'){
@@ -52,7 +52,7 @@ export function createPhotoReferencedInflatable(item,p){
     const a=b.w*.50,c=b.d*.50,rise=Math.min(1.4,h*.10),base=top-.28;
     const vertices=[-a,base,-c,a,base,-c,0,base+rise,-c,-a,base,c,a,base,c,0,base+rise,c];
     const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geo.setIndex([0,3,2,3,5,2,2,5,1,5,4,1,0,2,1,3,4,5,0,1,4,0,4,3]);geo.computeVertexNormals();
-    const mesh=new THREE.Mesh(geo,m[1]);mesh.position.set(b.x,0,b.z);mesh.name='Fitted gable canopy';body.add(mesh);
+    const mesh=new THREE.Mesh(geo,v==='rainbow-castle'?m[2]:m[1]);mesh.position.set(b.x,0,b.z);mesh.name='Fitted gable canopy';body.add(mesh);
     pipe([[-a+b.x,base,b.z+c],[b.x,base+rise,b.z+c],[a+b.x,base,b.z+c]],.18,v==='crayon'?m[2]:m[0],'Front roof edge');
   }
   function enclosure(b,combo=false){
@@ -75,13 +75,23 @@ export function createPhotoReferencedInflatable(item,p){
         const levels=5,dy=(top-1.4)/levels;
         for(let k=0;k<levels;k++)pad(x,1.4+dy*(k+.5),z,horizontal?len:radius*1.55,dy+.035,horizontal?radius*1.55:len,m[0],dy*.46,'White pillow wall');return;
       }
-      // Vinyl border with an inset net opening, not full-height exposed mesh.
-      const mat=v==='crayon'?m[1]:v==='pink-princess'?m[1]:combo?m[0]:v==='patriotic'?m[2]:m[1],thick=.40;
-      pad(x,(1.25+lower)/2,z,horizontal?len:thick,lower-1.25,horizontal?thick:len,mat,.18,'Solid lower wall');
-      pad(x,(top+upper)/2,z,horizontal?len:thick,top-upper,horizontal?thick:len,mat,.22,'Solid upper wall');
-      const opening=len*.72,border=(len-opening)/2;
-      for(const sign of [-1,1])pad(horizontal?x+sign*(len/2-border/2):x,(lower+upper)/2,horizontal?z:z+sign*(len/2-border/2),horizontal?border:thick,windowH,horizontal?thick:border,mat,.15,'Vinyl window surround');
-      const net=new THREE.Mesh(new THREE.PlaneGeometry(opening,windowH),netMaterial(opening,windowH));if(!horizontal)net.rotation.y=Math.PI/2;put(net,x,(lower+upper)/2,z,'Inset safety mesh');
+      // Match the photographed vinyl-to-mesh proportions. In particular the
+      // crayon unit has small inset windows, not full-height net fences.
+      const mat=v==='crayon'?m[1]:v==='pink-princess'?m[1]:combo?m[0]:v==='patriotic'?m[2]:m[1];
+      const low=v==='crayon'?h*.37:v==='pink-princess'?h*.25:combo?2.6:h*.22;
+      const high=v==='crayon'?h*.61:combo?upper:h*.66;
+      const opening=len*(v==='crayon'?.64:.73),netH=high-low;
+      const panel=new THREE.Shape();panel.moveTo(-len/2,1.25);panel.lineTo(len/2,1.25);panel.lineTo(len/2,top);panel.lineTo(-len/2,top);panel.closePath();
+      const aperture=new THREE.Path();aperture.moveTo(-opening/2,low);aperture.lineTo(opening/2,low);aperture.lineTo(opening/2,high);aperture.lineTo(-opening/2,high);aperture.closePath();panel.holes.push(aperture);
+      if(side==='front'){
+        const door=new THREE.Path(),r=Math.min(1.35,low*.36),spring=1.25+r*.55;
+        door.moveTo(-r,1.26);door.lineTo(r,1.26);door.lineTo(r,spring);door.absarc(0,spring,r,0,Math.PI,false);door.lineTo(-r,1.26);door.closePath();panel.holes.push(door);
+      }
+      const material=mat.clone();material.side=THREE.DoubleSide;
+      const sheet=new THREE.Mesh(new THREE.ShapeGeometry(panel),material);if(!horizontal)sheet.rotation.y=Math.PI/2;put(sheet,x,0,z,'Solid vinyl with inset window');
+      const net=new THREE.Mesh(new THREE.PlaneGeometry(opening,netH),netMaterial(opening,netH));if(!horizontal)net.rotation.y=Math.PI/2;put(net,x,(low+high)/2,z,'Inset safety mesh');
+      pad(x,top-.12,z,horizontal?len:.52,.54,horizontal?.52:len,mat,.23,'Upper inflated wall beam');
+      pad(x,1.50,z,horizontal?len:.6,.54,horizontal?.6:len,mat,.22,'Lower inflated wall beam');
     }
     for(const side of ['back','left','right',...(combo?[]:['front'])])wall(side);
     if(!isWhite&&!combo)roof(b,top);
@@ -121,28 +131,34 @@ export function createPhotoReferencedInflatable(item,p){
     }
   }
   function pool(x,start,end,width,baseMat,topMat){
-    const depth=end-start,zc=(start+end)/2,half=width/2,radius=Math.min(half*.9,depth*.47);
-    pad(x,.46,zc,width,.90,depth,baseMat,.42,'Splash pool base');
-    pad(x,1.05,zc,width-.8,.08,depth-.6,water,.03,'Splash water');
-    const pts=[[x-half+.42,1.30,start+.16],[x-half+.42,1.30,end-radius]];
-    for(let i=0;i<=24;i++){const a=Math.PI-i*Math.PI/24;pts.push([x+(half-.42)*Math.cos(a),1.30,end-radius+radius*Math.sin(a)]);}
-    pts.push([x+half-.42,1.30,start+.16]);
-    pipe(pts,.43,baseMat,'Rounded splash pool wall');pipe(pts.map(a=>[a[0],1.69,a[2]]),.28,topMat,'Splash pool rim');
+    const depth=end-start,half=width/2,radius=Math.min(half*.92,depth*.46);
+    const contour=new THREE.Shape();contour.moveTo(-half,0);contour.lineTo(half,0);contour.lineTo(half,depth-radius);
+    contour.absellipse(0,depth-radius,half,radius,0,Math.PI,false);contour.lineTo(-half,0);contour.closePath();
+    const geo=new THREE.ExtrudeGeometry(contour,{depth:.95,bevelEnabled:true,bevelSegments:3,bevelSize:.16,bevelThickness:.16});geo.rotateX(Math.PI/2);
+    put(new THREE.Mesh(geo,baseMat),x,1.08,start,'Rounded splash pool base');
+    const surface=new THREE.Mesh(new THREE.ShapeGeometry(contour),water);surface.rotation.x=Math.PI/2;surface.scale.set(.84,.89,1);put(surface,x,1.22,start+depth*.055,'Splash water');
+    const points=[[x-half+.46,1.60,start+.08],[x-half+.46,1.60,end-radius]];
+    for(let i=0;i<=32;i++){const angle=Math.PI-i*Math.PI/32;points.push([x+(half-.46)*Math.cos(angle),1.60,end-radius+radius*.91*Math.sin(angle)]);}
+    points.push([x+half-.46,1.60,start+.08]);
+    pipe(points,.49,baseMat,'Rounded splash pool wall');
+    pipe(points.map(a=>[a[0],2.23,a[2]]),.42,topMat,'Splash pool rim');
+    pipe(points.map(a=>[a[0],1.05,a[2]]),.34,baseMat,'Splash pool lower seam');
   }
   function slide(s){
     const purple=v==='purple-tropical',tidal=v==='tidal-wave',fire=v==='fire-marble',lava=v==='lava-wave',combo=!!p.combo;
     const trim=purple?m[1]:tidal?m[1]:fire?m[2]:lava?m[2]:m[0],wave=purple?m[2]:tidal?m[2]:trim,surface=purple?m[3]:tidal?m[0]:fire?m[1]:lava?m[0]:p.style==='pirate'?m[2]:m[1];
     const laneW=s.laneWidth||s.width/s.lanes-.55,centers=s.laneCenters||Array.from({length:s.lanes},(_,i)=>s.x+(i+.5)*s.width/s.lanes-s.width/2);
     const edgeLeft=Math.min(...centers)-laneW/2,edgeRight=Math.max(...centers)+laneW/2;
-    pad(0,.52,0,w*.94,1,d*.96,m[0],.40,'Slide foundation');
+    const baseStart=p.combo?-d*.46:s.z0-1.2,baseEnd=s.z1+.30;
+    pad(0,.52,(baseStart+baseEnd)/2,w*.90,1,baseEnd-baseStart,m[0],.40,'Slide foundation');
     for(const x of centers){
       ramp(s,x,laneW,surface,0,'Slide chute');
       for(const side of [-1,1]){
-        const railX=x+side*(laneW/2+.18);ramp(s,railX,.46,trim,1.25,'Inflated slide guard');
-        const pts=[];for(let i=0;i<=40;i++){const a=trajectory(s,i/40,railX);a[1]+=1.24;pts.push(a);}pipe(pts,.28,wave,'Raised wave rail');
+        const railX=x+side*(laneW/2+.21);ramp(s,railX,.63,trim,1.58,'Inflated slide guard');
+        const pts=[];for(let i=0;i<=40;i++){const a=trajectory(s,i/40,railX);a[1]+=1.53;pts.push(a);}pipe(pts,.41,wave,'Raised wave rail');
       }
       const end=Math.min(d/2-.30,s.z1+d*.20);
-      pool(x,s.z1-.12,end,laneW+.65,m[0],wave);
+      pool(x,s.z1-.12,end,purple?w*.44:combo?laneW+.65:w*.46,m[0],purple?trim:wave);
     }
     const climb=s.climb;
     if(climb){
@@ -158,16 +174,16 @@ export function createPhotoReferencedInflatable(item,p){
     // in the reference photos, instead of a thin triangular board.
     const outerLeft=Math.min(edgeLeft,climb?climb.x-climb.width/2:edgeLeft)-.46,outerRight=edgeRight+.46;
     for(const xx of [outerLeft,outerRight]){
-      ramp(s,xx,.55,m[0],1.02,'Outer inflatable sidewall');
+      ramp(s,xx,.72,m[0],1.18,'Outer inflatable sidewall');
       for(let yy=1.1;yy<s.y0;yy+=.58){
         let cutoff=s.z0;for(let j=0;j<=40;j++){const a=trajectory(s,j/40,xx);if(a[1]+1.0>=yy)cutoff=a[2];}
-        if(cutoff>s.z0+.3)pad(xx,yy,(s.z0+cutoff)/2,.61,.51,cutoff-s.z0+.05,m[0],.23,'Welded side chamber');
+        if(cutoff>s.z0+.3)pad(xx,yy,(s.z0+cutoff)/2,.96,.54,cutoff-s.z0+.05,m[0],.23,'Welded side chamber');
       }
     }
-    const towerLeft=outerLeft+.15,towerRight=outerRight-.15,rearZ=s.z0+.15,capY=Math.min(h-.55,s.y0+2.65);
-    for(const xx of [towerLeft,towerRight])post(xx,rearZ,s.y0-.5,capY,.46,m[0],false);
+    const towerLeft=outerLeft+.15,towerRight=outerRight-.15,rearZ=s.z0+.15,capY=Math.min(h-1.08,s.y0+3.75);
+    for(const xx of [towerLeft,towerRight])post(xx,rearZ,s.y0-.5,capY,.61,m[0],false);
     const bridgeMat=purple?m[0]:lava?m[1]:fire?m[1]:m[2];
-    pipe([[towerLeft,capY,rearZ],[(towerLeft+towerRight)/2,capY+.2,rearZ],[towerRight,capY,rearZ]],.44,bridgeMat,'Top bridge');
+    pipe([[towerLeft,capY,rearZ],[(towerLeft+towerRight)/2,capY+.2,rearZ],[towerRight,capY,rearZ]],.56,bridgeMat,'Top bridge');
     const net=new THREE.Mesh(new THREE.PlaneGeometry(towerRight-towerLeft,capY-s.y0-.20),netMaterial(towerRight-towerLeft,capY-s.y0-.20));put(net,(towerLeft+towerRight)/2,(capY+s.y0)/2,s.z0-.20,'Top safety mesh');
     if(tidal){
       for(let i=0;i<5;i++){const ball=new THREE.Mesh(new THREE.SphereGeometry(.67,18,12),white);ball.scale.y=.9;put(ball,towerLeft+(towerRight-towerLeft)*i/4,capY+.12,rearZ+.05,'White wave crest');}
