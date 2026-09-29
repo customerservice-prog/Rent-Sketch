@@ -500,8 +500,10 @@ function esc(s) {
    var name=String(product.name||'').toLowerCase(),cat=normCategory(product.category);
    if(cat==='tent'||/\btent\b|canopy|side\s*wall|sidewall/.test(name)) return 1;
    if(/bounce\s*house|water\s*slide|waterslide|inflatable|obstacle\s*course/.test(name)) return 2;
+   // Linen/configuration keywords take priority over the word "table" so
+   // cocktail table covers/tablecloths stay in the linen phase.
+   if(cat==='linen'||/linen|napkin|runner|spandex|tablecloth|overlay|table\s*cover|chair\s*cover/.test(name)) return 4;
    if(cat==='table'||cat==='chair'||/\btable\b|\bchair\b/.test(name)) return 3;
-   if(cat==='linen'||/linen|napkin|runner|spandex|tablecloth|overlay|cover/.test(name)) return 4;
    if(cat==='lighting'||cat==='dance_floor'||/light|dance\s*floor|fan|generator|power|distribution/.test(name)) return 5;
    return 6;
  }
