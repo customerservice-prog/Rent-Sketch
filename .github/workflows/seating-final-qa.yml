@@ -1,0 +1,57 @@
+name: Final seating and tabletop orientation QA
+on:
+  push:
+    branches: [qa/seating-alignment-20260929]
+    paths: [.github/workflows/seating-final-qa.yml]
+permissions: {contents: read}
+jobs:
+  final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/seating-browser --no-save playwright@1.56.1
+      - run: /tmp/seating-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Final geometry, saved-layout and unchanged booking checks
+        run: |
+          mkdir -p qa-seating
+          set -o pipefail
+          git diff --check
+          git diff --exit-code a55f64fb2ce883fad078eb128194e38470176349 -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js js/ui/scene-guests.js
+          node --test tests/seating-alignment.test.mjs tests/furniture-seating.test.mjs tests/furniture-placement.test.mjs tests/party-scene.test.mjs tests/photo-plan.test.mjs tests/premium-footprint.test.mjs tests/book-now-contract.test.mjs tests/phase4-linens.test.mjs tests/contextual-products.test.mjs tests/world-planning.test.mjs tests/furniture-accuracy.test.mjs | tee qa-seating/unit-tests.log
+          node --experimental-vm-modules tests/seating-alignment-mesh.cjs | tee qa-seating/alignment-mesh.log
+          node --experimental-vm-modules tests/seating-styling-mesh.cjs | tee qa-seating/styling-mesh.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs | tee qa-seating/furniture-mesh.log
+          node --experimental-vm-modules tests/furniture-plan-dom.cjs | tee qa-seating/furniture-plan.log
+          node --experimental-vm-modules tests/photo-mode-ui.cjs | tee qa-seating/photo-mode.log
+          node --experimental-vm-modules tests/photo-plan-dom.cjs | tee qa-seating/photo-plan.log
+          node --experimental-vm-modules tests/guest-anatomy-mesh.cjs | tee qa-seating/guest-anatomy.log
+      - name: Compare original broken scene and final correction at desktop and mobile sizes
+        env: {NODE_PATH: /tmp/seating-browser/node_modules}
+        run: node tests/seating-alignment-browser.cjs
+      - name: Record exact tested release entries without changing any branch
+        run: |
+          python3 - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          base='a55f64fb2ce883fad078eb128194e38470176349'
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          paths=[p for p in paths if not p.startswith('.github/')]
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()} for p in paths]
+          Path('qa-seating/release-tree.json').write_text(json.dumps({'base':base,'testedCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'entries':entries},indent=2))
+          PY
+      - name: Package exact source with the inspected images
+        if: always()
+        run: |
+          mkdir -p qa-seating
+          tar -czf qa-seating/runtime-source.tgz js designer/index.html catalog-preview/index.html tests/seating-alignment* tests/seating-styling-mesh.cjs docs/seating-alignment-20260929.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: seating-final-review
+          path: qa-seating
+          retention-days: 7
