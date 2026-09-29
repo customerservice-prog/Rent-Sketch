@@ -21,6 +21,10 @@ jobs:
           import json,hashlib,base64,gzip
           raw=''.join(Path('.github/phase5-payload/part-'+str(i)+'.b64').read_text().strip() for i in range(2))
           Path('qa-phase5/uploaded-patch.b64').write_text(raw)
+          fixes=[('YFetqEa0+PnmxlYI/lxydTeKgu14zBz','YFetqEa0+PnmxlY/lxydTeKgu14zBz'),('gwYLOq9yUIvLJJqfazmakb2FKVV3P2Ql','gwYLOq9yUIvLJJqzmakb2FKVV3P2Ql'),('LLFTHNnc6Ugros2Uw+3y7y5eSSoVicm','LLFTHNnc6Ugros2w+3y7y5eSSoVicm'),('avcstNROI+b0a1k3Q5+yVi2rpZC5pKA9','avcstNROI+b0a1kIz5+yVi2rpZC5pKA9'),('XGzr7BAjA5x1N/b0V0V3m2WA7F9ild0V','XGzr7BAjA5x1N/b0V3m2WA7F9ild0V')]
+          for old,new in fixes:
+            assert raw.count(old)==1
+            raw=raw.replace(old,new)
           assert hashlib.sha256(raw.encode()).hexdigest()=='7225cfffb8201834c008ca22833125ee12aef8e8a16a98f7a846b1aed609b512','Patch transport integrity mismatch'
           changes=json.loads(gzip.decompress(base64.b64decode(raw,validate=True)))
           assert len(changes)==22
