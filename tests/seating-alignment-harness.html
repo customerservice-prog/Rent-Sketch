@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RentSketch seating regression</title><style>html,body{height:100%;margin:0}#scene{width:100%;height:100%;overflow:hidden}#caption{position:fixed;left:16px;bottom:12px;background:white;padding:8px 12px;border-radius:8px;font:14px system-ui;color:#253e30;pointer-events:none}</style><script type="importmap">{"imports":{"three":"/tests/node_modules/three/build/three.module.js","three/addons/":"/tests/node_modules/three/examples/jsm/"}}</script></head><body><div id="scene"></div><div id="caption">Rotated banquet tables · Actual RentSketch renderer</div><script type="module">
+import * as THREE from 'three';
+import {init} from '../js/ui/view3d.js';
+const render=THREE.WebGLRenderer.prototype.render;
+THREE.WebGLRenderer.prototype.render=function(scene,camera){window.scene=scene;return render.call(this,scene,camera)};
+const view=init(document.getElementById('scene'),{registerActive:false});
+const table=(id,x,y,rotationDeg=0)=>({id,kind:'table',tableId:'banquet-6ft',shape:'rect',x,y,widthFt:rotationDeg%180?2.5:6,depthFt:rotationDeg%180?6:2.5,rotationDeg,seatCount:8,chairId:'plastic-white',linenId:'linen-banquet-72x120',linenColor:'Red'});
+const round=(id,x,y)=>({id,kind:'table',tableId:'round-5ft',shape:'round',x,y,widthFt:5,depthFt:5,seatCount:8,chairId:'plastic-white'});
+let data={tent:{id:'pole-20x20',name:'20x20 Pole Tent',type:'pole',widthFt:20,lengthFt:20,centerPoles:[{x:10,y:10}]},surfaceType:'grass',anchoringMethod:'stake',objects:[round('r1',2.5,2.5),round('r2',12.5,2.5),table('b1',3.75,11.5,90),table('b2',13.75,11.5,270),{id:'cocktail',kind:'table',tableId:'cocktail',shape:'round',x:9,y:.25,widthFt:2.5,depthFt:2.5,seatCount:0,chairId:'plastic-white'}],lightingId:'lighting-none'};
+window.alignReport=()=>{
+ const guests=window.scene.getObjectByName('Preview guests').userData.people.filter(p=>p.seated),seats=[];window.scene.updateMatrixWorld(true);
+ window.scene.traverse(o=>{if(o.userData.role!=='chairs')return;for(let i=0;i<o.count;i++){const m=new THREE.Matrix4();o.getMatrixAt(i,m);m.premultiply(o.matrixWorld);const pos=new THREE.Vector3().setFromMatrixPosition(m);seats.push({id:o.userData.itemId,x:pos.x,z:pos.z});}});
+ const distances=guests.map(p=>Math.min(...seats.filter(s=>s.id===p.tableId).map(s=>Math.hypot(s.x-p.x,s.z-p.z))));
+ return {seated:guests.length,maxSeatDistance:Math.max(...distances),guestsOffChair:distances.filter(d=>d>.001).length,rentalCount:data.objects.length,seatCount:data.objects.reduce((n,o)=>n+(o.seatCount||0),0),overflow:document.documentElement.scrollWidth>innerWidth+1};
+};
+window.runCase=(angle=90,chairId='plastic-white')=>{
+ for(const o of data.objects)if(o.shape==='rect'){const cx=o.x+o.widthFt/2,cy=o.y+o.depthFt/2;o.rotationDeg=angle;o.widthFt=angle%180===90?2.5:6;o.depthFt=angle%180===90?6:2.5;o.x=cx-o.widthFt/2;o.y=cy-o.depthFt/2;o.chairId=chairId;}
+ const before=JSON.stringify(data);view.rebuild(data);view.setScene({guests:true,motion:false,styling:true,night:false,weather:'clear'});view.reception();view.captureImage();return {...window.alignReport(),unchanged:JSON.stringify(data)===before};
+};
+window.view=view;window.runCase();window.ready=true;
+</script></body></html>
