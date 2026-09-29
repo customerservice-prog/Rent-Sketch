@@ -15,20 +15,23 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with: {node-version: 22}
-      - name: Wait for the exact tested release and verify served bytes
+      - name: Verify exact production runtime bytes, keeping test pages private
         run: |
           mkdir -p qa-live-seating
           node <<'JS'
           const fs=require('node:fs'),cp=require('node:child_process'),crypto=require('node:crypto'),assert=require('node:assert/strict');
           const release='de7fde908d5aa70b90b268aa0145b08c8f7cb3d4',base='a55f64fb2ce883fad078eb128194e38470176349',digest=x=>crypto.createHash('sha256').update(x).digest('hex');
-          (async()=>{const paths=cp.execFileSync('git',['diff','--name-only',base,'HEAD','--','js','designer','catalog-preview'],{encoding:'utf8'}).trim().split('\n');for(const p of ['js/core/bookingHandoff.js','js/ui/booking-handoff.js','js/ui/review-actions.js','js/ui/scene-guests.js','script.js','tests/seating-alignment-harness.html'])if(!paths.includes(p))paths.push(p);let last;
-           for(let i=0;i<60;i++){try{const r=await fetch('https://rentsketch.com/designer/index.html?verify='+release+'&attempt='+i,{signal:AbortSignal.timeout(15000)});assert.equal(r.ok,true);assert.equal(digest(Buffer.from(await r.arrayBuffer())),digest(fs.readFileSync('designer/index.html')));last=null;break;}catch(e){last=e;console.log('Waiting for seating release');await new Promise(r=>setTimeout(r,10000));}}if(last)throw last;
-           const files=[];for(const path of paths){const r=await fetch('https://rentsketch.com/'+path+'?verify='+release,{signal:AbortSignal.timeout(20000)});assert.equal(r.ok,true,path);const hash=digest(Buffer.from(await r.arrayBuffer()));assert.equal(hash,digest(fs.readFileSync(path)),path);files.push({path,sha256:hash,match:true});}fs.writeFileSync('qa-live-seating/deployed-files.json',JSON.stringify({release,files,checkedAt:new Date().toISOString()},null,2));console.log('PASS '+files.length+' exact production runtime and preserved booking file hashes');
-          })().catch(e=>{console.error(e);process.exitCode=1});
+          (async()=>{const paths=cp.execFileSync('git',['diff','--name-only',base,'HEAD','--','js','designer','catalog-preview'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);for(const p of ['js/core/bookingHandoff.js','js/ui/booking-handoff.js','js/ui/review-actions.js','js/ui/scene-guests.js','script.js'])if(!paths.includes(p))paths.push(p);
+           const files=[];for(const path of paths){const r=await fetch('https://rentsketch.com/'+path+'?verify='+release,{signal:AbortSignal.timeout(20000)});assert.equal(r.ok,true,path);const hash=digest(Buffer.from(await r.arrayBuffer()));assert.equal(hash,digest(fs.readFileSync(path)),path);files.push({path,sha256:hash,match:true});}fs.writeFileSync('qa-live-seating/deployed-files.json',JSON.stringify({release,files,testShell:'Local fixture intercepted only inside an isolated test browser; production modules remain real network responses',checkedAt:new Date().toISOString()},null,2));console.log('PASS '+files.length+' exact production runtime and preserved booking file hashes');
+          })().catch(e=>{fs.writeFileSync('qa-live-seating/byte-check-failure.txt',String(e.stack||e));console.error(e);process.exitCode=1});
           JS
       - run: npm --prefix tests ci
       - run: npm install --prefix /tmp/seating-live-browser --no-save playwright@1.56.1
       - run: /tmp/seating-live-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Retain existing seating and booking regression tests
+        run: |
+          set -o pipefail
+          node --test tests/book-now-contract.test.mjs tests/contextual-products.test.mjs tests/party-scene.test.mjs | tee qa-live-seating/contracts.log
       - name: Check real live renderer at desktop and mobile sizes without customer writes
         env:
           NODE_PATH: /tmp/seating-live-browser/node_modules
@@ -38,6 +41,11 @@ jobs:
           git show 82533d957b669285c60910753be609ccb683cfc4:tests/seating-live-browser.cjs > /tmp/seating-live-check.cjs
           node --check /tmp/seating-live-check.cjs
           node /tmp/seating-live-check.cjs
+      - name: Preserve tested geometry and test sources as inspection evidence
+        if: always()
+        run: |
+          mkdir -p qa-live-seating
+          git archive --format=tar.gz HEAD -o qa-live-seating/tested-source.tgz
       - uses: actions/upload-artifact@v4
         if: always()
         with:
