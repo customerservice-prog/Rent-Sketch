@@ -1,7 +1,9 @@
+import {phase6bSymbol} from './phase6b-symbols.js';
 import {tabletopReference} from '../data/tabletop-reference.js';
 import { tabletopPlacements } from '../data/tabletop.js';
 import { linenColorHex } from '../data/linens.js';
 export function tabletopSymbol(p,color='White'){
+ const phase6b=phase6bSymbol(p);if(phase6b)return phase6b;
  const reference=p.reference||tabletopReference(p);
  if(reference?.shape==='square'){const r=reference.diameterIn/24;return `<rect x="${-r}" y="${-r}" width="${r*2}" height="${r*2}" rx=".025" fill="#fffefa" stroke="#b7c5c7" stroke-width=".025"/>`;}
  const gold=/gold/i.test(p.name),metal=gold?'#bf954e':'#9aafb5',stroke='#73868a';

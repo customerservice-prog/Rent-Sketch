@@ -1,3 +1,4 @@
+import {createPhase6bModel} from './phase6b-models3d.js';
 import {createPhase6Equipment} from './phase6-equipment3d.js';
 import { createEquipment } from './equipment-motion3d.js';
 import { createHeroEquipment } from './hero-equipment3d.js';
@@ -203,6 +204,7 @@ export function createAccessory3d(item){
   };
   const type=canonicalEquipmentType(item.accessoryType);
   const product={...item,type,externalId:item.externalId||item.asset?.source?.externalId};
+  const b=createPhase6bModel(product,{...item,rotationDeg:0});if(b){b.userData.kind='accessory';return b;}
   const phase6=createPhase6Equipment(product,{...item,rotationDeg:0});if(phase6){phase6.userData.kind='accessory';return phase6;}
   const hero=createHeroEquipment(product,item);
   if(hero){hero.userData.itemId=item.id;hero.userData.kind='accessory';return hero;}
