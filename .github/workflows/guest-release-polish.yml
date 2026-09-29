@@ -1,0 +1,103 @@
+name: Guest and fabric release review
+on:
+  push:
+    branches: [qa/phase4-finish-20260929]
+    paths: [.github/workflows/guest-release-polish.yml]
+permissions: {contents: write}
+jobs:
+  final-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply scoped final visual corrections
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,re,json
+          p=Path('js/ui/scene-guests.js');s=p.read_text();assert hashlib.sha256(s.encode()).hexdigest()=='1fe685af6b390f57088257e0aa35ad6247802f1083660f99dead9e17cfa6bd33'
+          s=s.replace("part('detail',...shoulder,jacket?.183:.17,.183,.17,cloth);",'// Overlapping closed sleeves avoid toy-like shoulder balls.')
+          s=s.replace('shoulder=[side*.54,top-.16,0]','shoulder=[side*.50,top-.22,0]')
+          s=s.replace('lathe([[.72,-.54]','lathe([[0,-.55],[.72,-.54]').replace('[.72,.54]],16)','[.72,.54],[0,.55]],16)');p.write_text(s)
+          p=Path('js/ui/linen-fabric3d.js');s=p.read_text();assert hashlib.sha256(s.encode()).hexdigest()=='7054f78e8ce2d55f4b256709e73fa26bf173a1ede5b9cd37746c22a7551d6023'
+          s=s.replace("metalness:finish==='sequin'?.50:0","metalness:finish==='sequin'?.28:0").replace("finish==='sequin'?'#999'","finish==='sequin'?'#b8b8b8'").replace('shade=155+(row*31+col*17)%95','shade=202+(row*31+col*17)%53').replace("bump.repeat.set(finish==='sequin'?5:6,finish==='sequin'?7:6)","bump.repeat.set(finish==='sequin'?1:6,finish==='sequin'?1:6)")
+          old='const t=j/rows,a=i/segments*Math.PI*2;let x,z,nx,nz,physical,edgeU=0;'
+          new="""const t=j/rows;let a=i/segments*Math.PI*2;
+            if(round&&p.stretch&&spec.tableSizeIn===60){const theta=Math.atan2(p.d*.39+.04,p.w*.30+.04),angles=[theta,Math.PI-theta,Math.PI+theta,2*Math.PI-theta,2*Math.PI+theta],q=Math.min(3,Math.floor(i/(segments/4))),u=(i-q*segments/4)/(segments/4);a=angles[q]+(angles[q+1]-angles[q])*u;}
+            let x,z,nx,nz,physical,edgeU=0;"""
+          assert old in s;s=s.replace(old,new)
+          s=s.replace('vertices.push(x,y,z);uv.push(i/segments,t);',"vertices.push(x,y,z);uv.push(i/segments*(spec.material==='sequin'?(round?Math.PI*p.w:2*(p.w+p.d)):1),t*(spec.material==='sequin'?Math.max(.01,physical):1));")
+          needle=' return g;\n}'
+          extra=" if(spec.material==='sequin')for(const child of g.children){if(child.name!=='Linen tabletop')continue;const uv=child.geometry.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*p.w,uv.getY(i)*p.d);uv.needsUpdate=true;}\n"
+          assert needle in s;s=s.replace(needle,extra+needle);p.write_text(s)
+          p=Path('docs/phase4-linens-20260929.md');s=p.read_text().replace('40 website image references','39 website image references').replace('36 supported','35 supported');s+='\nThe final reference fetch used the canonical public `/api/item-image/:slug` route: 39 successful image responses. Models and the real photo comparisons were inspected; 35 products have production-model previews, 3 remain reference-only, and 1 is a multi-item bundle. This is not blanket visual approval.\n';p.write_text(s)
+          Path('docs/guest-model-assets.md').write_text('''# Guest model graphical sources and limits
+
+The sculpted head/scalp subset in `js/data/guest-anatomy.js` is derived from MakeHuman core graphical asset `makehuman/data/3dobjs/base.obj`, pinned at `a8bc2d54ff0ac92e78ff71431b1023eda42bf482` in `makehumancommunity/makehuman`. Core graphical assets are CC0 1.0; the copied license is in `docs/licenses/makehuman-cc0.md`. The MakeHuman application source is not copied, imported or distributed.
+
+`python scripts/build-guest-anatomy.py /path/to/base.obj` reproduces the local head/scalp data. Only the head subset is shipped. Body, helper and rig parts from the source asset are excluded. The body, garments, shoes, individual fingers, articulations and instanced animation implementation are RentSketch procedural geometry. There is no third-party runtime model request and no biometric/customer-image processing.
+
+Guests remain decorative preview objects. They never become inventory, quote or checkout lines. Eleven shared instanced batches are used regardless of crowd count. Existing motion toggle, reduced-motion preference and visibility handling remain in the main renderer. Tests check finite animated transforms, seating, unchanged rental data, instance allocation and 24/40-person batches. These are more anatomically detailed planning characters, not photorealistic scanned people or motion-captured actors.
+''')
+          # Version both consumers; the audit and customer designer must not use stale imports.
+          for file in ['designer/index.html','catalog-preview/index.html']:
+            p=Path(file);s=p.read_text();m=re.search(r'(<script type="importmap">)(.*?)(</script>)',s,re.S);assert m;mapping=json.loads(m.group(2))
+            for module in ['scene-guests','linen-fabric3d','equipment3d','catalog-phase4','catalog-furniture3d','tabletop3d','tabletop-reference3d']:mapping['imports']['../js/ui/'+module+'.js']='../js/ui/'+module+'.js?v=20260929-guests-phase4-final'
+            for module in ['guest-anatomy','linens','linen-spec','tabletop','tabletop-reference']:mapping['imports']['../js/data/'+module+'.js']='../js/data/'+module+'.js?v=20260929-guests-phase4-final'
+            s=s[:m.start(2)]+json.dumps(mapping,separators=(',',':'))+s[m.end(2):];s=s.replace('catalog-phase4.js?v=20260929-phase4-1','catalog-phase4.js?v=20260929-guests-phase4-final');p.write_text(s)
+          PY
+          git diff --check
+          git diff --exit-code 2fcabb108e8881a2ad271ebb9013404461c137ac -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase4-browser --no-save playwright@1.56.1
+      - run: /tmp/phase4-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Restore only public reference fixtures for consistent final visual comparison
+        run: |
+          mkdir -p qa-phase4/references
+          node <<'JS'
+          const fs=require('node:fs');(async()=>{const get=async u=>{const r=await fetch(u,{signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error(r.status);return r.json();};const c=await get('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products'),w=await get('https://www.friendlypartyrental.com/api/items');fs.writeFileSync('qa-phase4/catalog.json',JSON.stringify(c));fs.writeFileSync('qa-phase4/website.json',JSON.stringify(w));const items=[];for(const p of c.products){if(!String(p.external_id||'').startsWith('fpr:')||!(p.category==='linen'||/charger|\bplate\b|\bfork\b|\bspoon\b|\bknife\b|goblet|martini|wine glass|beer glass|rocks glass|coffee mug|carafe/i.test(p.name)))continue;const slug=p.external_id.slice(4),r=await fetch('https://www.friendlypartyrental.com/api/item-image/'+slug,{signal:AbortSignal.timeout(15000)});if(!r.ok||!r.headers.get('content-type')?.startsWith('image/'))throw Error('Photo unavailable '+slug);fs.writeFileSync('qa-phase4/references/'+slug+'.img',Buffer.from(await r.arrayBuffer()));items.push({productId:p.id,slug,name:p.name,error:null});}fs.writeFileSync('qa-phase4/manifest.json',JSON.stringify({items}));})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - name: Verify models and unchanged booking contracts
+        run: |
+          set -o pipefail
+          node --experimental-vm-modules tests/guest-anatomy-mesh.cjs | tee qa-phase4/guest-tests.log
+          node --test tests/phase4-linens.test.mjs tests/contextual-products.test.mjs tests/party-scene.test.mjs tests/book-now-contract.test.mjs | tee qa-phase4/unit-tests.log
+          node --experimental-vm-modules tests/phase4-render.cjs | tee qa-phase4/geometry-tests.log
+      - name: Final model captures and hidden payment-control regression
+        env: {NODE_PATH: /tmp/phase4-browser/node_modules}
+        run: |
+          node tests/guest-realism-browser.cjs
+          node tests/phase4-capture.cjs
+          node <<'JS'
+          const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=require('playwright');(async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage();await p.setContent('<style>'+fs.readFileSync('customer-experience.css','utf8')+'</style><section id="step-review" class="active"><div class="review-primary-actions"><button id="btnPayDeposit" hidden>Pay Deposit Now</button><button id="btnBookRentals">Book Now</button></div></section>');assert.equal(await p.locator('#btnPayDeposit').isVisible(),false);assert.equal(await p.locator('#btnBookRentals').isVisible(),true);fs.writeFileSync('qa-phase4/hidden-control.json',JSON.stringify({hiddenDeposit:true,visibleBooking:true}));await b.close();})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - name: Save tested candidate and exact release entries
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js docs designer catalog-preview
+          git commit -m 'Finish anatomical guest and physical linen visual review while preserving Book Now'
+          git push origin HEAD:refs/heads/qa/phase4-finish-20260929
+          python3 - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          base='2fcabb108e8881a2ad271ebb9013404461c137ac'
+          names=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          names=[n for n in names if not n.startswith('.github/') and n!='scripts/refine-guest-review.py']
+          rows=[{'path':n,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+n],text=True).strip()} for n in names]
+          Path('qa-phase4/release-tree.json').write_text(json.dumps({'base':base,'testedCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'entries':rows},indent=2))
+          PY
+      - name: Package final runtime for inspection
+        if: always()
+        run: tar -czf qa-phase4/runtime-source.tgz js server/src tests/guest* tests/phase4* tests/contextual-products.test.mjs tests/scene-environment.cjs designer catalog-preview dashboard customer-experience.css docs scripts/build-guest-anatomy.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guest-phase4-release
+          path: |
+            qa-phase4
+            qa-guest-realism
+          retention-days: 7
