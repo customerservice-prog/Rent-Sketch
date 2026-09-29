@@ -109,8 +109,12 @@ export function tableControls(item, table, chairs, linens, matchingCount=1) {
 }
 export function tableInspector(item, table, chairs, linens, matchingCount=1) {
   const esc=escapeHtml,chair=chairs.find(c=>c.id===item.chairId) || {};
+  const reference=table.photoUrl?`<div class="catalog-reference-card"><span>Real Friendly rental</span><img src="${esc(table.photoUrl)}" alt="${esc(table.name)} product photo" loading="lazy" decoding="async"><small>Website product photo</small></div>`:'';
+  const accuracy=table.dimensionsConfirmed===true
+    ? '<div class="catalog-accuracy-badge exact">✓ Live catalog dimensions</div>'
+    : '<div class="catalog-accuracy-badge review">Planning model · dimensions need verification</div>';
   return `<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>
-    <h3 class="inspector-title">${esc(table.name)}</h3>${tableVisual(table,chair,item)}
+    <h3 class="inspector-title">${esc(table.name)}</h3>${reference}${accuracy}${tableVisual(table,chair,item)}
     ${tableControls(item,table,chairs,linens,matchingCount)}
     <div class="inspector-actions equipment-actions"><button class="btn-secondary" data-role="insp-rotate" data-id="${esc(item.id)}">Rotate 90°</button><button class="btn-secondary" data-role="insp-duplicate" data-id="${esc(item.id)}">Duplicate</button><button class="btn-danger" data-role="insp-delete" data-id="${esc(item.id)}">Delete</button></div>
     <button class="btn-primary table-studio-launch" data-role="insp-design-table" data-id="${esc(item.id)}">Style This Table · Close-up</button>
