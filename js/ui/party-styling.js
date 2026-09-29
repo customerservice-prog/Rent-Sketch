@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { chairPositions } from '../core/seating.js';
+import { chairPositions,tableModelItem } from '../core/seating.js';
 import { byId as chairById } from '../data/chairs.js';
 import { tableProfile } from './equipment3d.js';
 
@@ -10,13 +10,19 @@ export function createPartyStyling(tent,objects){
   const materials={ceramic:new THREE.MeshStandardMaterial({color:'#f9f5e8',roughness:.32}),gold:new THREE.MeshStandardMaterial({color:'#bda175',metalness:.6,roughness:.3}),metal:new THREE.MeshStandardMaterial({color:'#bdc4c7',metalness:.85,roughness:.2}),cloth:new THREE.MeshStandardMaterial({color:'#879d8b',roughness:.95}),glass:new THREE.MeshPhysicalMaterial({color:'#e3eeeb',metalness:.08,roughness:.12,transparent:true,opacity:.43,depthWrite:false}),green:new THREE.MeshStandardMaterial({color:'#527255',roughness:.88}),flower:new THREE.MeshStandardMaterial({color:'#f3e6d7',roughness:.8}),water:new THREE.MeshStandardMaterial({color:'#bdd3c2',roughness:.3})};
   const batches={plates:{g:new THREE.CylinderGeometry(1,1,.032,28),m:materials.ceramic},rim:{g:new THREE.TorusGeometry(1,.026,6,28),m:materials.gold},cutlery:{g:new THREE.BoxGeometry(1,1,1),m:materials.metal},napkin:{g:new THREE.BoxGeometry(1,1,1),m:materials.cloth},glass:{g:new THREE.CylinderGeometry(1,.72,1,14,1,true),m:materials.glass},stem:{g:new THREE.CylinderGeometry(1,1,1,8),m:materials.glass},vase:{g:new THREE.CylinderGeometry(.22,.17,.54,16,1,true),m:materials.glass},leaves:{g:new THREE.SphereGeometry(1,8,5),m:materials.green},petals:{g:new THREE.SphereGeometry(1,8,5),m:materials.flower},water:{g:new THREE.CylinderGeometry(.18,.14,.30,12),m:materials.water}};
   Object.values(batches).forEach(b=>{b.transforms=[];});
-  function put(kind,x,y,z,sx=1,sy=1,sz=1,ry=0,rx=0,rz=0){batches[kind].transforms.push({x,y,z,sx,sy,sz,rx,ry,rz});}
+  let tableTransform=null;
+  function put(kind,x,y,z,sx=1,sy=1,sz=1,ry=0,rx=0,rz=0){
+    if(tableTransform){const {cx,cz,a}=tableTransform,dx=x-cx,dz=z-cz;x=cx+dx*Math.cos(a)-dz*Math.sin(a);z=cz+dx*Math.sin(a)+dz*Math.cos(a);}
+    batches[kind].transforms.push({x,y,z,sx,sy,sz,rx,ry,rz,tableYaw:-(tableTransform?.a||0)});
+  }
   function glass(x,y,z){put('stem',x,y+.07,z,.014,.13,.014);put('stem',x,y+.01,z,.10,.018,.10);put('glass',x,y+.24,z,.105,.23,.105);}
   let styled=0;
-  for(const item of objects){
+  for(const placed of objects){
+    const item=tableModelItem(placed);
     if(item.kind!=='table'||Array.isArray(item.tabletop)||styled>=12)continue;
     const p=tableProfile(item);if(p.silhouette==='fillchill-tub')continue;styled++;
-    const cx=item.x+item.widthFt/2-tent.widthFt/2,cz=item.y+item.depthFt/2-tent.lengthFt/2,y=p.height+.035;
+    const cx=placed.x+placed.widthFt/2-tent.widthFt/2,cz=placed.y+placed.depthFt/2-tent.lengthFt/2,y=p.height+.035;
+    tableTransform={cx,cz,a:(Number(placed.rotationDeg)||0)*Math.PI/180};
     for(const seat of chairPositions(item,chairById(item.chairId)||{})){
       let x,z;
       if(item.shape==='round'){x=Math.cos(seat.angle)*(item.widthFt/2-.60);z=Math.sin(seat.angle)*(item.depthFt/2-.60);}
@@ -42,11 +48,12 @@ export function createPartyStyling(tent,objects){
     }
     if(!item.seatCount)for(const a of [0,Math.PI*.7,Math.PI*1.4])glass(cx+Math.cos(a)*.68,y,cz+Math.sin(a)*.68);
   }
-  const dummy=new THREE.Object3D();
+  // Apply the table yaw outside each prop's local tilt; Euler addition tilts plate rims upright.
+  const dummy=new THREE.Object3D(),tableRotation=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0);
   for(const [name,batch] of Object.entries(batches)){
     if(!batch.transforms.length){batch.g.dispose();continue;}
     const mesh=new THREE.InstancedMesh(batch.g,batch.m,batch.transforms.length);mesh.name='Table styling · '+name;
-    batch.transforms.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.rotation.set(p.rx,p.ry,p.rz);dummy.scale.set(p.sx,p.sy,p.sz);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});
+    batch.transforms.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.rotation.set(p.rx,p.ry,p.rz);tableRotation.setFromAxisAngle(up,p.tableYaw);dummy.quaternion.premultiply(tableRotation);dummy.scale.set(p.sx,p.sy,p.sz);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});
     mesh.instanceMatrix.needsUpdate=true;mesh.castShadow=mesh.receiveShadow=true;group.add(mesh);
   }
   group.userData.tableCount=styled;return group;

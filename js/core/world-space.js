@@ -70,12 +70,16 @@ export function rotateGroundPoint(point, angleDeg, origin = { x: 0, y: 0 }) {
 
 // New equipment/accessory/inflatable saves retain model dimensions separately
 // from their oriented layout box. Older accessories and inflatables stored a box swapped at each 90°
-// turn. Recover that local size without changing unflagged legacy object kinds.
+// turn. The normal table editor also swaps its saved width/depth at each
+// quarter turn. A tableId identifies that editor-owned save contract; generic
+// unflagged rectangles retain their original rotation semantics. Recover the
+// table-local size before applying scene rotation.
+// An explicit footprintOriented:false keeps an unswapped model-space contract.
 // Resolve this before overriding rotation with an independent photo placement.
 export function objectLocalDimensions(object) {
   const width = Math.max(0.01, finite(object?.widthFt));
   const depth = Math.max(0.01, finite(object?.depthFt ?? object?.lengthFt));
-  const oriented = object?.footprintOriented === true || ['accessory','inflatable'].includes(object?.kind);
+  const oriented = object?.footprintOriented === true || ['accessory','inflatable'].includes(object?.kind) || (object?.kind==='table' && typeof object?.tableId==='string' && object?.footprintOriented!==false);
   const quarterTurn = Math.abs(Math.abs(finite(object?.rotationDeg) % 180) - 90) < 1e-7;
   return {
     widthFt: finite(object?.modelWidthFt) > 0 ? Number(object.modelWidthFt) : oriented && quarterTurn ? depth : width,

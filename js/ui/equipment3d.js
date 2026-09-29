@@ -7,16 +7,17 @@ import {byId as linenById} from '../data/linens.js';
 import * as THREE from 'three';
 import * as base from './equipment-base3d.js';
 import {referenceChair,refineReferenceTable} from './furniture-reference3d.js';
-import {chairPositions} from '../core/seating.js';
+import {chairPositions,tableModelItem} from '../core/seating.js';
 import {byId as chairById} from '../data/chairs.js';
 import {byId as tableById} from '../data/tables.js';
 export {mergeParts} from './equipment-base3d.js';
 import {DANCE_SECTION} from '../data/danceFloor.js';
 import {makeReferenceFloor} from './phase5-floor3d.js';
 export function makeDanceFloor(items,tent){return DANCE_SECTION.externalId==='fpr:dance-floor-3x3-section'?makeReferenceFloor(items,tent):base.makeDanceFloor(items,tent);}
-export function tableProfile(item){return linenDrapeProfile(item,base.tableProfile(item),linenById(item.linenId));}
+export function tableProfile(item){const local=tableModelItem(item);return linenDrapeProfile(local,base.tableProfile(local),linenById(local.linenId));}
 export function makeChair(def={}){return referenceChair(def,base.mergeParts)||base.makeChair(def);}
 export function makeTable(item){
+ item=tableModelItem(item);
  const g=base.makeTable({...item,hideChairs:true,linenId:null}),p=tableProfile(item),def=tableById(item.tableId)||{};g.userData.profile=p;
  const cloth=makeLinen(item,p);if(cloth){base.mergeParts(cloth);while(cloth.children.length)g.add(cloth.children[0]);}
  refineReferenceTable(g,p,def,base.mergeParts);
