@@ -49,7 +49,7 @@ const PROFILES=[
 ];
 
 function profileFor(product){
-  const b=phase6bReference(product);if(b?.kind==='equipment'){const [w,d,h]=b.dimensions;return {type:b.type,category:b.category.replace(/^./,c=>c.toUpperCase()),w,d,h};}
+  const b=phase6bReference(product);if((b?.kind==='equipment'||b?.placement==='equipment')){const [w,d,h]=b.dimensions;return {type:b.type,category:b.category.replace(/^./,c=>c.toUpperCase()),w,d,h};}
   const reference=phase6Reference(product);if(reference?.kind==='equipment'){const [w,d,h]=reference.dimensions;return {type:reference.type,category:reference.category.replace(/^./,c=>c.toUpperCase()),w,d,h};}
   const identity=normal((product.name||'')+' '+(product.external_id||''));
   const text=normal(identity+' '+(product.category||''));
@@ -96,7 +96,7 @@ export function accessoryCatalog(products,showPrices=true){
       pricePerDay:showPrices&&Number.isFinite(price)?price:null,
       sourceCategory:product.category||'other',
       reference:phase6bReference(product)||phase6Reference(product),
-      ...(phase6bReference(product)?.kind==='equipment'?phase6bDimensions(product):{}),
+      ...((phase6bReference(product)?.kind==='equipment'||phase6bReference(product)?.placement==='equipment')?phase6bDimensions(product):{}),
     });
   }
   return out.sort((a,b)=>a.visualCategory.localeCompare(b.visualCategory)||a.name.localeCompare(b.name));

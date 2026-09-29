@@ -1,7 +1,7 @@
 // Photo-referenced appearances, never inventory, safety envelopes or approvals.
 // dimensions = illustrative width/depth/height in feet unless a note identifies
 // a nominal catalog size. Volume labels do NOT establish physical dimensions.
-export const PHASE6B_VERSION='2026.09.29.service1';
+export const PHASE6B_VERSION='2026.09.29.service2';
 const rows={};
 function add(slug,type,kind,dimensions,note,extra={}){rows[slug]={type,kind,dimensions,note,...extra};}
 const table=(slug,type,d,note,extra)=>add(slug,type,'tabletop',d,note,extra);
@@ -43,12 +43,13 @@ equipment('madison-arbor','arbor',[4.7,2.4,7.5],'White arched arbor with four po
 equipment('round-wedding-arch-7ft','round-arch',[7,2,7.4],'Gold circular frame and splayed support feet. The 7ft title is nominal; floral decor, sign, drape and candles in the image are not assumed included.',{nominalDiameterFt:7});
 equipment('gold-mirror-welcome-sign','mirror-sign',[2.5,.3,4.5],'Arched gold frame with ornamental crest and reflective-look panel. No invented customer names, sign text, floral decor or separate easel.');
 equipment('gold-welcome-sign-easel','gold-easel',[2.2,2,5.3],'Slim gold three-leg easel with sign supports. Printed board and flowers are not selected with the easel.');
-equipment('greenery-and-floral-wall-8x8','greenery-wall',[8,1.5,8],'Dense green foliage face. The 8x8 label describes the upright face, not an 8ft-deep footprint. Flowers, neon sign, plinth and candles pictured around it are not assumed included. Support depth requires confirmation.',{verticalFace:true,nominalFaceFt:[8,8]});
-equipment('sequin-backdrop-panel-8x8','sequin-wall',[8,1.5,8],'Gold sequin curtain with vertical pleats. The 8x8 label describes the upright face. No flower arrangements, lights or separately billable stand is added; mounting/support hardware needs confirmation.',{verticalFace:true,nominalFaceFt:[8,8]});
+equipment('greenery-and-floral-wall-8x8','greenery-wall',[8,1.5,8],'Dense green foliage face. The 8x8 label describes the upright face, not an 8ft-deep footprint. Flowers, neon sign, plinth and candles pictured around it are not assumed included. Support depth requires confirmation.',{verticalFace:true,nominalFaceFt:[8,8],visualDepthFt:.30});
+equipment('sequin-backdrop-panel-8x8','sequin-wall',[8,1.5,8],'Gold sequin curtain with vertical pleats. The 8x8 label describes the upright face. No flower arrangements, lights or separately billable stand is added; mounting/support hardware needs confirmation.',{verticalFace:true,nominalFaceFt:[8,8],visualDepthFt:.16});
 equipment('water-barrel-cover','barrel-cover',[2,2,3],'White cloth sleeve with gathered top and overlap seam. Barrel, water, ballast capacity and anchoring hardware are not included by drawing the cover.',{coverOnly:true});
 equipment('leg-drape','leg-drape',[1.5,.8,7],'White drape gathered with a mid-height tie. This is fabric only, shown upright to illustrate its use. Tent and support pole are not additional rentals.',{coverOnly:true});
 rows['glass-water-pitcher-64-oz']={kind:'reference-only',placement:'tabletop',type:'pitcher-conflict',dimensions:[.6,.6,.8],note:'Reference conflict: the title and description say glass, but the canonical photo shows a reflective metal pitcher. Material and appearance require confirmation; no physical substitute is invented.'};
 rows['round-gold-metal-display-dish']={kind:'reference-only',placement:'tabletop',type:'dish-conflict',dimensions:[1,1,.1],note:'Reference conflict: this single-dish title uses the same two tiered-stand photo as the three-level display product. Correct shape and included quantity need confirmation.'};
+rows['hexagon-wedding-arch']={kind:'reference-only',placement:'equipment',type:'arch-conflict',dimensions:[7,2,7.5],note:'Reference conflict: the item is named Hexagon Wedding Arch, but its canonical photograph appears to show a peaked seven-sided frame. Confirm the actual frame shape before using it as a visual reference; no guessed hexagon or heptagon is substituted.'};
 export const PHASE6B_SLUGS=Object.freeze(Object.keys(rows));
 export function phase6bReference(product={}){
  const id=product.external_id||product.externalId||product.asset?.source?.externalId;

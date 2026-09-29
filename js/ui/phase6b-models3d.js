@@ -23,7 +23,7 @@ export function createPhase6bModel(product,item={}){
   if(![size.x,size.y,size.z].every(n=>Number.isFinite(n)&&n>0))throw new Error('Invalid Phase 6B geometry: '+ref.slug);
   // Give normalized geometry exactly the selected envelope. A taller close-up
   // must never silently move a saved item or expand its rental footprint.
-  body.scale.set(1/size.x,1/size.y,1/size.z);body.position.set(-center.x/size.x,-bounds.min.y/size.y,-center.z/size.z);
+  const depthRatio=ref.verticalFace?Math.min(1,(ref.visualDepthFt||.2)/d):1;body.scale.set(1/size.x,1/size.y,depthRatio/size.z);body.position.set(-center.x/size.x,-bounds.min.y/size.y,-center.z*depthRatio/size.z);
  }
  root.scale.set(w,h,d);
  root.userData={hardwareDetail:ref.kind==='tabletop',previewBackground:['ribbed-pitcher','flute','highball'].includes(ref.type)?'#50635b':undefined,kind:ref.kind==='tabletop'?'tabletop':'equipment',itemId:item.id,productId:product.productId||product.id,reference:ref,features,referenceOnly:ref.kind==='reference-only',dimensionsVerified:false,phase6b:true,asset:{fidelity:ref.kind==='reference-only'?'footprint':'photo-referenced-planning',source:{kind:ref.kind==='reference-only'?'unverified-reference':'catalog-photo',externalId:ref.externalId,referenceUrl:ref.referenceUrl,notes:ref.note}}};

@@ -12,7 +12,7 @@ const products=PHASE6B_SLUGS.map(product);
 for(const p of products)test('Phase 6B exact source and retained rental quantity: '+p.name,()=>{
  const before=JSON.stringify(p),r=phase6bReference(p);assert.ok(r);assert.equal(r.approved,false);assert.equal(phase6bReference({...p,external_id:'other:'+r.slug}),null);assert.equal(phase6bReference({name:p.name}),null);
  let scene,catalog,expected=2;
- if(r.kind==='equipment'){
+ if((r.kind==='equipment'||r.placement==='equipment')){
   const [d]=equipmentCatalog([p],true),[hidden]=equipmentCatalog([p],false);assert.ok(d,p.name);assert.equal(d.type,r.type);assert.equal(d.productId,p.id);assert.equal(hidden.pricePerDay,null);assert.equal(hidden.productId,p.id);
   const [old]=accessoryCatalog([p],true);assert.ok(old);assert.equal(old.productId,p.id);const placed=equipmentItem(d,'a',7,9),other=equipmentItem(d,'b',11,9);scene={objects:[placed,other]};catalog={equipment:[d],accessories:[old]};
   const legacy=summarizeEvent({objects:[accessoryItem(old,'old',3,4)]},{accessories:[old]},{includeTent:false});assert.equal(legacy.lines.filter(l=>l.productId===p.id)[0].qty,1);
@@ -37,4 +37,9 @@ test('sets, cover-only rentals and volume labels are not expanded',()=>{
  assert.equal(phase6bReference(product('25-gallon-insulated-beverage-dispenser')).capacityLabel,'2.5 gallon');
  for(const slug of ['water-barrel-cover','leg-drape'])assert.equal(phase6bReference(product(slug)).coverOnly,true);
  assert.equal(phase6bReference(product('25-foot-movie-screen-with-projector')).bundleVisual,true);
+});
+
+
+test('the named hexagon is not approved against a seven-sided source photograph',()=>{
+ const p=product('hexagon-wedding-arch'),r=phase6bReference(p);assert.equal(r.kind,'reference-only');assert.equal(r.placement,'equipment');assert.match(r.note,/seven-sided/);assert.equal(equipmentCatalog([p])[0].productId,p.id);
 });
