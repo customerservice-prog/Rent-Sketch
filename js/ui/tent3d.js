@@ -62,14 +62,40 @@ function makeSidewalls(t,p,sidewalls){
     else if(seg.side==='left'||seg.side==='right'){x=seg.side==='left'?-hw:hw;z=-hl+start+len/2;w=th;d=len;}
     else return;
     if(!windowWall){addBox(w,h,d,solid,x,h/2,z);return;}
-    addBox(w,h,d,glass,x,h/2,z);
     const horizontal=seg.side==='front'||seg.side==='back';
+    const panelSpan=Number(seg.panelWidthFt)||20;
+    const paneCount=panelSpan===10?2:1;
+    const bottomH=Math.min(2.05,h*.30),topH=Math.min(1.1,h*.18),windowH=Math.max(2,h-bottomH-topH);
+    // Real rental window sidewalls are mostly white vinyl with inset clear
+    // panes—not one full blue transparent sheet. A 20 ft pole/frame panel
+    // produces one broad pane per rendered 10 ft section; a 10 ft popup
+    // panel uses two smaller panes inside its single section.
     if(horizontal){
-      addBox(len,.16,.11,frame,x,.14,z);addBox(len,.16,.11,frame,x,h-.14,z);
-      for(const offset of [-len/2,0,len/2])addBox(.13,h,.11,frame,x+offset,h/2,z);
+      addBox(len,bottomH,.11,solid,x,bottomH/2,z);
+      addBox(len,topH,.11,solid,x,h-topH/2,z);
+      const paneW=len/paneCount;
+      for(let i=0;i<paneCount;i++){
+        const cx=x-len/2+paneW*(i+.5),clearW=Math.max(.8,paneW-.62);
+        addBox(clearW,windowH,.075,glass,cx,bottomH+windowH/2,z);
+      }
+      for(let i=0;i<=paneCount;i++){
+        const ox=x-len/2+(len/paneCount)*i;
+        addBox(.18,windowH,.13,frame,ox,bottomH+windowH/2,z);
+      }
+      addBox(len,.18,.13,frame,x,bottomH,z);addBox(len,.18,.13,frame,x,h-topH,z);
     }else{
-      addBox(.11,.16,len,frame,x,.14,z);addBox(.11,.16,len,frame,x,h-.14,z);
-      for(const offset of [-len/2,0,len/2])addBox(.11,h,.13,frame,x,h/2,z+offset);
+      addBox(.11,bottomH,len,solid,x,bottomH/2,z);
+      addBox(.11,topH,len,solid,x,h-topH/2,z);
+      const paneW=len/paneCount;
+      for(let i=0;i<paneCount;i++){
+        const cz=z-len/2+paneW*(i+.5),clearW=Math.max(.8,paneW-.62);
+        addBox(.075,windowH,clearW,glass,x,bottomH+windowH/2,cz);
+      }
+      for(let i=0;i<=paneCount;i++){
+        const oz=z-len/2+(len/paneCount)*i;
+        addBox(.13,windowH,.18,frame,x,bottomH+windowH/2,oz);
+      }
+      addBox(.13,.18,len,frame,x,bottomH,z);addBox(.13,.18,len,frame,x,h-topH,z);
     }
   });
   return group;
