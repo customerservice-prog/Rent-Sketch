@@ -1,0 +1,28 @@
+name: Furniture audit browser verification
+on:
+  push:
+    branches: [qa/furniture-accuracy-20260929]
+permissions:
+  contents: read
+jobs:
+  browser-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/furniture-browser --no-save playwright@1.56.1
+      - run: /tmp/furniture-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Test actual audit page on desktop and mobile
+        env:
+          NODE_PATH: /tmp/furniture-browser/node_modules
+        run: node tests/furniture-preview-browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: furniture-browser-evidence
+          retention-days: 7
+          path: qa-furniture-browser/

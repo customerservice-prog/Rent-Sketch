@@ -1,21 +1,18 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>RentSketch Catalog Visual Preview</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#eef3ef;color:#24382b}
-body{display:grid;place-items:center;padding:10px}.preview{width:100%;height:100%;min-height:180px;display:grid;grid-template-rows:1fr auto;gap:8px}
-.visual{display:grid;place-items:center;min-height:0;overflow:hidden;border:1px solid #d5dfd7;border-radius:12px;background:linear-gradient(145deg,#fff,#f4f8f4);padding:12px}
+body{display:grid;place-items:center;padding:10px}.preview{width:100%;height:100%;min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:8px}
+.visual{display:grid;place-items:center;min-width:0;min-height:0;overflow:hidden;border:1px solid #d5dfd7;border-radius:12px;background:linear-gradient(145deg,#fff,#f4f8f4);padding:12px;position:relative}
 .visual .inventory-media,.visual .inventory-illustration,.visual .inventory-symbol,.visual .inventory-symbol>svg{display:grid;place-items:center;width:100%;height:100%;min-height:0}
-.visual img,.visual svg{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain}
-.visual small{display:none}.meta{text-align:center}.meta strong{display:block;font-size:12px;line-height:1.3}.meta span{display:block;margin-top:2px;color:#657369;font-size:10px}.error{padding:18px;text-align:center;color:#7b5047}
-</style>
-</head>
-<body>
-<div class="preview"><div class="visual" id="visual"><span>Loading RentSketch visual…</span></div><div class="meta"><strong id="name"></strong><span id="status">Current planning representation</span></div></div>
+.visual img,.visual svg{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain}.visual.is-live-3d{padding:0;display:block}.visual canvas{display:block;width:100%;height:100%;touch-action:none}
+.visual small{display:none}.meta{min-width:0;text-align:center}.meta strong{display:block;font-size:12px;line-height:1.3;overflow-wrap:anywhere}.meta span{display:block;margin-top:2px;color:#657369;font-size:10px}.error{padding:18px;text-align:center;color:#7b5047}
+</style></head><body>
+<div class="preview"><div class="visual" id="visual"><span>Loading RentSketch visual…</span></div><div class="meta"><strong id="name"></strong><span id="status" role="status">Current planning representation</span></div></div>
 <script type="module">
 import {TENTS,TABLES,CHAIRS} from '../js/data/tenant.js';
 import {liveCatalog} from '../js/data/catalog.js';
@@ -25,37 +22,32 @@ import {contextualProducts} from '../js/core/contextual-products.js';
 import {tabletopCatalog,tabletopType} from '../js/data/tabletop.js';
 import {LIGHTING_OPTIONS} from '../js/data/lighting.js';
 import {equipmentPhoto} from '../js/ui/inventory-browser.js';
-
 const q=new URLSearchParams(location.search),tenant=q.get('tenant')||'friendly',productId=q.get('productId')||'';
 const api='https://rentsketch-api-production.up.railway.app';
 const visual=document.getElementById('visual'),name=document.getElementById('name'),status=document.getElementById('status');
 function cat(v){return String(v||'').toLowerCase().replace(/[\s-]+/g,'_')}
 function fallback(p){return {id:p.id,productId:p.id,name:p.name,category:cat(p.category),kind:cat(p.category),photoUrl:null,visualModelId:p.visual_model_id||null,widthFt:Number(p.width_ft)||null,depthFt:Number(p.length_ft)||null,dimensionsConfirmed:!!(Number(p.width_ft)&&Number(p.length_ft))}}
 try{
- const res=await fetch(api+'/api/tenants/'+encodeURIComponent(tenant)+'/products',{headers:{Accept:'application/json'}});
+ const res=await fetch(api+'/api/tenants/'+encodeURIComponent(tenant)+'/products',{headers:{Accept:'application/json'},signal:AbortSignal.timeout(15000)});
  if(!res.ok)throw new Error('Catalog unavailable');
  const body=await res.json(),products=body.products||[],p=products.find(x=>String(x.id)===String(productId));
- if(!p)throw new Error('Product not found');
- name.textContent=p.name||'Rental item';
- let resolved=null,category=cat(p.category);
+ if(!p)throw new Error('Product not found');name.textContent=p.name||'Rental item';
+ let resolved=null,category=cat(p.category),mappedFurniture=false;
  if(isInflatableProduct(p)){resolved=inflatableCatalog([p],true)[0]||fallback(p);category='inflatable';}
  else if(['tent','table','chair'].includes(category)){
    const base=category==='tent'?TENTS:category==='table'?TABLES:CHAIRS;
-   resolved=liveCatalog(category,base,[p],true,p.id)[0]||fallback(p);
+   const mapped=liveCatalog(category,base,[p],true,p.id)[0];resolved=mapped||fallback(p);mappedFurniture=!!mapped&&['table','chair'].includes(category);
  }else{
-   const context=contextualProducts({products:[p],tabletop:[],linens:[],lighting:LIGHTING_OPTIONS,showPrices:true});
-   resolved=context.find(x=>x.productId===p.id)||null;
-   if(resolved){category=resolved.kind==='sidewall'?'tent':resolved.kind;}
+   const context=contextualProducts({products:[p],tabletop:[],linens:[],lighting:LIGHTING_OPTIONS,showPrices:true});resolved=context.find(x=>x.productId===p.id)||null;
+   if(resolved)category=resolved.kind==='sidewall'?'tent':resolved.kind;
    if(!resolved&&tabletopType(p)){resolved=tabletopCatalog([p],true)[0];if(resolved){resolved.kind='tabletop';category='tabletop';}}
    if(!resolved){resolved=equipmentCatalog([p],true)[0]||fallback(p);category=resolved.category||resolved.sourceCategory||category;}
  }
  resolved={...resolved,photoUrl:null};
- visual.innerHTML=equipmentPhoto(resolved,{category,showProductPhoto:false});
- const approx=resolved.dimensionsConfirmed===false||resolved.visualFidelity==='illustrative'||resolved.visualFidelity==='footprint';
- status.textContent=approx?'Planning/illustrative visual — requires audit approval':'Current RentSketch visual';
-}catch(error){
- visual.innerHTML='<div class="error">'+String(error.message||error)+'</div>';status.textContent='Preview unavailable';
-}
-</script>
-</body>
-</html>
+ const showFallback=()=>{visual.classList.remove('is-live-3d');visual.innerHTML=equipmentPhoto(resolved,{category,showProductPhoto:false});status.textContent='3D unavailable — fallback planning illustration, not live 3D';};
+ if(mappedFurniture){
+   try{const {mountCatalogFurniture}=await import('../js/ui/catalog-furniture3d.js?v=20260929-phase3-1');mountCatalogFurniture(visual,resolved,category,showFallback);status.textContent='Live RentSketch 3D · Drag to rotate · Photo-referenced planning model';}
+   catch(error){showFallback();}
+ }else{visual.innerHTML=equipmentPhoto(resolved,{category,showProductPhoto:false});status.textContent='Planning illustration — visual accuracy requires review';}
+}catch(error){visual.replaceChildren();const text=document.createElement('div');text.className='error';text.textContent=String(error.message||error);visual.appendChild(text);status.textContent='Preview unavailable';}
+</script></body></html>
