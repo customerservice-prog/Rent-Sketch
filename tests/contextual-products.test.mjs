@@ -26,7 +26,8 @@ test('one physical 20ft wall remains one SKU quantity across two rendered10ft se
  assert.deepEqual(selected.map(l=>[l.productId,l.qty,l.amount]),[['wall20',1,60],['linen-a',1,24],['plate-gold',8,16],['lighting-b',1,125]]);
  const payload=buildBookingHandoff({tenant:'friendly',lines:selected,products});assert.deepEqual(payload.items.map(x=>[x.slug,x.quantity]),[['solid-wall20',1],['white-linen',1],['gold-plate',8],['lighting-b',1]]);
  const removed=summarizeEvent(scene,{...catalog,contextual:[]});assert.equal(removed.lines.find(l=>l.category==='lighting').amount,null);assert.equal(removed.lines.find(l=>l.category==='lighting').productId,'lighting-b','removedSKU cannot silently become variantA');
- assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:removed.lines.filter(l=>l.category==='lighting'),products}),/staff confirmation/);
+ const stillMapped=buildBookingHandoff({tenant:'friendly',lines:removed.lines.filter(l=>l.category==='lighting'),products});assert.equal(stillMapped.items[0].slug,'lighting-b');assert.equal(stillMapped.items[0].amount,undefined,'checkout re-prices; a missing local display price is never transferred');
+ assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:removed.lines.filter(l=>l.category==='lighting'),products:products.filter(p=>p.id!=='lighting-b')}),/staff confirmation/);
 });
 
 

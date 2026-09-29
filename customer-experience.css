@@ -629,3 +629,6 @@ body:has(#step-review.active) #app{max-width:1220px;margin:24px auto 44px;paddin
 /* Book Now is the primary Friendly review action. */
 #step-review .review-side-column #friendlyBooking{order:-1}
 #friendlyBooking[hidden]{display:none!important}
+
+/* Hidden payment controls must not be revealed by premium flex rules. */
+#step-review [hidden]{display:none!important}

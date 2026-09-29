@@ -35,7 +35,7 @@ export function applyTableProduct(item,product){
  if(product.kind==='linen')return {linenId:product.sourceId,linenProductId:product.productId,linenColor:product.colors?.includes(item.linenColor)?item.linenColor:product.colors?.[0]||'White'};
  const entries=JSON.parse(JSON.stringify(item.tabletop||[])),existing=entries.find(entry=>entry.productId===product.productId);
  // Selection applies this exact item once (or one per seat), never duplicates it silently.
- if(!existing)entries.push({productId:product.productId,qty:1,perSeat:!!product.perSeat,...(['napkin','runner'].includes(product.type)?{color:'White'}:{})});
+ if(!existing)entries.push({productId:product.productId,qty:1,perSeat:!!product.perSeat,...(['napkin','runner'].includes(product.type)?{color:product.colors?.[0]||'White'}:{})});
  return {tabletop:entries};
 }
 export function lightingCompatibility(product,tent){

@@ -33,6 +33,7 @@ try{
  const body=await res.json(),products=body.products||[],p=products.find(x=>String(x.id)===String(productId));
  if(!p)throw new Error('Product not found');name.textContent=p.name||'Rental item';
  let resolved=null,category=cat(p.category),mappedFurniture=false;
+ const phase4=category==='linen'||!!tabletopType(p);
  if(isInflatableProduct(p)){resolved=inflatableCatalog([p],true)[0]||fallback(p);category='inflatable';}
  else if(['tent','table','chair'].includes(category)){
    const base=category==='tent'?TENTS:category==='table'?TABLES:CHAIRS;
@@ -45,7 +46,14 @@ try{
  }
  resolved={...resolved,photoUrl:null};
  const showFallback=()=>{visual.classList.remove('is-live-3d');visual.innerHTML=equipmentPhoto(resolved,{category,showProductPhoto:false});status.textContent='3D unavailable — fallback planning illustration, not live 3D';};
- if(mappedFurniture){
+ if(phase4){
+   try{
+     const {mountCatalogPhase4}=await import('../js/ui/catalog-phase4.js?v=20260929-phase4-1');
+     const result=mountCatalogPhase4(visual,p,products,showFallback);
+     if(result){status.textContent='Live RentSketch 3D · Drag to rotate · '+result.note;}
+     else{visual.textContent='This product does not yet have an audited 3D representation.';status.textContent='Reference-only item — not visually approved';}
+   }catch(error){showFallback();}
+ }else if(mappedFurniture){
    try{const {mountCatalogFurniture}=await import('../js/ui/catalog-furniture3d.js?v=20260929-phase3-1');mountCatalogFurniture(visual,resolved,category,showFallback);status.textContent='Live RentSketch 3D · Drag to rotate · Photo-referenced planning model';}
    catch(error){showFallback();}
  }else{visual.innerHTML=equipmentPhoto(resolved,{category,showProductPhoto:false});status.textContent='Planning illustration — visual accuracy requires review';}
