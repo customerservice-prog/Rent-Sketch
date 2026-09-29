@@ -9,18 +9,12 @@
   if (!['friendly', 'generic'].includes(tenant)) tenant = null;
   var query = new URLSearchParams(location.search);
   var orderPanel = document.getElementById('orderAccess');
-  if (query.get('mode') === 'order') {
-    document.body.classList.add('order-access-page');
-    orderPanel.open = true;
-    document.getElementById('paidAccess').hidden = true;
-    document.getElementById('paidAccessLink').hidden = false;
-    document.querySelector('h1').textContent = 'Design your booked event.';
-    document.querySelector('.eyebrow').textContent = 'Included with Friendly';
-    document.querySelector('.intro').textContent = 'Enter your first name and order number to open your included event designer.';
-    document.querySelector('.details strong').textContent = 'Open here. No email or code needed.';
-    document.querySelector('.details p').textContent = 'We check your active booking and open its event layout immediately. Use the same name and order number to return on another device.';
-    document.getElementById('emailHelp').hidden = true;
-    document.getElementById('orderNumber').value = (query.get('order') || '').slice(0,80);
+  if (tenant === 'friendly' && query.get('mode') === 'order') {
+    var destination = new URL('/designer/', location.origin);
+    destination.searchParams.set('tenant', 'friendly');
+    destination.searchParams.set('source', 'legacy_order_access');
+    location.replace(destination.toString());
+    return;
   }
   var orderForm = document.getElementById('orderAccessForm');
   orderForm.addEventListener('submit', async function (event) {
