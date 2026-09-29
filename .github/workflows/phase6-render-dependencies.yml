@@ -1,0 +1,21 @@
+name: Phase 6 isolated renderer dependencies
+on:
+  push:
+    branches: [qa/phase6-accessories-20260929]
+    paths: [.github/workflows/phase6-render-dependencies.yml]
+permissions: {contents: read}
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm --prefix tests ci
+      - run: tar -czf phase6-test-dependencies.tgz tests/node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase6-test-dependencies
+          path: phase6-test-dependencies.tgz
+          retention-days: 3
