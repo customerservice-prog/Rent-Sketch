@@ -77,3 +77,16 @@ button,input,select,textarea{font:inherit}.dash-shell{min-height:100vh;backgroun
 .catalog-audit-card>footer strong{font-size:11px;line-height:1.4;color:#405247}.catalog-audit-card>footer span{font-size:10px;color:#8a948e;white-space:nowrap}
 @media(max-width:1050px){.catalog-phase-tabs{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:720px){.catalog-phase-tabs{grid-template-columns:1fr 1fr}.catalog-compare{grid-template-columns:1fr}.catalog-compare>section+section{border-left:0;border-top:1px solid #e7ece8}.catalog-media{height:230px}.catalog-audit-card>header,.catalog-audit-card>footer{align-items:flex-start;flex-direction:column}.catalog-audit-card>footer span{white-space:normal}}
+
+
+/* Catalog Accuracy approval workflow */
+.catalog-audit-card.approved{border-color:#b8d9c1;background:linear-gradient(180deg,#fff,#fbfefb)}
+.catalog-audit-status.approved{background:#e4f4e8;color:#2d6940;border:1px solid #bcdcc4}
+.catalog-audit-actions{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid #edf1ed;background:#fbfcfb}
+.catalog-audit-actions button{min-height:36px;padding:7px 10px;border:1px solid #d6dfd8;border-radius:9px;background:#fff;color:#46574c;font:750 11px system-ui;cursor:pointer}
+.catalog-audit-actions button:hover{border-color:#7eaa89}
+.catalog-audit-actions button[data-audit="approved"]{background:#eaf6ed;border-color:#b9d8c0;color:#2d6840}
+.catalog-audit-actions button[data-audit="rebuild"]{background:#fff4f1;border-color:#e8c4be;color:#8e4036}
+.catalog-audit-actions button:disabled{opacity:.55;cursor:wait}
+.catalog-audit-card.approved .catalog-audit-actions button[data-audit="approved"]{box-shadow:inset 0 0 0 2px #8fbd9a}
+@media(max-width:720px){.catalog-audit-actions{display:grid;grid-template-columns:1fr}.catalog-audit-actions button{width:100%}}
