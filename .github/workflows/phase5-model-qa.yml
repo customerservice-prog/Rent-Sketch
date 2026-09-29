@@ -1,0 +1,84 @@
+name: Phase 5 model and booking QA
+on:
+  push:
+    branches: [qa/phase5-equipment-20260929]
+    paths: [.github/workflows/phase5-model-qa.yml]
+permissions: {contents: write}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply only integrity-checked scoped source
+        run: |
+          mkdir -p qa-phase5
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib,base64,gzip
+          raw=''.join(Path('.github/phase5-payload/part-'+str(i)+'.b64').read_text().strip() for i in range(2))
+          Path('qa-phase5/uploaded-patch.b64').write_text(raw)
+          assert hashlib.sha256(raw.encode()).hexdigest()=='7225cfffb8201834c008ca22833125ee12aef8e8a16a98f7a846b1aed609b512','Patch transport integrity mismatch'
+          changes=json.loads(gzip.decompress(base64.b64decode(raw,validate=True)))
+          assert len(changes)==22
+          for row in changes:
+            p=Path(row['path']);assert '..' not in p.parts and not p.is_absolute() and p.parts[0] in ['js','tests','catalog-preview','designer','dashboard']
+            old=p.read_text() if p.exists() else None
+            assert (hashlib.sha256(old.encode()).hexdigest() if old is not None else None)==row['before'],str(p)+' changed since baseline'
+            new=row.get('content',old)
+            for start,end,value in reversed(row.get('edits',[])):new=new[:start]+value+new[end:]
+            assert hashlib.sha256(new.encode()).hexdigest()==row['after'],str(p)+' patch differs'
+            p.parent.mkdir(parents=True,exist_ok=True);p.write_text(new)
+          Path('qa-phase5/scoped-files.json').write_text(json.dumps([row['path'] for row in changes]))
+          PY
+          git diff --check
+          git diff --exit-code 485a87d9b67ead7e7d4cc88011eabbe5fad7e773 -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js
+      - name: Read current public products and their canonical website photos
+        run: |
+          mkdir -p qa-phase5/references
+          node <<'JS'
+          const fs=require('node:fs');const read=async u=>{const r=await fetch(u,{signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(r.status+' '+u);return r.json();};(async()=>{const catalog=await read('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products'),website=await read('https://www.friendlypartyrental.com/api/items');fs.writeFileSync('qa-phase5/catalog.json',JSON.stringify(catalog));fs.writeFileSync('qa-phase5/website.json',JSON.stringify(website));const products=[];for(const p of catalog.products){if(!p.active||!p.external_id?.startsWith('fpr:'))continue;const slug=p.external_id.slice(4);if(!(['lighting','dance_floor'].includes(p.category)||/^(4375-watt-generator|30a-power-distribution-spider-box|20-inch-fan)$/.test(slug)))continue;const r=await fetch('https://www.friendlypartyrental.com/api/item-image/'+slug,{signal:AbortSignal.timeout(15000)});if(!r.ok||!r.headers.get('content-type')?.startsWith('image/'))throw Error('Photo unavailable '+slug);fs.writeFileSync('qa-phase5/references/'+slug+'.img',Buffer.from(await r.arrayBuffer()));products.push({id:p.id,slug,name:p.name,category:p.category,model:p.visual_model_id,error:null});}if(products.length!==23)throw Error('Reconcile changed Phase 5 catalog before release');fs.writeFileSync('qa-phase5/manifest.json',JSON.stringify({products,checkedAt:new Date().toISOString()},null,2));console.log('Read '+products.length+' canonical photos');})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase5-browser --no-save playwright@1.56.1
+      - run: /tmp/phase5-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Geometry, identity, catalog and booking contract checks
+        run: |
+          set -o pipefail
+          node --test tests/phase5-catalog.test.mjs tests/book-now-contract.test.mjs tests/contextual-products.test.mjs tests/party-scene.test.mjs tests/equipment-assets.test.mjs tests/furniture-catalog.test.mjs tests/phase4-linens.test.mjs | tee qa-phase5/unit-tests.log
+          node --experimental-vm-modules tests/phase5-mesh.cjs | tee qa-phase5/mesh-tests.log
+          node --experimental-vm-modules tests/equipment-assets-mesh.cjs | tee qa-phase5/equipment-regression.log
+          node --experimental-vm-modules tests/phase4-render.cjs | tee qa-phase5/linen-regression.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs | tee qa-phase5/furniture-regression.log
+      - name: Actual shared renderer captures and mobile audit navigation
+        env: {NODE_PATH: /tmp/phase5-browser/node_modules}
+        run: node tests/phase5-browser.cjs
+      - name: Save candidate only to isolated QA branch
+        run: |
+          python3 - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          paths=json.loads(Path('qa-phase5/scoped-files.json').read_text())
+          subprocess.run(['git','config','user.name','RentSketch QA'],check=True)
+          subprocess.run(['git','config','user.email','rentsketch-qa@users.noreply.github.com'],check=True)
+          subprocess.run(['git','add','--',*paths],check=True)
+          subprocess.run(['git','commit','-m','Render photo-referenced Phase 5 equipment with exact checkout identities preserved'],check=True)
+          subprocess.run(['git','push','origin','HEAD:refs/heads/qa/phase5-equipment-20260929'],check=True)
+          commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()} for p in paths]
+          Path('qa-phase5/release-tree.json').write_text(json.dumps({'base':'485a87d9b67ead7e7d4cc88011eabbe5fad7e773','testedCommit':commit,'entries':entries},indent=2))
+          PY
+      - name: Package source and transport evidence
+        if: always()
+        run: |
+          mkdir -p qa-phase5
+          tar -czf qa-phase5/runtime-source.tgz js tests/phase5* catalog-preview designer dashboard
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase5-model-review
+          path: qa-phase5
+          retention-days: 7
