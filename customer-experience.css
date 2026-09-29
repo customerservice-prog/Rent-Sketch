@@ -614,3 +614,14 @@ body:has(#step-review.active) #app{max-width:1220px;margin:24px auto 44px;paddin
   .review-live-lines>div{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 0!important}
   .review-live-lines>div>strong{font-size:13px!important}
 }
+
+
+/* Catalog accuracy references inside customer inspectors */
+.catalog-reference-card{display:grid;gap:6px;margin:0 0 10px;padding:10px;border:1px solid #dbe4dd;border-radius:12px;background:#fafcfb}
+.catalog-reference-card>span{font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#477055}
+.catalog-reference-card img{display:block;width:100%;max-height:170px;object-fit:contain;border-radius:9px;background:#fff}
+.catalog-reference-card small{font-size:10px;color:#748078;text-align:center}
+.catalog-accuracy-badge{display:inline-flex;align-items:center;width:max-content;max-width:100%;margin:0 0 10px;padding:6px 9px;border-radius:999px;font-size:10px;font-weight:850;line-height:1.3}
+.catalog-accuracy-badge.exact{background:#e8f5eb;color:#2e6940;border:1px solid #c5dfcb}
+.catalog-accuracy-badge.review{background:#fff5df;color:#805d18;border:1px solid #ead5a1}
+@media(max-width:720px){.catalog-reference-card img{max-height:135px}.catalog-accuracy-badge{white-space:normal}}
