@@ -57,7 +57,10 @@ function findCompatible(products,id){
     'linen-napkins':n=>/napkin/.test(n),
     'linen-chair-cover':n=>/chair/.test(n)&&/cover/.test(n),
   };
-  const rule=rules[id];return rule?live.find(p=>rule(String(p.name||'').toLowerCase())):null;
+  const rule=rules[id];
+  if(!rule)return null;
+  const matches=live.filter(p=>rule(String(p.name||'').toLowerCase()));
+  return matches.length===1?matches[0]:null;
 }
 const LINEN_BASE=JSON.parse(JSON.stringify(LINENS));
 function applyTenantLinens(detail){
