@@ -5,17 +5,17 @@ import { objectLocalDimensions } from '../core/world-space.js';
 export const INFLATABLES = [];
 const profile=(slug,style,colors,widthFt,depthFt,heightFt,extra={})=>({slug,style,colors,widthFt,depthFt,heightFt,...extra});
 export const INFLATABLE_PROFILES = [
-  profile('rainbow-castle-bounce-house','castle',['#1453bb','#efc829','#d73b30','#36a44d'],15,18,15),
-  profile('crayon-bounce-house','crayon',['#17449a','#edcf30','#e84b44','#25bade'],15,17,14),
-  profile('pink-inflatable-bounce-house','castle',['#a349ad','#f08bb8','#139cc0','#8c63b9'],15,18,15),
-  profile('patriotic-red-white-and-blue-bounce-house','castle',['#183e8a','#eeeeec','#d53b35','#f3f2ee'],15,18,15),
-  profile('wedding-white-bounce-house','white',['#f5f1e8','#fffcf4','#ece7dd','#ffffff'],15,18,14),
-  profile('fire-truck-water-slide-bounce-house','firetruck',['#cf302d','#ed5740','#29313c','#ead6bf'],16,32,15,{combo:true}),
-  profile('pirate-ship-slide-combo-bounce-house','pirate',['#bd643c','#ee9b37','#2849ae','#6e412f'],16,32,16,{combo:true}),
-  profile('tidal-wave-inflatable-water-slide','slide',['#1678b6','#f2f2ec','#2ca6d8','#1e4d83'],16,32,17,{lanes:2}),
-  profile('fire-red-marble-inflatable-water-slide','slide',['#e44125','#ffca3b','#dc3024','#717a7c'],16,32,18,{lanes:2,marble:true}),
-  profile('18ft-purple-tropical-marble-double-bay-waterslide','slide',['#753dac','#f2be33','#17b6dd','#702c9c'],18,36,18,{lanes:2,palms:true,marble:true}),
-  profile('22ft-tropical-lava-wave-marble-waterslide','slide',['#b82420','#ffbf2f','#d74329','#e3811d'],18,40,22,{lanes:2,palms:true,marble:true}),
+  profile('rainbow-castle-bounce-house','castle',['#1453bb','#efc829','#d73b30','#36a44d'],15,18,15,{variant:'rainbow-castle'}),
+  profile('crayon-bounce-house','crayon',['#17449a','#edcf30','#e84b44','#25bade'],15,17,14,{variant:'crayon'}),
+  profile('pink-inflatable-bounce-house','castle',['#a349ad','#f08bb8','#139cc0','#8c63b9'],15,18,15,{variant:'pink-princess'}),
+  profile('patriotic-red-white-and-blue-bounce-house','castle',['#183e8a','#eeeeec','#d53b35','#f3f2ee'],15,18,15,{variant:'patriotic'}),
+  profile('wedding-white-bounce-house','white',['#f5f1e8','#fffcf4','#ece7dd','#ffffff'],15,18,14,{variant:'wedding-white'}),
+  profile('fire-truck-water-slide-bounce-house','firetruck',['#cf302d','#ed5740','#29313c','#ead6bf'],16,32,15,{combo:true,variant:'firetruck'}),
+  profile('pirate-ship-slide-combo-bounce-house','pirate',['#bd643c','#ee9b37','#2849ae','#6e412f'],16,32,16,{combo:true,variant:'pirate'}),
+  profile('tidal-wave-inflatable-water-slide','slide',['#1678b6','#f2f2ec','#2ca6d8','#1e4d83'],16,32,17,{lanes:2,variant:'tidal-wave',wave:true}),
+  profile('fire-red-marble-inflatable-water-slide','slide',['#e44125','#ffca3b','#dc3024','#717a7c'],16,32,18,{lanes:2,marble:true,variant:'fire-marble',flame:true}),
+  profile('18ft-purple-tropical-marble-double-bay-waterslide','slide',['#753dac','#f2be33','#17b6dd','#702c9c'],18,36,18,{lanes:2,palms:true,marble:true,variant:'purple-tropical'}),
+  profile('22ft-tropical-lava-wave-marble-waterslide','slide',['#b82420','#ffbf2f','#d74329','#e3811d'],18,40,22,{lanes:2,palms:true,marble:true,variant:'lava-wave',wave:true}),
 ];
 const normal=v=>String(v||'').toLowerCase().replace(/×/g,'x').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 export function isInflatableProduct(p){return p?.active!==false && !/package|cover|blower|repair|accessor/i.test(p?.name||'') && /\bbounce\s*house\b|\bwater\s*slide\b|\bwaterslide\b|\bobstacle\s*course\b|\binflatable\s+(?:slide|game|combo)\b/i.test(p?.name||'');}
@@ -35,7 +35,7 @@ export function inflatableCatalog(products,showPrices){
 }
 export function byId(id){return INFLATABLES.find(p=>p.id===id);}
 function visualProfile(product={}){
- return {version:1,slug:String(product.slug||''),style:['castle','crayon','white','firetruck','pirate','slide','combo'].includes(product.style)?product.style:'castle',colors:(Array.isArray(product.colors)?product.colors:[]).slice(0,4).map(c=>/^#[0-9a-f]{3,8}$/i.test(c)?c:'#70998b'),combo:product.combo===true,lanes:product.lanes===2?2:1,palms:product.palms===true,marble:product.marble===true};
+ return {version:2,slug:String(product.slug||''),variant:String(product.variant||''),style:['castle','crayon','white','firetruck','pirate','slide','combo'].includes(product.style)?product.style:'castle',colors:(Array.isArray(product.colors)?product.colors:[]).slice(0,4).map(c=>/^#[0-9a-f]{3,8}$/i.test(c)?c:'#70998b'),combo:product.combo===true,lanes:product.lanes===2?2:1,palms:product.palms===true,marble:product.marble===true,wave:product.wave===true,flame:product.flame===true};
 }
 export function inflatableItem(product,id,x=0,y=0){
  return {id,kind:'inflatable',inflatableId:product.id,productId:product.productId||null,externalId:product.externalId||null,name:product.name||'Inflatable',widthFt:product.widthFt,depthFt:product.depthFt,modelWidthFt:product.widthFt,modelDepthFt:product.depthFt,heightFt:product.heightFt,footprintOriented:true,dimensionsConfirmed:product.dimensionsConfirmed===true,heightConfirmed:product.heightConfirmed===true,modelProfile:visualProfile(product),rotationDeg:0,x,y};
