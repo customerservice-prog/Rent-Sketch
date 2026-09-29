@@ -33,6 +33,7 @@ jobs:
             imports=json.loads(m.group(2))
             for row in changes:imports['imports']['../'+row['path']]='../'+row['path']+'?v=20260929-seating-alignment-1'
             s=s[:m.start(2)]+json.dumps(imports,separators=(',',':'))+s[m.end(2):];p.write_text(s)
+          p=Path('tests/seating-alignment-browser.cjs');s=p.read_text();old="p.on('pageerror',e=>errors.push({baseline,width,error:String(e)}));";new="p.on('pageerror',e=>{errors.push({baseline,width,error:String(e)});console.error('BROWSER ERROR',baseline,width,e);fs.writeFileSync(path.join(out,'browser-errors.json'),JSON.stringify(errors));});";assert old in s;s=s.replace(old,new);p.write_text(s)
           PY
           git diff --check
           node --check tests/seating-alignment-browser.cjs
@@ -58,7 +59,7 @@ jobs:
         run: |
           git config user.name 'RentSketch QA'
           git config user.email 'rentsketch-qa@users.noreply.github.com'
-          git add js/core/geometry.js js/core/photo-geometry.js js/core/seating.js js/core/world-space.js js/ui/equipment3d.js js/ui/party-styling.js js/ui/plan2d.js js/ui/view3d.js designer/index.html catalog-preview/index.html
+          git add js/core/geometry.js js/core/photo-geometry.js js/core/seating.js js/core/world-space.js js/ui/equipment3d.js js/ui/party-styling.js js/ui/plan2d.js js/ui/view3d.js designer/index.html catalog-preview/index.html tests/seating-alignment-browser.cjs
           git commit -m 'Align rendered tables, chairs and guests through one shared rotation transform'
           git push origin HEAD:refs/heads/qa/seating-alignment-20260929
           python3 - <<'PY'
