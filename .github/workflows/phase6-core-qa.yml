@@ -1,0 +1,82 @@
+name: Phase 6 core models and booking QA
+on:
+  push:
+    branches: [qa/phase6-core-20260929]
+    paths: [.github/workflows/phase6-core-qa.yml]
+permissions: {contents: write}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply only the integrity-checked scoped patch
+        run: |
+          mkdir -p qa-phase6
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,base64,gzip,json
+          raw=''.join(Path('.github/phase6-core/part-'+str(i)+'.b64').read_text().strip() for i in range(2))
+          Path('qa-phase6/received-patch.txt').write_text(raw)
+          assert hashlib.sha256(raw.encode()).hexdigest()=='f2511467755223c3e806fef2c289b9e94a6286196a60df393f1898397bede883','Patch transport mismatch'
+          changes=json.loads(gzip.decompress(base64.b64decode(raw,validate=True)))
+          assert len(changes)==14
+          for row in changes:
+            p=Path(row['path']);assert not p.is_absolute() and '..' not in p.parts and p.parts[0] in ['js','tests','designer','dashboard','catalog-preview']
+            old=p.read_text() if p.exists() else None
+            assert (hashlib.sha256(old.encode()).hexdigest() if old is not None else None)==row['before'],str(p)+' baseline mismatch'
+            new=row.get('content',old)
+            for start,end,value in reversed(row.get('edits',[])):new=new[:start]+value+new[end:]
+            assert hashlib.sha256(new.encode()).hexdigest()==row['after'],str(p)+' differs from tested source'
+            p.parent.mkdir(parents=True,exist_ok=True);p.write_text(new)
+          Path('qa-phase6/scoped-files.json').write_text(json.dumps([r['path'] for r in changes]))
+          PY
+          git diff --check
+          git diff --exit-code de7fde908d5aa70b90b268aa0145b08c8f7cb3d4 -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js js/core/seating.js js/ui/equipment3d.js js/core/world-space.js
+      - name: Capture current public identities and canonical product photos
+        run: |
+          mkdir -p qa-phase6/references
+          node <<'JS'
+          const fs=require('node:fs');
+          (async()=>{const {PHASE6_SLUGS}=await import('./js/data/phase6-reference.js');const read=async url=>{const r=await fetch(url,{signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(r.status+' '+url);return r.json();};const catalog=await read('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products'),website=await read('https://www.friendlypartyrental.com/api/items');fs.writeFileSync('qa-phase6/catalog.json',JSON.stringify(catalog));fs.writeFileSync('qa-phase6/website.json',JSON.stringify(website));const rows=[];for(const slug of PHASE6_SLUGS){const p=catalog.products.filter(p=>p.external_id==='fpr:'+slug),w=website.items.filter(w=>w.slug===slug);if(p.length!==1||w.length!==1)throw Error('Ambiguous/missing exact source '+slug);const r=await fetch('https://www.friendlypartyrental.com/api/item-image/'+slug,{signal:AbortSignal.timeout(20000)});const row={slug,productId:p[0].id,websiteId:w[0].id,photoStatus:r.status};if(r.ok&&r.headers.get('content-type')?.startsWith('image/'))fs.writeFileSync('qa-phase6/references/'+slug+'.img',Buffer.from(await r.arrayBuffer()));else if(slug!=='sugar-and-creamer-set')throw Error('Unexpected missing photo '+slug);rows.push(row);}fs.writeFileSync('qa-phase6/references.json',JSON.stringify({rows,checkedAt:new Date().toISOString()},null,2));})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase6-browser --no-save playwright@1.56.1
+      - run: /tmp/phase6-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Run the focused catalog, mesh, seating and booking tests
+        run: |
+          set -o pipefail
+          node --test tests/phase6-core.test.mjs tests/book-now-contract.test.mjs tests/contextual-products.test.mjs tests/party-scene.test.mjs tests/equipment-assets.test.mjs tests/furniture-catalog.test.mjs tests/seating-alignment.test.mjs | tee qa-phase6/unit.log
+          node --experimental-vm-modules tests/phase6-core-mesh.cjs | tee qa-phase6/mesh.log
+          node --experimental-vm-modules tests/seating-alignment-mesh.cjs | tee qa-phase6/seating.log
+      - name: Render every source model and inspect desktop/mobile audit controls
+        env: {NODE_PATH: /tmp/phase6-browser/node_modules}
+        run: node tests/phase6-core-browser.cjs
+      - name: Store successful candidate in QA branch only
+        run: |
+          python3 - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          paths=json.loads(Path('qa-phase6/scoped-files.json').read_text())
+          subprocess.run(['git','config','user.name','RentSketch QA'],check=True)
+          subprocess.run(['git','config','user.email','rentsketch-qa@users.noreply.github.com'],check=True)
+          subprocess.run(['git','add','--',*paths],check=True)
+          subprocess.run(['git','commit','-m','Build source-matched games, concessions and specialty equipment without changing saved rentals or checkout'],check=True)
+          subprocess.run(['git','push','origin','HEAD:refs/heads/qa/phase6-core-20260929'],check=True)
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()} for p in paths]
+          Path('qa-phase6/release-tree.json').write_text(json.dumps({'base':'de7fde908d5aa70b90b268aa0145b08c8f7cb3d4','testedCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'entries':entries},indent=2))
+          PY
+      - name: Preserve source and test evidence
+        if: always()
+        run: |
+          mkdir -p qa-phase6
+          tar -czf qa-phase6/source.tgz js tests/phase6-core* catalog-preview designer dashboard
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase6-core-reviewed
+          path: qa-phase6
+          retention-days: 7
