@@ -1,0 +1,75 @@
+name: Reviewed guests and Phase 4 final QA
+on:
+  push:
+    branches: [qa/phase4-finish-20260929]
+    paths: [.github/workflows/guest-final-qa.yml]
+permissions: {contents: write}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply corrections identified in real renders
+        run: |
+          python3 scripts/refine-guest-review.py
+          curl -fsSL https://raw.githubusercontent.com/makehumancommunity/makehuman/a8bc2d54ff0ac92e78ff71431b1023eda42bf482/makehuman/data/3dobjs/base.obj -o /tmp/guest.obj
+          python3 scripts/build-guest-anatomy.py /tmp/guest.obj
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('designer/index.html');s=p.read_text().replace('20260929-phase4-guests-1','20260929-phase4-guests-2');p.write_text(s)
+          p=Path('tests/guest-realism-harness.html');s=p.read_text();needle='window.renderPose='
+          addition="""const seatedItem={id:'qa-seated',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:7.5,y:7.5,seatCount:8,chairId:'resin-white',linenId:'linen-round-120',linenColor:'White'};
+          let seatedGroup=null;const seatedSource=JSON.stringify(seatedItem);
+          window.renderSeated=(dt=0)=>{guests.visible=false;if(!seatedGroup){seatedGroup=new THREE.Group();const table=makeTable(seatedItem);seatedGroup.add(table);const people=createGuests({type:'frame',widthFt:20,lengthFt:20},[seatedItem]);seatedGroup.add(people);seatedGroup.userData.guests=people;scene.add(seatedGroup);}seatedGroup.userData.guests.userData.update(dt);camera.position.set(8,8,Math.max(13,11/(2*Math.tan(camera.fov*Math.PI/360)*camera.aspect))));camera.lookAt(0,1.9,0);paint();return{people:seatedGroup.userData.guests.userData.people.length,seated:seatedGroup.userData.guests.userData.people.filter(p=>p.seated).length,batches:seatedGroup.userData.guests.children.length,unchanged:JSON.stringify(seatedItem)===seatedSource};};
+          """
+          assert needle in s;s=s.replace(needle,addition+needle);p.write_text(s)
+          p=Path('tests/guest-realism-browser.cjs');s=p.read_text();old='await page.close();';new="const seated=await page.evaluate(()=>window.renderSeated(.033));assert.equal(seated.seated,8);assert.equal(seated.batches,11);assert.equal(seated.unchanged,true);await page.screenshot({path:out+'/seated-'+width+'.png'});reports.push({width,mode:'seated',...seated});await page.close();";assert old in s;s=s.replace(old,new);p.write_text(s)
+          PY
+          node --check js/ui/scene-guests.js
+          git diff --check
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase4-browser --no-save playwright@1.56.1
+      - run: /tmp/phase4-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Get current public catalog and canonical product photos
+        run: |
+          node <<'JS'
+          const fs=require('node:fs');(async()=>{fs.mkdirSync('qa-phase4/references',{recursive:true});const read=async url=>{const r=await fetch(url,{signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(url+' '+r.status);return r.json();};const catalog=await read('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products'),website=await read('https://www.friendlypartyrental.com/api/items');fs.writeFileSync('qa-phase4/catalog.json',JSON.stringify(catalog));fs.writeFileSync('qa-phase4/website.json',JSON.stringify(website));const items=[];for(const p of catalog.products){if(!String(p.external_id||'').startsWith('fpr:'))continue;const slug=p.external_id.slice(4);if(!(p.category==='linen'||/charger|\bplate\b|\bfork\b|\bspoon\b|\bknife\b|goblet|martini|wine glass|beer glass|rocks glass|coffee mug|carafe/i.test(p.name)))continue;const row={productId:p.id,slug,name:p.name,error:null};try{const r=await fetch('https://www.friendlypartyrental.com/api/item-image/'+encodeURIComponent(slug),{signal:AbortSignal.timeout(15000)});if(!r.ok||!r.headers.get('content-type')?.startsWith('image/'))throw Error('Image '+r.status);fs.writeFileSync('qa-phase4/references/'+slug+'.img',Buffer.from(await r.arrayBuffer()));}catch(e){row.error=e.message;}items.push(row);}fs.writeFileSync('qa-phase4/manifest.json',JSON.stringify({items,checkedAt:new Date().toISOString()},null,2));})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - name: Run actual geometry and checkout contract tests
+        run: |
+          set -o pipefail
+          node --experimental-vm-modules tests/guest-anatomy-mesh.cjs | tee qa-phase4/guest-tests.log
+          node --test tests/party-scene.test.mjs tests/phase4-linens.test.mjs tests/contextual-products.test.mjs tests/book-now-contract.test.mjs | tee qa-phase4/unit-tests.log
+          node --experimental-vm-modules tests/phase4-render.cjs | tee qa-phase4/geometry-tests.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs
+          node --experimental-vm-modules tests/furniture-plan-dom.cjs
+      - name: Inspect actual WebGL models on desktop and mobile
+        env: {NODE_PATH: /tmp/phase4-browser/node_modules}
+        run: |
+          node tests/guest-realism-browser.cjs
+          node tests/phase4-capture.cjs
+      - name: Save tested source to QA only
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js tests/guest* tests/scene-environment.cjs designer
+          git commit -m 'Refine guest facial tones and seams, fit cloth to real table supports, and verify seated scenes'
+          git push origin HEAD:refs/heads/qa/phase4-finish-20260929
+          git rev-parse HEAD > qa-phase4/tested-commit.txt
+      - name: Package evidence
+        if: always()
+        run: |
+          mkdir -p qa-phase4
+          tar -czf qa-phase4/runtime-source.tgz js server/src tests/guest* tests/phase4* tests/scene-environment.cjs designer catalog-preview dashboard customer-experience.css docs scripts/build-guest-anatomy.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reviewed-guests-phase4
+          path: |
+            qa-phase4
+            qa-guest-realism
+          retention-days: 7
