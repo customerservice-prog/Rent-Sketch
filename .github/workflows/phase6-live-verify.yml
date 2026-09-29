@@ -1,0 +1,55 @@
+name: Live Phase 6 core verification
+on:
+  push:
+    branches: [qa/phase6-core-20260929]
+    paths: [.github/workflows/phase6-live-verify.yml]
+permissions: {contents: read}
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RELEASE_SHA: e20f7131fbeb41e0961b9c3310287024ace6d4fc
+      NODE_PATH: /tmp/phase6-live-browser/node_modules
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e20f7131fbeb41e0961b9c3310287024ace6d4fc
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Verify the exact deployed runtime, seating and booking files
+        run: |
+          mkdir -p qa-phase6-live
+          node <<'JS'
+          const fs=require('node:fs'),cp=require('node:child_process'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+          const release=process.env.RELEASE_SHA,base='de7fde908d5aa70b90b268aa0145b08c8f7cb3d4',digest=x=>crypto.createHash('sha256').update(x).digest('hex');
+          (async()=>{const paths=cp.execFileSync('git',['diff','--name-only',base,'HEAD','--','js','designer','catalog-preview','dashboard'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);for(const path of ['js/core/bookingHandoff.js','js/ui/booking-handoff.js','js/ui/review-actions.js','js/core/seating.js','js/core/world-space.js','js/core/geometry.js','js/core/photo-geometry.js','js/ui/equipment3d.js','js/ui/party-styling.js','js/ui/plan2d.js','js/ui/view3d.js','js/ui/scene-guests.js','script.js','customer-experience.css'])if(!paths.includes(path))paths.push(path);let last;
+           for(let attempt=0;attempt<60;attempt++){try{const r=await fetch('https://rentsketch.com/designer/index.html?phase6='+release+'&n='+attempt,{signal:AbortSignal.timeout(15000)});assert.equal(r.ok,true);assert.equal(digest(Buffer.from(await r.arrayBuffer())),digest(fs.readFileSync('designer/index.html')));last=null;break;}catch(e){last=e;console.log('Waiting for the tested Phase 6 release');await new Promise(r=>setTimeout(r,10000));}}if(last)throw last;
+           const files=[];for(const path of paths){const r=await fetch('https://rentsketch.com/'+path+'?phase6='+release,{signal:AbortSignal.timeout(20000)});assert.equal(r.ok,true,path);const actual=digest(Buffer.from(await r.arrayBuffer()));assert.equal(actual,digest(fs.readFileSync(path)),path);files.push({path,sha256:actual,match:true});}fs.writeFileSync('qa-phase6-live/deployed-files.json',JSON.stringify({release,files,checkedAt:new Date().toISOString()},null,2));console.log('PASS '+files.length+' exact runtime hashes');
+          })().catch(e=>{fs.writeFileSync('qa-phase6-live/byte-failure.txt',String(e.stack||e));console.error(e);process.exitCode=1});
+          JS
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase6-live-browser --no-save playwright@1.56.1
+      - run: /tmp/phase6-live-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Live Phase 6 audit previews and current-price equipment checkout
+        run: node tests/phase6-live.cjs
+      - name: Preserve existing carts, linen variants and unmatched-item protection
+        run: |
+          git fetch --depth=1 origin 2aaed161faa865b8d7e470234db82d0a46487276
+          git show 2aaed161faa865b8d7e470234db82d0a46487276:tests/book-now-live-browser.cjs > /tmp/phase6-book-now-check.cjs
+          node /tmp/phase6-book-now-check.cjs
+      - name: Verify the real live seating runtime with a local test shell only
+        run: |
+          git fetch --depth=1 origin 82533d957b669285c60910753be609ccb683cfc4
+          git show 82533d957b669285c60910753be609ccb683cfc4:tests/seating-live-browser.cjs > /tmp/phase6-seating-check.cjs
+          node /tmp/phase6-seating-check.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase6-live-verified
+          path: |
+            qa-phase6-live
+            qa-book-now-live
+            qa-live-seating
+          retention-days: 7
