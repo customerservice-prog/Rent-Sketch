@@ -13,6 +13,7 @@ function sanitizeLines(lines){
    qty:Math.max(0,Math.min(10000,Number(line?.qty)||0)),
    productId:line?.productId==null?null:String(line.productId).slice(0,160),
    category:line?.category==null?null:String(line.category).slice(0,60),
+   selectedColor:line?.selectedColor==null?null:String(line.selectedColor).trim().slice(0,80),
  })).filter(line=>line.qty>0);
 }
 async function reviewPricing(tenant,{zip='',eventDate='',lines=[]}={},fetcher=fetch){
@@ -31,8 +32,32 @@ async function reviewPricing(tenant,{zip='',eventDate='',lines=[]}={},fetcher=fe
  if(itemsResult.status!=='fulfilled')throw new Error('Friendly live item pricing is unavailable');
  const friendlyItems=Array.isArray(itemsResult.value?.items)?itemsResult.value.items:[];
  const byId=new Map(friendlyItems.map(item=>[String(item.id),item]));
+ const norm=value=>String(value||'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+ const byName=new Map();
+ for(const item of friendlyItems){
+   for(const raw of [item.name,item.specialDisplayName]){
+     const key=norm(raw);if(!key)continue;
+     const list=byName.get(key)||[];list.push(item);byName.set(key,list);
+   }
+ }
+ function uniqueNameMatch(line){
+   const candidates=[];
+   const add=raw=>{const key=norm(raw);if(key)candidates.push(key);};
+   add(line.label);
+   if(line.selectedColor){
+     const label=String(line.label||'');
+     const color=String(line.selectedColor);
+     if(label.toLowerCase().startsWith(color.toLowerCase()+' '))add(label.slice(color.length+1));
+   }
+   for(const key of [...new Set(candidates)]){
+     const matches=[...new Map((byName.get(key)||[]).map(item=>[String(item.id),item])).values()];
+     if(matches.length===1)return matches[0];
+   }
+   return null;
+ }
  const priced=clean.map(line=>{
-   const item=line.productId?byId.get(String(line.productId)):null;
+   let item=line.productId?byId.get(String(line.productId)):null,matchedBy=item?'id':null;
+   if(!item){item=uniqueNameMatch(line);if(item)matchedBy='exact_name';}
    const unit=item?amount(item.cost):null;
    const available=item&&item.available!=null?Number(item.available):null;
    return {
@@ -44,6 +69,7 @@ async function reviewPricing(tenant,{zip='',eventDate='',lines=[]}={},fetcher=fe
      amount:unit==null?null:Math.round(unit*line.qty*100)/100,
      available:Number.isFinite(available)?available:null,
      exactMatch:!!item,
+     matchedBy,
      availableForDate:Number.isFinite(available)?available>=line.qty:null,
    };
  });
