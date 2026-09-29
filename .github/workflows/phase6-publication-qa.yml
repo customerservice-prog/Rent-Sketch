@@ -1,0 +1,71 @@
+name: Phase 6 publication QA
+on:
+  push:
+    branches: [qa/phase6-core-20260929]
+    paths: [.github/workflows/phase6-publication-qa.yml]
+permissions: {contents: write, actions: read}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply the final inspected shape corrections
+        run: |
+          python3 .github/phase6-final-shape-fix.py
+          node --check js/ui/phase6-equipment3d.js
+          node --check tests/phase6-core-mesh.cjs
+          git diff --check
+          git diff --exit-code de7fde908d5aa70b90b268aa0145b08c8f7cb3d4 -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js js/core/seating.js js/core/world-space.js js/core/geometry.js js/core/photo-geometry.js js/ui/equipment3d.js js/ui/party-styling.js js/ui/plan2d.js js/ui/view3d.js js/ui/scene-guests.js script.js server
+      - name: Restore the just-verified public catalog/photo fixtures
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh run download 36638175258 -n phase6-final-reviewed -D /tmp/phase6-reference-qa
+          mkdir -p qa-phase6/references
+          cp /tmp/phase6-reference-qa/catalog.json /tmp/phase6-reference-qa/website.json /tmp/phase6-reference-qa/references.json qa-phase6/
+          cp /tmp/phase6-reference-qa/references/* qa-phase6/references/
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase6-browser --no-save playwright@1.56.1
+      - run: /tmp/phase6-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Check physical shapes, seating preservation, and actual summary-to-booking chains
+        run: |
+          set -o pipefail
+          node --test tests/phase6-core.test.mjs tests/phase6-summary-handoff.test.mjs tests/book-now-contract.test.mjs tests/phase5-catalog.test.mjs tests/phase4-linens.test.mjs tests/seating-alignment.test.mjs tests/contextual-products.test.mjs tests/equipment-assets.test.mjs tests/party-scene.test.mjs | tee qa-phase6/unit.log
+          node --experimental-vm-modules tests/phase6-core-mesh.cjs | tee qa-phase6/mesh.log
+          node --experimental-vm-modules tests/seating-alignment-mesh.cjs | tee qa-phase6/seating.log
+          node --experimental-vm-modules tests/seating-styling-mesh.cjs | tee qa-phase6/seating-styling.log
+          node --experimental-vm-modules tests/equipment-assets-mesh.cjs | tee qa-phase6/equipment-regression.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs | tee qa-phase6/furniture-regression.log
+      - name: Capture actual shared models in desktop and mobile audit previews
+        env: {NODE_PATH: /tmp/phase6-browser/node_modules}
+        run: node tests/phase6-core-browser.cjs
+      - name: Save candidate only to QA branch and preserve exact source identities
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js/ui/phase6-equipment3d.js tests/phase6-core-mesh.cjs catalog-preview/index.html designer/index.html dashboard/app.js dashboard/index.html js/data/phase6-reference.js
+          git commit -m 'Render continuous booth rings and physically supported high-hole game boards'
+          git push origin HEAD:refs/heads/qa/phase6-core-20260929
+          python3 - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          base='de7fde908d5aa70b90b268aa0145b08c8f7cb3d4'
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          paths=[p for p in paths if not p.startswith('.github/')]
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()} for p in paths]
+          Path('qa-phase6/release-tree.json').write_text(json.dumps({'base':base,'testedCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'entries':entries},indent=2))
+          PY
+      - name: Package exact rendered source for inspection
+        if: always()
+        run: |
+          mkdir -p qa-phase6
+          tar -czf qa-phase6/source.tgz js tests/phase6* catalog-preview designer dashboard docs/phase6-core-20260929.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase6-publication-reviewed
+          path: qa-phase6
+          retention-days: 7
