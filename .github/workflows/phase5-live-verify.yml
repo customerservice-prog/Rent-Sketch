@@ -1,0 +1,47 @@
+name: Live Phase 5 models and checkout verification
+on:
+  push:
+    branches: [qa/phase5-equipment-20260929]
+    paths: [.github/workflows/phase5-live-verify.yml]
+permissions: {contents: read}
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a55f64fb2ce883fad078eb128194e38470176349
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Wait for tested deployment and verify all changed runtime files
+        run: |
+          mkdir -p qa-phase5-live
+          node <<'JS'
+          const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict'),cp=require('node:child_process');const digest=x=>crypto.createHash('sha256').update(x).digest('hex');
+          (async()=>{const paths=cp.execFileSync('git',['diff','--name-only','485a87d9b67ead7e7d4cc88011eabbe5fad7e773','HEAD','--','js','designer','catalog-preview','dashboard'],{encoding:'utf8'}).trim().split('\n');for(const p of ['js/core/bookingHandoff.js','js/ui/booking-handoff.js','js/ui/review-actions.js','customer-experience.css','js/ui/scene-guests.js'])if(!paths.includes(p))paths.push(p);let last;const probe='designer/index.html';for(let attempt=0;attempt<60;attempt++){try{const r=await fetch('https://rentsketch.com/'+probe+'?phase5='+Date.now(),{signal:AbortSignal.timeout(15000)});assert.equal(r.ok,true);assert.equal(digest(Buffer.from(await r.arrayBuffer())),digest(fs.readFileSync(probe)));last=null;break;}catch(e){last=e;console.log('Waiting for exact Phase 5 deployment...');await new Promise(r=>setTimeout(r,10000));}}if(last)throw last;const files=[];for(const path of paths){const r=await fetch('https://rentsketch.com/'+path+'?phase5='+Date.now(),{signal:AbortSignal.timeout(20000)});assert.equal(r.ok,true,path);const hash=digest(Buffer.from(await r.arrayBuffer()));assert.equal(hash,digest(fs.readFileSync(path)),path);files.push({path,sha256:hash,match:true});}fs.writeFileSync('qa-phase5-live/deployed-files.json',JSON.stringify({release:'a55f64fb2ce883fad078eb128194e38470176349',files,checkedAt:new Date().toISOString()},null,2));console.log('PASS '+files.length+' exact deployed file hashes');})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - run: npm install --prefix /tmp/phase5-live-browser --no-save playwright@1.56.1
+      - run: /tmp/phase5-live-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Verify live models and Phase 5 equipment checkout using isolated browser carts
+        env: {NODE_PATH: /tmp/phase5-live-browser/node_modules}
+        run: |
+          git fetch --depth=1 origin 34ccbc2fa2af370d9c6fb0d37b3218341234d17b
+          git show 34ccbc2fa2af370d9c6fb0d37b3218341234d17b:tests/phase5-live.cjs > /tmp/phase5-live-check.cjs
+          node --check /tmp/phase5-live-check.cjs
+          node /tmp/phase5-live-check.cjs
+      - name: Recheck existing cart, linen variants and unmatched-item protection
+        env: {NODE_PATH: /tmp/phase5-live-browser/node_modules}
+        run: |
+          git fetch --depth=1 origin 2aaed161faa865b8d7e470234db82d0a46487276
+          git show 2aaed161faa865b8d7e470234db82d0a46487276:tests/book-now-live-browser.cjs > /tmp/previous-book-now-check.cjs
+          node /tmp/previous-book-now-check.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-phase5-verification
+          path: |
+            qa-phase5-live
+            qa-book-now-live
+          retention-days: 7
