@@ -40,7 +40,9 @@ export function lightingCompatibility(product,tent){
 export function sidewallPanelCount(product,tent,side){
  if(product?.kind!=='sidewall'||!['solid','window'].includes(product.type)||!tent||tent.isSite||!['front','back','left','right'].includes(side))return 0;
  const length=['front','back'].includes(side)?tent.widthFt:tent.lengthFt,span=Number(product.panelFt);
- // The visual perimeter is built from 10-foot sections. Only full, known physical panels are offered.
+ const expectedSpan=tent.type==='canopy'?10:(tent.type==='pole'||tent.type==='frame'?20:null);
+ // Friendly inventory rule: 10 ft sidewalls are for pop-up canopies; 20 ft sidewalls are for pole/frame tents.
+ if(!expectedSpan||span!==expectedSpan)return 0;
  if(!(span>=10&&Number.isInteger(span/10)&&Number.isInteger(length/span)))return 0;
  return length/span;
 }
