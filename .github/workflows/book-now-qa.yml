@@ -1,0 +1,49 @@
+name: Book Now source and link QA
+on:
+  push:
+    branches: [qa/book-now-20260929]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  book-now:
+    if: github.ref == 'refs/heads/qa/book-now-20260929'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: qa/book-now-20260929
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refresh booking entry assets only
+        run: |
+          python3 - <<'PY'
+          import pathlib,re
+          p=pathlib.Path('js/ui/booking-handoff.js');s=p.read_text();s=s.replace("../core/bookingHandoff.js'","../core/bookingHandoff.js?v=20260929-book-now-1'");p.write_text(s)
+          p=pathlib.Path('designer/index.html');s=p.read_text();s=re.sub(r'booking-handoff\.js\?v=[^"\s]+','booking-handoff.js?v=20260929-book-now-1',s);s=re.sub(r'customer-experience\.css\?v=[^"\s]+','customer-experience.css?v=20260929-book-now-1',s);p.write_text(s)
+          p=pathlib.Path('customer-experience.css');s=p.read_text();rule='\n/* Book Now is the primary Friendly review action. */\n#step-review .review-side-column #friendlyBooking{order:-1}\n#friendlyBooking[hidden]{display:none!important}\n'
+          if 'Book Now is the primary Friendly review action' not in s:p.write_text(s+rule)
+          PY
+      - name: Test exact Book Now payload contracts
+        run: |
+          mkdir -p qa-book-now
+          node --test tests/book-now-contract.test.mjs | tee qa-book-now/tests.log
+          node --experimental-vm-modules - <<'JS'
+          const fs=require('fs'),vm=require('vm');for(const p of ['js/core/bookingHandoff.js','js/ui/booking-handoff.js'])new vm.SourceTextModule(fs.readFileSync(p,'utf8'));console.log('Booking modules parse');
+          JS
+      - name: Commit tested booking entry changes to QA branch only
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js/ui/booking-handoff.js designer/index.html customer-experience.css
+          if ! git diff --cached --quiet; then git commit -m 'Refresh and prioritize verified Book Now entry'; git push origin HEAD:refs/heads/qa/book-now-20260929; fi
+          git rev-parse HEAD > qa-book-now/tested-commit.txt
+          tar -czf qa-book-now/source.tgz js/core/bookingHandoff.js js/ui/booking-handoff.js designer/index.html customer-experience.css tests/book-now-contract.test.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: book-now-tested-source
+          path: qa-book-now
+          retention-days: 7
