@@ -12,15 +12,31 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
   const tent = find(catalog.tents,scene.tentId);
   if(includeTent && scene.tentId) add(tent,1,'tent','Tent — confirm selection');
   if(includeTent && scene.tentId && Array.isArray(scene.sidewalls)) {
-    const wallCounts={solid:0,window:0},exactWalls=new Map();
-    scene.sidewalls.forEach(w=>{if(!w)return;if(w.productId){const entry=exactWalls.get(w.productId)||new Set();entry.add(w.panelId||w.id);exactWalls.set(w.productId,entry);}else if(wallCounts[w.type]!==undefined)wallCounts[w.type]++;});
+    const legacyWalls={solid:[],window:[]},exactWalls=new Map();
+    scene.sidewalls.forEach(w=>{if(!w)return;if(w.productId){const entry=exactWalls.get(w.productId)||new Set();entry.add(w.panelId||w.id);exactWalls.set(w.productId,entry);}else if(legacyWalls[w.type])legacyWalls[w.type].push(w);});
     exactWalls.forEach((panels,id)=>{const product=(catalog.contextual||[]).find(p=>p.kind==='sidewall'&&p.productId===id)||{productId:id,name:'Sidewall — confirm catalog item',pricePerDay:null};add(product,panels.size,'sidewall','Sidewall — confirm selection');});
-    function legacyWallProduct(type){
-      const candidates=(catalog.contextual||[]).filter(p=>p.kind==='sidewall'&&p.type===type&&Number(p.panelFt)===10);
-      return candidates.length===1?candidates[0]:null;
+    function legacyWallResolution(type,walls){
+      if(!walls.length)return null;
+      const panelFt=tent?.type==='canopy'?10:(tent?.type==='pole'||tent?.type==='frame'?20:null);
+      if(!panelFt)return {product:null,qty:walls.length,label:(type==='window'?'Window':'Solid')+' Sidewall — confirm pricing'};
+      const candidates=(catalog.contextual||[]).filter(p=>p.kind==='sidewall'&&p.type===type&&Number(p.panelFt)===panelFt);
+      const product=candidates.length===1?candidates[0]:null;
+      const chunksPerPanel=panelFt/10,groups=new Map();
+      for(const wall of walls){
+        const side=String(wall.side||'unknown'),start=Number(wall.startFt);
+        if(!Number.isFinite(start)||Math.abs((Number(wall.lengthFt)||10)-10)>.01)return {product:null,qty:walls.length,label:(type==='window'?'Window':'Solid')+' Sidewall — confirm pricing'};
+        const bucket=Math.floor((start+.001)/panelFt),key=side+':'+bucket;
+        if(!groups.has(key))groups.set(key,new Set());
+        groups.get(key).add(Math.round((start-bucket*panelFt)/10));
+      }
+      const complete=[...groups.values()].every(parts=>parts.size===chunksPerPanel&&[...parts].every(i=>i>=0&&i<chunksPerPanel));
+      if(!complete)return {product:null,qty:walls.length,label:(type==='window'?'Window':'Solid')+' Sidewall — confirm panel quantity'};
+      return {product,qty:groups.size,label:product?.name||((type==='window'?'Window':'Solid')+' '+panelFt+' ft Sidewall')};
     }
-    if(wallCounts.solid){const live=legacyWallProduct('solid');add(live,wallCounts.solid,'sidewall','Solid 10 ft Sidewall — confirm pricing',live?live.name:'Solid 10 ft Sidewall');}
-    if(wallCounts.window){const live=legacyWallProduct('window');add(live,wallCounts.window,'sidewall','Window 10 ft Sidewall — confirm pricing',live?live.name:'Window 10 ft Sidewall');}
+    for(const type of ['solid','window']){
+      const resolved=legacyWallResolution(type,legacyWalls[type]);
+      if(resolved)add(resolved.product,resolved.qty,'sidewall',(type==='window'?'Window':'Solid')+' Sidewall — confirm pricing',resolved.label);
+    }
   }
   const inflatables=new Map();
   for(const object of objects)if(object.kind==='inflatable'){
