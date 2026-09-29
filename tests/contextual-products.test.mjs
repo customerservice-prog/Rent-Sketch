@@ -4,7 +4,7 @@ import {summarizeEvent} from '../js/core/eventSummary.js';
 import {computeSidewallSegments} from '../js/data/tentStructure.js';
 import {buildBookingHandoff} from '../js/core/bookingHandoff.js';
 const products=[{id:'plate-gold',name:'Gold charger plate',category:'accessory',price_per_day:2,external_id:'fpr:gold-plate'},{id:'linen-a',name:'120 Round White Linen',category:'linen',external_id:'fpr:white-linen'},{id:'lighting-a',name:'20×20 Tent Lighting A',category:'lighting',visual_model_id:'lighting-tent',width_ft:20,length_ft:20,price_per_day:95,external_id:'fpr:lighting-a'},{id:'lighting-b',name:'20×20 Tent Lighting B',category:'lighting',visual_model_id:'lighting-tent',width_ft:20,length_ft:20,price_per_day:125,external_id:'fpr:lighting-b'},{id:'wall20',name:'Solid 20 ft Sidewall',category:'sidewall',width_ft:20,price_per_day:60,external_id:'fpr:solid-wall20'}];
-const catalog={products,tents:[{id:'tent',name:'Tent',widthFt:20,lengthFt:30}],tables:[],chairs:[],tabletop:[{id:'plate-gold',productId:'plate-gold',name:'Gold plate',perSeat:true,pricePerDay:2}],linens:[{id:'linen-round',productId:'linen-a',name:'White linen',fitsTableIds:['round-5ft'],colors:['White'],pricePerDay:24}],lighting:[{id:'lighting-tent',visual:'perimeter-eave'}]};
+const catalog={products,tents:[{id:'tent',name:'Tent',type:'frame',widthFt:20,lengthFt:30}],tables:[],chairs:[],tabletop:[{id:'plate-gold',productId:'plate-gold',name:'Gold plate',perSeat:true,pricePerDay:2}],linens:[{id:'linen-round',productId:'linen-a',name:'White linen',fitsTableIds:['round-5ft'],colors:['White'],pricePerDay:24}],lighting:[{id:'lighting-tent',visual:'perimeter-eave'}]};
 const table={id:'table',kind:'table',tableId:'round-5ft',seatCount:8,widthFt:5,depthFt:5,linenColor:'Blue'};
 
 test('context products retain variants, enforce compatibility, and apply exact identities idempotently',()=>{
@@ -37,4 +37,20 @@ test('linen fit follows the physical model without changing a variant SKU',()=>{
  assert.equal(variant.tableId,'banquet-6ft--plastic-sku');
  assert.equal(applyTableProduct({...variant,tableId:'sweetheart-half-round-60'},product),null,'do not promise banquet linen fits the new half-round table');
  assert.equal(applyTableProduct({...variant,tableId:'banquet-8ft--other-sku'},product),null);
+});
+
+
+test('Friendly sidewall inventory sizes are enforced by tent type',()=>{
+ const context=contextualProducts({products:[
+   {id:'wall10',name:'Window 10 ft Sidewall',category:'sidewall',width_ft:10,price_per_day:30,metadata:{sidewall_type:'window'}},
+   {id:'wall20b',name:'Window 20 ft Sidewall',category:'sidewall',width_ft:20,price_per_day:55,metadata:{sidewall_type:'window'}}
+ ]});
+ const wall10=context.find(p=>p.id==='wall10'),wall20=context.find(p=>p.id==='wall20b');
+ const popup={type:'canopy',widthFt:10,lengthFt:20},pole={type:'pole',widthFt:20,lengthFt:40},frame={type:'frame',widthFt:20,lengthFt:40};
+ assert.equal(sidewallPanelCount(wall10,popup,'front'),1);
+ assert.equal(sidewallPanelCount(wall20,popup,'front'),0,'20 ft wall must never be offered on a pop-up');
+ assert.equal(sidewallPanelCount(wall10,pole,'front'),0,'10 ft wall must never be offered on a pole tent');
+ assert.equal(sidewallPanelCount(wall20,pole,'front'),1);
+ assert.equal(sidewallPanelCount(wall10,frame,'front'),0,'10 ft wall must never be offered on a frame tent');
+ assert.equal(sidewallPanelCount(wall20,frame,'front'),1);
 });
