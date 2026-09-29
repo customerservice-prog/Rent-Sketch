@@ -16,7 +16,7 @@ export function buildServiceware(root,ref){
   curve([[-a,top,-b],[a,top,-b],[a,top,b],[-a,top,b],[-a,top,-b]],.016,m);
  }
  function loopHandle(x,y,z,m=steel,span=.20){curve([[x-span/2,y,z],[x-span/2,y+.07,z],[x,y+.10,z],[x+span/2,y+.07,z],[x+span/2,y,z]],.013,m);}
- function burners(n,y=.15){for(let i=0;i<n;i++){const x=n===1?0:(i-.5)*.46;cyl(.09,.07,steel,x,y,0,28);torus(.09,.009,steel,x,y+.04,0,true);}}
+ function burners(n,y=.15){for(let i=0;i<n;i++){const x=n===1?0:(i-.5)*.46;lathe([[.09,0],[.09,.04],[.078,.04],[.078,.01],[0,.01],[0,0]],steel,x,y,0,28);torus(.09,.007,steel,x,y+.04,0,true);}}
  let f={type:ref.type,foodIncluded:false};
  if(ref.type==='chafer-rect'||ref.type==='chafer-roll'){
   for(const x of [-.38,.38])for(const z of [-.31,.31]){rod([x,.035,z],[x*.94,.5,z*.93],.032,steel);box(.14,.022,.13,steel,x,.02,z,.009);}

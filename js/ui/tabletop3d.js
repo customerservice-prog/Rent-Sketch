@@ -1,3 +1,4 @@
+import {createPhase6bModel} from './phase6b-models3d.js';
 import {makeRunner,clothMaterial} from './linen-fabric3d.js';
 import {makeTabletopReference} from './tabletop-reference3d.js';
 import * as THREE from 'three';
@@ -15,7 +16,7 @@ export function makeTabletop(item,height){
  for(const pos of tabletopPlacements(item)){
   const p=pos.product,g=new THREE.Group(),metal=/gold/i.test(p.name)?gold:silver;root.add(g);g.name=p.name;g.userData.productId=p.productId;g.position.set(pos.x,height+.06+pos.layer,pos.z);g.rotation.y=-pos.angle-Math.PI/2;
   if(p.type==='runner'&&p.reference){const runner=makeRunner(item.widthFt,item.depthFt,height,clothMaterial(pos.color,p.reference.material||'polyester'),p.reference.lengthFt||9);runner.position.y=-height;g.rotation.y=0;g.add(runner);continue;}
-  const reference=makeTabletopReference(p,pos.color);if(reference){g.add(reference);continue;}
+  const reference=createPhase6bModel(p)||makeTabletopReference(p,pos.color);if(reference){g.add(reference);continue;}
   if(['plate','charger','bowl'].includes(p.type)){
    const r=p.type==='charger'?.53:/salad|bread/i.test(p.name)?.30:.43,m=p.type==='charger'?metal:ceramic;
    const points=p.type==='bowl'?[[0,0],[.21,0],[r,.22],[r-.03,.23],[.20,.03],[0,.03]]:[[0,0],[r*.7,0],[r,.055],[r,.075],[r*.7,.035],[0,.035]];

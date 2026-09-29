@@ -1,3 +1,4 @@
+import {phase6bReference} from './phase6b-reference.js';
 import { tabletopReference } from './tabletop-reference.js';
 import { productColors } from './linen-spec.js';
 // Only real products from the active rental catalog are offered or priced.
@@ -5,6 +6,13 @@ import { chairPositions } from '../core/seating.js';
 export const TABLETOP=[];
 export const TABLETOP_GROUPS=['Place settings','Napkins & runners','Centerpieces','Serving & drinks'];
 export function tabletopType(product){
+ if(product.active===false)return null;
+ const b=phase6bReference(product);
+ if(b&&(b.kind==='tabletop'||b.placement==='tabletop')){
+  const t=b.type;
+  return t.startsWith('chafer-')?'chafer':['insulated-dispenser','coffee-urn'].includes(t)?'dispenser':['ribbed-pitcher','pitcher-conflict'].includes(t)?'pitcher':['flute','highball'].includes(t)?'glass':t==='rim-bowl'?'bowl':['serving-tongs','cake-server'].includes(t)?'utensil':t==='metal-shakers'?'condiment':t==='candelabra'?'candle':['cake-plateau','tiered-stand','dish-conflict'].includes(t)?'stand':'serving';
+ }
+
  const n=String(product.name||'').toLowerCase();
  if(product.active===false||/package|aisle|chair|tablecloth|table linen|cover|syrup|sugar -|floss|kernel|fuel|floor|wall|arch|tent/.test(n))return null;
  if(/charger.*plate/.test(n))return 'charger';
@@ -30,7 +38,7 @@ export function tabletopType(product){
 export function tabletopCatalog(products,showPrices=true){return products.flatMap(p=>{
  const type=tabletopType(p);if(!type)return[];const setting=['charger','plate','napkin','fork','knife','spoon','glass','bowl'].includes(type),price=p.price_per_day==null||p.price_per_day===''?null:Number(p.price_per_day);
  const group=['napkin','runner'].includes(type)?'Napkins & runners':setting?'Place settings':['centerpiece','candle','number'].includes(type)?'Centerpieces':'Serving & drinks';
- return [{id:p.id,productId:p.id,externalId:p.external_id||null,name:p.name,type,group,perSeat:setting,reference:tabletopReference(p),...productColors(p),pricePerDay:showPrices&&Number.isFinite(price)&&price!==null?price:null,photoUrl:/^https?:\/\//i.test(p.photo_url||p.image_url||'')?(p.photo_url||p.image_url):null}];
+ return [{id:p.id,productId:p.id,externalId:p.external_id||null,name:p.name,type,group,perSeat:setting,reference:phase6bReference(p)||tabletopReference(p),...productColors(p),pricePerDay:showPrices&&Number.isFinite(price)&&price!==null?price:null,photoUrl:/^https?:\/\//i.test(p.photo_url||p.image_url||'')?(p.photo_url||p.image_url):null}];
 });}
 export function genericTabletop(){
  const samples=[['plate','Dinner Plate'],['charger','Gold Charger Plate'],['glass','Wine Glass'],['fork','Dinner Fork'],['knife','Dinner Knife'],['napkin','Napkin'],['runner','Table Runner'],['centerpiece','Floral Centerpiece'],['candle','Candle'],['pitcher','Water Pitcher']];

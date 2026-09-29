@@ -1,3 +1,4 @@
+import {createPhase6bModel} from './phase6b-models3d.js';
 import {createPhase6Equipment} from './phase6-equipment3d.js';
 import {createPhase5Equipment} from './phase5-equipment3d.js';
 import { createHeroEquipment } from './hero-equipment3d.js';
@@ -8,6 +9,7 @@ import { equipmentById } from '../data/equipment.js';
 // Motion only affects visual children. The authoritative placement footprint stays fixed.
 export function createEquipment(item,{mobile=false}={}){
  const p=equipmentById(item.equipmentId)||{...item,externalId:item.externalId||item.asset?.source?.externalId,type:item.visualType||'generic',name:item.name,widthFt:item.modelWidthFt||item.widthFt,depthFt:item.modelDepthFt||item.depthFt,heightFt:item.heightFt};
+ const b=createPhase6bModel(p,item);if(b){b.rotation.y=-(Number(item.rotationDeg)||0)*Math.PI/180;return b;}
  const phase6=createPhase6Equipment(p,item);if(phase6){phase6.rotation.y=-(Number(item.rotationDeg)||0)*Math.PI/180;return phase6;}
  const exact=createPhase5Equipment(p,item);if(exact){exact.rotation.y=-(Number(item.rotationDeg)||0)*Math.PI/180;return exact;}
  const hero=createHeroEquipment(p,item,{mobile});if(hero){hero.userData.itemId=item.id;hero.userData.kind='equipment';hero.rotation.y=-(Number(item.rotationDeg)||0)*Math.PI/180;return hero;}

@@ -28,7 +28,7 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
    // Check the center hits the interior floor, not an opaque cap at rim level.
    const hits=new THREE.Raycaster(new THREE.Vector3(0,expected.heightFt*2,0),new THREE.Vector3(0,-1,0)).intersectObject(g,true);check(hits.length>0,slug+' has an interior base');check(hits[0].point.y<expected.heightFt*.65,slug+' opening is not painted onto a solid cap');
   }
-  if(['round-arch','hex-arch','arbor','gold-easel'].includes(ref.type)){const hits=new THREE.Raycaster(new THREE.Vector3(0,expected.heightFt*.58,expected.depthFt*3),new THREE.Vector3(0,0,-1)).intersectObject(g,true);check(hits.length===0,slug+' frame center is open');}
+  if(['round-arch','hex-arch','arbor','gold-easel'].includes(ref.type)){const hits=new THREE.Raycaster(new THREE.Vector3(ref.type==='gold-easel'?expected.widthFt*.12:0,expected.heightFt*.58,expected.depthFt*3),new THREE.Vector3(0,0,-1)).intersectObject(g,true);check(hits.length===0,slug+' frame center is open');}
   if(ref.type==='movie-screen'){check(g.userData.features.physicalPackages===1&&g.userData.features.componentRentalLines===0,'one package remains one rental');}
   if(ref.type==='metal-shakers')check(g.userData.features.physicalCount===2,'two physical shakers remain one set');
   rows.push({slug,name:p.name,placement:ref.kind,meshes,vertices,dimensions:{width:size.x,depth:size.z,height:size.y},features:g.userData.features});

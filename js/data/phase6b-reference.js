@@ -54,5 +54,5 @@ export function phase6bReference(product={}){
  const id=product.external_id||product.externalId||product.asset?.source?.externalId;
  if(typeof id!=='string'||!id.startsWith('fpr:'))return null;
  const slug=id.slice(4),r=rows[slug];if(!r)return null;
- return {...r,dimensions:r.dimensions?[...r.dimensions]:undefined,slug,externalId:id,version:PHASE6B_VERSION,referenceUrl:'https://www.friendlypartyrental.com/api/item-image/'+slug,fidelity:'photo-referenced-planning',approved:false};
+ return {...r,category:r.kind==='tabletop'?'tabletop':(['movie-speaker','audio-phone'].includes(r.type)?'audio':['laptop','movie-screen'].includes(r.type)?'photo':r.type==='patio-heater'?'climate':r.type==='oversize-cards'?'games':['bus-bin','freezer','handwash','portable-restroom'].includes(r.type)?'service':'accessories'),dimensions:r.dimensions?[...r.dimensions]:undefined,slug,externalId:id,version:PHASE6B_VERSION,referenceUrl:'https://www.friendlypartyrental.com/api/item-image/'+slug,fidelity:'photo-referenced-planning',approved:false};
 }
