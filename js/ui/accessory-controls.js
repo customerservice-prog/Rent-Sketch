@@ -59,10 +59,16 @@ export function accessoryDrawer(items,objects){
 
 export function accessoryInspector(item,product){
   if(!product)return '';
-  const price=product.pricePerDay==null?'Confirm pricing':'$'+Number(product.pricePerDay).toFixed(2)+'/day';
+  const price=product.pricePerDay==null?'Confirm pricing':'
++Number(product.pricePerDay).toFixed(2)+'/day';
+  const realPhoto=product.photoUrl?'<div class="catalog-reference-card"><span>Real Friendly rental</span><img src="'+esc(product.photoUrl)+'" alt="'+esc(product.name)+' website product photo" loading="lazy" decoding="async"><small>Website product photo</small></div>':'';
+  const fidelity=product.dimensionsConfirmed
+    ? '<div class="catalog-accuracy-badge exact">✓ Live catalog footprint</div>'
+    : '<div class="catalog-accuracy-badge review">Planning model · dimensions/shape need visual approval</div>';
   return '<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>'+
     '<h3>'+esc(product.name)+'</h3>'+
-    (product.photoUrl?'<img class="equipment-model inspector-accessory-photo" src="'+esc(product.photoUrl)+'" alt="" loading="lazy">':'<div class="inspector-accessory-icon">'+accessoryIcon(product.accessoryType)+'</div>')+
+    realPhoto+fidelity+
+    (!product.photoUrl?'<div class="inspector-accessory-icon">'+accessoryIcon(product.accessoryType)+'</div>':'')+
     '<p>'+esc(product.visualCategory)+' · '+(product.dimensionsConfirmed?'Catalog dimensions: ':'Illustrative ')+esc(product.widthFt)+' × '+esc(product.depthFt)+' ft footprint</p>'+
     '<p><strong>'+price+'</strong>'+(product.animated?' · Animated in 3D':'')+'</p>'+
     (product.operation?.supported?'<div class="equipment-operation"><button type="button" class="btn-secondary" data-role="equipment-operation" data-id="'+esc(item.id)+'" data-state="'+(item.operationState==='off'?'running':'off')+'">'+(item.operationState==='off'?'Start operating preview':'Stop operating preview')+'</button><p class="equipment-note">Visual preview only. Power, water and installation still need confirmation.</p></div>':'')+
