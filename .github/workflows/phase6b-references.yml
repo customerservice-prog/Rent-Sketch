@@ -1,0 +1,30 @@
+name: Phase 6B current public references
+on:
+  push:
+    branches: [qa/phase6b-service-20260929]
+    paths: [.github/workflows/phase6b-references.yml]
+permissions: {contents: read}
+jobs:
+  references:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Fetch only public catalog records and canonical product photos
+        run: |
+          mkdir -p qa-phase6b/references
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';import assert from 'node:assert/strict';import crypto from 'node:crypto';
+          const {PHASE6B_SLUGS,phase6bReference}=await import('data:text/javascript;base64,'+fs.readFileSync('js/data/phase6b-reference.js').toString('base64'));
+          const read=async u=>{const r=await fetch(u,{signal:AbortSignal.timeout(20000)});assert.equal(r.ok,true,u);return r.json();};
+          const catalog=await read('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products'),website=await read('https://www.friendlypartyrental.com/api/items');
+          fs.writeFileSync('qa-phase6b/catalog.json',JSON.stringify(catalog));fs.writeFileSync('qa-phase6b/website.json',JSON.stringify(website));const rows=[];
+          for(const slug of PHASE6B_SLUGS){const pp=catalog.products.filter(p=>p.external_id==='fpr:'+slug&&p.active!==false),ww=website.items.filter(w=>w.slug===slug);assert.equal(pp.length,1,slug+' tenant identity');assert.equal(ww.length,1,slug+' website identity');const p=pp[0],w=ww[0];let error=null,hash=null;try{const r=await fetch('https://www.friendlypartyrental.com/api/item-image/'+slug,{signal:AbortSignal.timeout(15000)});assert.equal(r.ok,true,slug+' photo');assert.ok(r.headers.get('content-type')?.startsWith('image/'));const bytes=Buffer.from(await r.arrayBuffer());hash=crypto.createHash('sha256').update(bytes).digest('hex');fs.writeFileSync('qa-phase6b/references/'+slug+'.img',bytes);}catch(e){error=e.message;}rows.push({slug,productId:p.id,websiteItemId:w.id,name:w.name,reference:phase6bReference(p),photoSha256:hash,error});}
+          fs.writeFileSync('qa-phase6b/references.json',JSON.stringify({rows,checkedAt:new Date().toISOString()},null,2));assert.equal(rows.filter(r=>r.error).length,0,'Photograph failures must be reconciled');console.log('PASS '+rows.length+' exact public product identities/photos');
+          JS
+      - run: git archive --format=tar.gz HEAD -o qa-phase6b/source.tgz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: phase6b-current-references, path: qa-phase6b, retention-days: 7}
