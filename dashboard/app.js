@@ -4,7 +4,7 @@
  var API_BASE = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
   var session = window.RentSketchDashboardSession;
   var TENANT_KEY = 'rentsketch_dashboard_tenant';
-  var ROUTES = ['login', 'overview', 'requests', 'products', 'branding', 'analytics', 'billing', 'install', 'superadmin'];
+  var ROUTES = ['login', 'overview', 'requests', 'products', 'catalog-audit', 'branding', 'analytics', 'billing', 'install', 'superadmin'];
 
  function platformTenantView() { try { return new URLSearchParams(window.location.search).get('tenantView') === '1'; } catch (_) { return false; } }
  function identity() { return session.identity(); }
@@ -78,7 +78,7 @@ function esc(s) {
        '<a class="tw-sidebar-launch" href="' + designerUrl + '" target="_blank" rel="noopener">✦ Open RentSketch</a>' +
        '<nav class="dash-nav" aria-label="Business workspace">' +
          '<div class="tw-nav-label">Workspace</div>' +
-         navLink('overview', 'Overview', '⌂') + navLink('requests', 'Requests', '▤') + navLink('products', 'Products', '▦') +
+         navLink('overview', 'Overview', '⌂') + navLink('requests', 'Requests', '▤') + navLink('products', 'Products', '▦') + navLink('catalog-audit', 'Catalog Accuracy', '◎') +
          navLink('branding', 'Branding & payouts', '◇') + navLink('analytics', 'Analytics', '▥') +
          '<div class="tw-nav-label tw-nav-label-secondary">Account</div>' +
          navLink('billing', 'Billing', '$') + navLink('install', 'Install & share', '↗') +
@@ -495,6 +495,73 @@ function esc(s) {
    }
  }
 
+
+ function catalogAuditPhase(product){
+   var name=String(product.name||'').toLowerCase(),cat=normCategory(product.category);
+   if(cat==='tent'||/\btent\b|canopy|side\s*wall|sidewall/.test(name)) return 1;
+   if(/bounce\s*house|water\s*slide|waterslide|inflatable|obstacle\s*course/.test(name)) return 2;
+   if(cat==='table'||cat==='chair'||/\btable\b|\bchair\b/.test(name)) return 3;
+   if(cat==='linen'||/linen|napkin|runner|spandex|tablecloth|overlay|cover/.test(name)) return 4;
+   if(cat==='lighting'||cat==='dance_floor'||/light|dance\s*floor|fan|generator|power|distribution/.test(name)) return 5;
+   return 6;
+ }
+ function catalogAuditStatus(product){
+   var phase=catalogAuditPhase(product),name=String(product.name||'').toLowerCase(),meta=product.metadata||{};
+   if(phase===2) return {kind:'rebuild',label:'Rebuild required',detail:'Current inflatable is a procedural illustrative model. Approve only after the live RentSketch shape matches the Friendly product photo.'};
+   if(/side\s*wall|sidewall/.test(name)){
+     var size=Number(meta.panel_width_ft||product.width_ft||((name.match(/\b(10|20)\s*(?:ft|foot|feet|['′])/i)||[])[1]));
+     if(size===10||size===20) return {kind:'review',label:'Physical rule enforced',detail:(size===10?'10 ft: pop-up tents only':'20 ft: pole/frame tents only')+'. Visual window pattern still requires photo review.'};
+     return {kind:'rebuild',label:'Sidewall size missing',detail:'Panel width must be identified before this item can be approved.'};
+   }
+   if(product.visual_model_id) return {kind:'review',label:'Visual mapped',detail:'Compare the mapped RentSketch visual against the website photo before approval.'};
+   if(product.photo_url||product.image_url) return {kind:'review',label:'Photo available',detail:'Website photo is available; RentSketch visual still needs phase review.'};
+   return {kind:'missing',label:'Missing visual reference',detail:'No website photo or approved RentSketch visual is currently attached.'};
+ }
+ async function viewCatalogAudit(route,gen){
+   appEl().innerHTML=shellHtml(route,loadingHtml('Loading catalog accuracy audit...'));bindShellEvents();
+   if(!state.tenant){mainEl().innerHTML='<div class="dash-empty">No tenant access.</div>';return;}
+   try{
+     var data=await api('/api/tenants/'+state.tenant+'/products'),products=data.products||[];
+     if(gen!==renderGeneration)return;
+     var selected=Number(new URLSearchParams((location.hash.split('?')[1]||'')).get('phase')||1);
+     if(!(selected>=1&&selected<=7))selected=1;
+     var phases=[
+       ['Tents + sidewalls','Tent structures, pop-ups, frame/pole walls'],
+       ['Inflatables','Waterslides, bounce houses, combos'],
+       ['Tables + chairs','Furniture geometry and real product identity'],
+       ['Linens + tabletop','Linens, covers, napkins, overlays and tabletop'],
+       ['Lighting + floor + power','Lighting, dance floor, fans, generators and power'],
+       ['Games + concessions + accessories','Games, concessions and specialty accessories'],
+       ['Final full-catalog audit','Anything unmatched or still unapproved']
+     ];
+     var rows=products.filter(function(p){return selected===7||catalogAuditPhase(p)===selected;});
+     var counts={rebuild:0,review:0,missing:0};
+     rows.forEach(function(p){var s=catalogAuditStatus(p);counts[s.kind]=(counts[s.kind]||0)+1;});
+     function websitePhoto(p){
+       var src=p.photo_url||p.image_url||'';
+       return src?'<img src="'+esc(src)+'" alt="'+esc(p.name)+' website product photo" loading="lazy">':'<div class="catalog-audit-empty">No website photo</div>';
+     }
+     function preview(p){
+       var phase=catalogAuditPhase(p),focus=phase===2?'inflatable':phase===1?'tent':'';
+       if(!focus)return '<div class="catalog-audit-preview-placeholder"><strong>RentSketch mapping</strong><span>'+esc(p.visual_model_id||'No dedicated visual model')+'</span><a href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open designer ↗</a></div>';
+       var url='/designer/?tenant='+encodeURIComponent(state.tenant)+'&focus='+focus+'&productId='+encodeURIComponent(p.id)+'&autoplace=1&embed=1';
+       return '<iframe loading="lazy" title="RentSketch preview for '+esc(p.name)+'" src="'+url+'"></iframe><a class="catalog-audit-open" href="'+url.replace('&embed=1','')+'" target="_blank" rel="noopener">Open full visual ↗</a>';
+     }
+     mainEl().innerHTML=
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Visual QA system</div><h1 class="dash-title">Catalog Accuracy</h1><p class="dash-subtitle">Website product photo on the left. Current RentSketch representation on the right. Nothing is approved just because the name or price matches.</p></div><div class="tw-actions"><a class="tw-btn" href="#/products">Products</a><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open RentSketch</a></div></div>'+
+       '<section class="catalog-phase-tabs">'+phases.map(function(x,i){var n=i+1;return '<a class="'+(selected===n?'active':'')+'" href="#/catalog-audit?phase='+n+'"><b>Phase '+n+'</b><span>'+esc(x[0])+'</span></a>';}).join('')+'</section>'+
+       '<section class="tw-metrics">'+
+         '<article class="tw-metric"><div class="tw-metric-label">Phase items</div><div class="tw-metric-value">'+rows.length+'</div><div class="tw-metric-detail">'+esc(phases[selected-1][0])+'</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Rebuild required</div><div class="tw-metric-value">'+(counts.rebuild||0)+'</div><div class="tw-metric-detail">Known inaccurate/illustrative visuals</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Needs visual review</div><div class="tw-metric-value">'+(counts.review||0)+'</div><div class="tw-metric-detail">Compare side by side before approval</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Missing reference</div><div class="tw-metric-value">'+(counts.missing||0)+'</div><div class="tw-metric-detail">No reliable photo/visual mapping</div></article>'+
+       '</section>'+
+       '<div class="catalog-audit-grid">'+rows.map(function(p){var st=catalogAuditStatus(p);return '<article class="catalog-audit-card '+st.kind+'"><header><div><span class="catalog-audit-phase">Phase '+catalogAuditPhase(p)+'</span><h2>'+esc(p.name)+'</h2><p>'+esc(p.category||'Uncategorized')+' · '+money(p.price_per_day)+'</p></div><span class="catalog-audit-status '+st.kind+'">'+esc(st.label)+'</span></header><div class="catalog-compare"><section><h3>Friendly website</h3><div class="catalog-media">'+websitePhoto(p)+'</div></section><section><h3>RentSketch now</h3><div class="catalog-media rentsketch">'+preview(p)+'</div></section></div><footer><strong>'+esc(st.detail)+'</strong><span>Product ID: '+esc(p.id)+'</span></footer></article>';}).join('')+
+       (rows.length?'':'<div class="dash-empty"><h3>No products in this phase</h3></div>')+
+       '</div>';
+   }catch(err){mainEl().innerHTML=errorHtml(err);}
+ }
+
  async function viewBranding(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading branding...'));
    bindShellEvents();
@@ -788,6 +855,7 @@ function esc(s) {
   if (route === 'overview') viewOverview(route, __gen);
    else if (route === 'requests') viewRequests(route, __gen);
    else if (route === 'products') viewProducts(route, __gen);
+   else if (route === 'catalog-audit') viewCatalogAudit(route, __gen);
    else if (route === 'branding') viewBranding(route, __gen);
    else if (route === 'analytics') viewAnalytics(route, __gen);
    else if (route === 'billing') viewBilling(route, __gen);
