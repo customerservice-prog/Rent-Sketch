@@ -1,0 +1,29 @@
+name: Phase 5 public reference capture
+on:
+  push:
+    branches: [qa/phase5-equipment-20260929]
+    paths: [.github/workflows/phase5-references.yml]
+permissions: {contents: read}
+jobs:
+  references:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Read only public inventory and photo references
+        run: |
+          mkdir -p qa-phase5/references
+          node <<'JS'
+          const fs=require('node:fs');
+          const read=async u=>{const r=await fetch(u,{signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(r.status+' '+u);return r.json();};
+          (async()=>{const catalog=await read('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products'),website=await read('https://www.friendlypartyrental.com/api/items');fs.writeFileSync('qa-phase5/catalog.json',JSON.stringify(catalog));fs.writeFileSync('qa-phase5/website.json',JSON.stringify(website));const rows=[];for(const p of catalog.products){if(!p.active||!p.external_id?.startsWith('fpr:'))continue;const slug=p.external_id.slice(4);if(!(['lighting','dance_floor'].includes(p.category)||/^(4375-watt-generator|30a-power-distribution-spider-box|20-inch-fan)$/.test(slug)))continue;const record={id:p.id,slug,name:p.name,category:p.category,model:p.visual_model_id,error:null};try{const r=await fetch('https://www.friendlypartyrental.com/api/item-image/'+slug,{signal:AbortSignal.timeout(15000)});if(!r.ok||!r.headers.get('content-type')?.startsWith('image/'))throw Error('Photo unavailable '+r.status);fs.writeFileSync('qa-phase5/references/'+slug+'.img',Buffer.from(await r.arrayBuffer()));}catch(e){record.error=e.message;}rows.push(record);}if(rows.some(r=>r.error))throw Error(JSON.stringify(rows.filter(r=>r.error)));fs.writeFileSync('qa-phase5/manifest.json',JSON.stringify({base:'485a87d9b67ead7e7d4cc88011eabbe5fad7e773',checkedAt:new Date().toISOString(),products:rows},null,2));console.log(JSON.stringify(rows));})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+          git archive --format=tar.gz HEAD -o qa-phase5/source.tgz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase5-public-references
+          path: qa-phase5
+          retention-days: 7
