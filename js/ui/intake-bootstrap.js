@@ -22,13 +22,15 @@
       showCatalogFailure('This rental company has no product previews available yet.');
       return;
     }
-    import('./intake.js').then(function () {
+    import('./intake.js?v=20260929-address-1').then(function () {
       var attempts = 0;
       (function ready() {
-        var host = document.getElementById('step-designer');
-        if (window.FriendlyBridge && host && host.classList.contains('active')) {
+        var designer = document.getElementById('step-designer');
+        var planner = document.getElementById('intakeWizard');
+        var addressReady = planner && planner.dataset.addressPlannerMounted === '1';
+        if (window.FriendlyBridge && ((designer && designer.classList.contains('active')) || addressReady)) {
           window.dispatchEvent(new CustomEvent('rentsketch:intakeReady'));
-          if (window.parent !== window) window.parent.postMessage({type:'rentsketch.ready',mode:'designer',tenant:params.get('tenant') || 'generic'}, '*');
+          if (window.parent !== window) window.parent.postMessage({type:'rentsketch.ready',mode:addressReady?'property-planner':'designer',tenant:params.get('tenant') || 'generic'}, '*');
         } else if (++attempts < 100) setTimeout(ready, 100);
         else showCatalogFailure('The designer could not start. Please try again.');
       })();
