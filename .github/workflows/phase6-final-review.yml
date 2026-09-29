@@ -1,0 +1,76 @@
+name: Final Phase 6 core review
+on:
+  push:
+    branches: [qa/phase6-core-20260929]
+    paths: [.github/workflows/phase6-final-review.yml]
+permissions: {contents: write}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply reviewed changes, leaving seating and booking untouched
+        run: |
+          python3 .github/phase6-resume-refine.py
+          git diff --check
+          git diff --exit-code de7fde908d5aa70b90b268aa0145b08c8f7cb3d4 -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js js/core/seating.js js/core/world-space.js js/core/geometry.js js/core/photo-geometry.js js/ui/equipment3d.js js/ui/party-styling.js js/ui/plan2d.js js/ui/view3d.js js/ui/scene-guests.js script.js server
+          node --check js/ui/phase6-equipment3d.js
+          node --check dashboard/app.js
+          node --check tests/phase6-live.cjs
+      - name: Read current public reference identities and original photos
+        run: |
+          mkdir -p qa-phase6/references
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';import assert from 'node:assert/strict';import {PHASE6_SLUGS,phase6Reference} from './js/data/phase6-reference.js';
+          const get=async url=>{const r=await fetch(url,{signal:AbortSignal.timeout(20000)});assert.equal(r.ok,true,url);return r.json();};
+          const catalog=await get('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products');const website=await get('https://www.friendlypartyrental.com/api/items');
+          fs.writeFileSync('qa-phase6/catalog.json',JSON.stringify(catalog));fs.writeFileSync('qa-phase6/website.json',JSON.stringify(website));const references=[];
+          for(const slug of PHASE6_SLUGS){const matches=catalog.products.filter(p=>p.active!==false&&p.external_id==='fpr:'+slug);assert.equal(matches.length,1,slug);const p=matches[0],r=phase6Reference(p);assert.equal(website.items.filter(w=>w.slug===slug).length,1,slug);const url='https://www.friendlypartyrental.com/api/item-image/'+slug;const photo=await fetch(url,{signal:AbortSignal.timeout(20000)});const image=photo.ok&&photo.headers.get('content-type')?.startsWith('image/');if(r.kind==='equipment')assert.equal(image,true,slug+' photo');if(image)fs.writeFileSync('qa-phase6/references/'+slug+'.img',Buffer.from(await photo.arrayBuffer()));references.push({slug,productId:p.id,kind:r.kind,status:photo.status,photo:!!image});}
+          fs.writeFileSync('qa-phase6/references.json',JSON.stringify({checkedAt:new Date().toISOString(),items:references},null,2));console.log('Verified '+references.length+' source identities; '+references.filter(r=>r.photo).length+' reference images returned.');
+          JS
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase6-browser --no-save playwright@1.56.1
+      - run: /tmp/phase6-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Catalog, geometry, legacy saved layouts and booking regression
+        run: |
+          set -o pipefail
+          node --test tests/phase6-core.test.mjs tests/book-now-contract.test.mjs tests/phase5-catalog.test.mjs tests/phase4-linens.test.mjs tests/seating-alignment.test.mjs tests/contextual-products.test.mjs tests/equipment-assets.test.mjs tests/party-scene.test.mjs | tee qa-phase6/unit.log
+          node --experimental-vm-modules tests/phase6-core-mesh.cjs | tee qa-phase6/mesh.log
+          node --experimental-vm-modules tests/seating-alignment-mesh.cjs | tee qa-phase6/seating.log
+          node --experimental-vm-modules tests/seating-styling-mesh.cjs | tee qa-phase6/seating-styling.log
+          node --experimental-vm-modules tests/equipment-assets-mesh.cjs | tee qa-phase6/equipment-regression.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs | tee qa-phase6/furniture-regression.log
+      - name: Actual shared renderer desktop and mobile comparisons
+        env: {NODE_PATH: /tmp/phase6-browser/node_modules}
+        run: node tests/phase6-core-browser.cjs
+      - name: Save tested candidate to QA only
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js/ui/phase6-equipment3d.js js/data/phase6-reference.js tests/phase6-core.test.mjs tests/phase6-core-mesh.cjs tests/phase6-core-browser.cjs catalog-preview/index.html designer/index.html dashboard/app.js dashboard/index.html
+          git commit -m 'Finish reviewed Phase 6 shapes, unverified-source placeholders and portable regression tests'
+          git push origin HEAD:refs/heads/qa/phase6-core-20260929
+          python3 - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          base='de7fde908d5aa70b90b268aa0145b08c8f7cb3d4'
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          paths=[p for p in paths if not p.startswith('.github/')]
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()} for p in paths]
+          Path('qa-phase6/release-tree.json').write_text(json.dumps({'base':base,'testedCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'entries':entries},indent=2))
+          PY
+      - name: Package exact inspected source
+        if: always()
+        run: |
+          mkdir -p qa-phase6
+          tar -czf qa-phase6/source.tgz js tests/phase6* catalog-preview designer dashboard docs/phase6-core-20260929.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase6-final-reviewed
+          path: qa-phase6
+          retention-days: 7
