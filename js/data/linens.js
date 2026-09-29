@@ -1,3 +1,4 @@
+import { linenSpec, productColors } from './linen-spec.js';
 // RentSketch linen renderer primitives. Rental-company prices are never
 // hardcoded here; compatible live tenant products hydrate pricing after the
 // tenant catalog has loaded. Unknown styles safely remain "Ask for pricing".
@@ -28,7 +29,7 @@ export const LINENS = [
 // that model while placement, pricing and ordering keep the selected SKU.
 export function linenFitsTable(linen,table){
   const id=typeof table==='string'?table:table?.visualModelId||table?.tableId||table?.id;
-  return !!id && !!linen?.fitsTableIds?.includes(String(id).split('--')[0]);
+  return linen?.active!==false && !!id && !!linen?.fitsTableIds?.includes(String(id).split('--')[0]);
 }
 export function optionsForTable(tableId){return LINENS.filter(l=>linenFitsTable(l,tableId));}
 export function byId(id){return LINENS.find(l=>l.id===id);}
@@ -63,22 +64,25 @@ function findCompatible(products,id){
   return matches.length===1?matches[0]:null;
 }
 const LINEN_BASE=JSON.parse(JSON.stringify(LINENS));
-function applyTenantLinens(detail){
+export function applyTenantLinens(detail){
   LINENS.splice(0,LINENS.length,...JSON.parse(JSON.stringify(LINEN_BASE)));
   const tenant=detail&&detail.tenant||window.ACTIVE_TENANT||{};
   const products=Array.isArray(detail&&detail.products)?detail.products:[],show=tenant.slug!=='generic'&&tenant.showPrices!==false;
   const used=new Set();
-  function hydrate(l,p){l.name=p.name;l.productId=p.id;l.pricePerDay=show?price(p):null;l.photoUrl=p.photo_url||p.image_url||null;if(Array.isArray(p.metadata?.colors)&&p.metadata.colors.length)l.colors=p.metadata.colors;else if(/black/i.test(p.name))l.colors=['Black'];else if(/white/i.test(p.name))l.colors=['White'];used.add(p.id);}
-  LINENS.forEach(l=>{const p=findCompatible(products,l.id);if(p)hydrate(l,p);});
+  function hydrate(l,p){
+    const spec=linenSpec({...p,id:l.id});
+    Object.assign(l,{name:p.name,productId:p.id,externalId:p.external_id||null,pricePerDay:show?price(p):null,photoUrl:p.photo_url||p.image_url||null,active:true},productColors(p));
+    if(spec){Object.assign(l,spec,{spec,visual:spec.kind==='runner'?'runner':spec.shape==='round'?'skirt-round':'skirt-rect'});}else l.active=false;
+    used.add(p.id);
+  }
+  LINENS.forEach(l=>{const p=findCompatible(products,l.id);if(p)hydrate(l,p);else if(tenant.slug!=='generic')l.active=false;});
   for(const p of products){
     if(used.has(p.id)||p.active===false||String(p.category).toLowerCase()!=='linen'||/package|aisle|chair|clip|napkin|runner/i.test(p.name))continue;
-    const n=p.name.toLowerCase(),round=/round/.test(n)&&n.match(/(60|90|108|120|132)/),rect=n.match(/(54|72|90)\s*[x×]\s*(120|132|156)/);
-    if(!round&&!rect)continue;
-    const id='linen-product-'+p.id,fit=round?['round-5ft']:Number(rect[2])>=156?['banquet-8ft']:Number(rect[2])===132?['banquet-6ft']:['banquet-6ft','banquet-8ft'];
-    const l=buildLinen(id,p.name,fit);l.visual=round?'skirt-round':'skirt-rect';if(round)l.roundSizeIn=Number(round[1]);else{l.clothWidthIn=Number(rect[1]);l.clothLengthIn=Number(rect[2]);}hydrate(l,p);LINENS.push(l);
+    const spec=linenSpec(p);if(!spec||!['drape','stretch'].includes(spec.kind))continue;
+    const l=buildLinen('linen-product-'+p.id,p.name,spec.fitsTableIds);hydrate(l,p);LINENS.push(l);
   }
 }
 if(typeof window!=='undefined')window.addEventListener('rentsketch:catalogReady',e=>applyTenantLinens(e.detail||{}));
 
-export const LINEN_COLOR_HEX = {'White':'#ffffff','Ivory':'#eee4cf','Champagne':'#d9c39d','Gold':'#b58b42','Black':'#18191b','Silver':'#aeb3b8','Navy Blue':'#172c52','Royal Blue':'#2350a2','Dusty Blue':'#829cae','Burgundy':'#681f2d','Red':'#a72b2c','Blush':'#e4bbb7','Dusty Rose':'#b97c7c','Pink':'#e4a9bd','Purple':'#76538f','Sage Green':'#8b9b79','Hunter Emerald Green':'#285d49'};
+export const LINEN_COLOR_HEX = {'White':'#ffffff','Ivory':'#eee4cf','Champagne':'#d9c39d','Gold':'#b58b42','Black':'#18191b','Silver':'#aeb3b8','Navy Blue':'#172c52','Royal Blue':'#2350a2','Dusty Blue':'#829cae','Burgundy':'#681f2d','Red':'#a72b2c','Blush':'#e4bbb7','Dusty Rose':'#b97c7c','Pink':'#e4a9bd','Purple':'#76538f','Sage Green':'#8b9b79','Hunter Emerald Green':'#285d49','Hunter Green':'#285d49','Rose Gold':'#bd8b7e','Beige':'#d4c3a1','Taupe':'#a09180','Orange':'#cf7738','Nude':'#d4ad93','Terracotta (Rust)':'#ac5c40','Chocolate':'#5c3c2d','Cinnamon Brown':'#925d3d','Fuchsia':'#b63883','Lavender Lilac':'#b7a3c5','Amethyst':'#885c9c','Dusty Sage Green':'#98a58c','Light Blue':'#a7c8df','Turquoise':'#45afbc','Peacock Teal':'#247982','Denim Blue':'#4c708c','Dark Denim Blue':'#334c65','Yellow':'#e1c34f','Apple Green':'#7b9c3f','Olive Green':'#73804c','Wine':'#692638'};
 export function linenColorHex(name){return LINEN_COLOR_HEX[name] || '#ffffff';}

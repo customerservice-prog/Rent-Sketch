@@ -5,10 +5,10 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {makeChair,makeTable} from './equipment3d.js';
 import {TABLES} from '../data/tables.js';
 import {CHAIRS} from '../data/chairs.js';
-export function mountCatalogFurniture(host,definition,category,onFailure){
- if(!host||!definition||!['table','chair'].includes(category))throw new Error('A mapped furniture product is required');
+export function mountCatalogFurniture(host,definition,category,onFailure,suppliedModel=null){
+ if(!host||!definition||(!suppliedModel&&!['table','chair'].includes(category)))throw new Error('A mapped furniture product is required');
  const list=category==='table'?TABLES:CHAIRS,index=list.findIndex(p=>p.id===definition.id);
- if(index<0)list.push(definition);else list[index]=definition;
+ if(!suppliedModel){if(index<0)list.push(definition);else list[index]=definition;}
  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'low-power'});
  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
  const scene=new THREE.Scene();scene.background=new THREE.Color('#f5f6f5');scene.add(new THREE.HemisphereLight('#ffffff','#d2c9bd',2.7));
@@ -17,7 +17,7 @@ export function mountCatalogFurniture(host,definition,category,onFailure){
  const camera=new THREE.PerspectiveCamera(35,1,.01,150),controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=false;controls.enablePan=false;controls.maxPolarAngle=Math.PI*.49;
  let dead=false,failed=false,visible=true,ready=false,observer=null,visibility=null;
  const item={id:'catalog-preview-'+definition.productId,kind:'table',tableId:definition.id,shape:definition.shape,widthFt:definition.diameterFt||definition.widthFt,depthFt:definition.diameterFt||definition.depthFt,modelWidthFt:definition.widthFt,modelDepthFt:definition.depthFt,rotationDeg:0,seatCount:0,hideChairs:true};
- const model=category==='chair'?makeChair(definition):makeTable(item);scene.add(model);
+ const model=suppliedModel||(category==='chair'?makeChair(definition):makeTable(item));scene.add(model);
  const bounds=new THREE.Box3().setFromObject(model),center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
  if(![size.x,size.y,size.z].every(n=>Number.isFinite(n)&&n>0)){renderer.dispose();controls.dispose();throw new Error('Furniture geometry is unavailable');}
  host.replaceChildren(renderer.domElement);host.classList.add('is-live-3d');renderer.domElement.setAttribute('aria-label',definition.name+' — current RentSketch 3D model. Drag to rotate.');
