@@ -17,5 +17,19 @@ router.post('/:slug/products', requireTenantRole('staff'), async (req,res)=>{con
 
 router.patch('/:slug/products/:id', requireTenantRole('staff'), async (req,res)=>{const fields=req.body||{};const allowed=['category','name','sku','price_per_day','price_type','width_ft','length_ft','capacity','photo_url','external_id','sort_order','active','visual_model_id'];const map={pricePerDay:'price_per_day',priceType:'price_type',widthFt:'width_ft',lengthFt:'length_ft',photoUrl:'photo_url',externalId:'external_id',sortOrder:'sort_order',visualModelId:'visual_model_id'};const sets=[],values=[];let i=1;for(const [key,raw] of Object.entries(fields)){const col=map[key]||key;if(!allowed.includes(col))continue;let value;try{value=normalized(raw,col);}catch(err){return validationError(res,key,err);}sets.push(`${col}=$${i++}`);values.push(value);}if(!sets.length)return res.status(400).json({error:'No valid fields to update'});sets.push('updated_at=now()');values.push(req.params.id,req.tenant.id);const r=await db.query(`UPDATE products SET ${sets.join(',')} WHERE id=$${i} AND tenant_id=$${i+1} RETURNING *`,values);if(!r.rows[0])return res.status(404).json({error:'Product not found'});res.json({product:r.rows[0]});});
 
+
+router.patch('/:slug/products/:id/visual-audit', requireTenantRole('staff'), async (req,res)=>{
+  const body=req.body||{},status=String(body.status||'').trim().toLowerCase(),phase=Number(body.phase),note=text(body.note,800,false);
+  if(!['approved','review','rebuild'].includes(status))return res.status(400).json({error:'status must be approved, review, or rebuild'});
+  if(!Number.isInteger(phase)||phase<1||phase>7)return res.status(400).json({error:'phase must be between 1 and 7'});
+  const audit={status,phase,note:note||null,reviewedAt:new Date().toISOString(),reviewedBy:req.user?.userId||null};
+  const r=await db.query(
+    `UPDATE products SET metadata=COALESCE(metadata,'{}'::jsonb) || jsonb_build_object('visualAudit',$1::jsonb),updated_at=now() WHERE id=$2 AND tenant_id=$3 RETURNING *`,
+    [JSON.stringify(audit),req.params.id,req.tenant.id]
+  );
+  if(!r.rows[0])return res.status(404).json({error:'Product not found'});
+  res.json({product:r.rows[0]});
+});
+
 router.delete('/:slug/products/:id', requireTenantRole('staff'), async (req,res)=>{const r=await db.query('UPDATE products SET active=false,updated_at=now() WHERE id=$1 AND tenant_id=$2 RETURNING id',[req.params.id,req.tenant.id]);if(!r.rows[0])return res.status(404).json({error:'Product not found'});res.json({ok:true});});
 module.exports=router;
