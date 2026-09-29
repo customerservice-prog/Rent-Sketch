@@ -93,11 +93,11 @@ function showLayoutNotice(message,durationMs){var note=$('layoutNotice');if(!not
 function customizeFromScratch(){if(!canEditEvent()&&(!bareRental(store.getState())||window.RentSketchEventPass?.hasPaidEvent()))return false;store.reset({tentId:state.tentId,objects:[],zones:[],aisles:[]});state.selectedId=null;state.lastTableConfig=null;if(CHAIRS.length&&!byId(CHAIRS,state.chairId))state.chairId=CHAIRS[0].id;enterDesigner();}function enterDesigner(){if(state.tentId&&!TENTS.length){alert('This rental catalog is not ready. Please reload.');return;}document.body.classList.add('designer-active');document.body.classList.remove('guided-active');state.viewMode='plan';state.selectedId=null;state.activeDrawer=null;state.eventCheckOpen=false;state.estimateOpen=false;validateLighting();showStep('step-designer');closeDrawer();mountPlan();setViewMode('plan');refreshAll();if(!window.RENTSKETCH_TENT_PREVIEW){try{setTimeout(function(){window.parent.postMessage({type:'rentsketch.ready'},'*');},16);}catch(e){}}}
 // Contact details and scene preferences travel with the existing saved event.
 function customerDetails(){
-  return {name:$('customerName')?.value||'',email:$('customerEmail')?.value||'',date:$('customerDate')?.value||''};
+  return {name:$('customerName')?.value||'',email:$('customerEmail')?.value||'',phone:$('customerPhone')?.value||'',date:$('customerDate')?.value||''};
 }
 function restoreCustomerDetails(value,checkoutEmail){
   var details=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
-  [['name','customerName',200],['email','customerEmail',254],['date','customerDate',10]].forEach(function([key,id,max]){
+  [['name','customerName',200],['email','customerEmail',254],['phone','customerPhone',40],['date','customerDate',10]].forEach(function([key,id,max]){
     var field=$(id);if(!field)return;
     var text=typeof details[key]==='string'?details[key]:'';
     if(key==='email'&&!text&&typeof checkoutEmail==='string')text=checkoutEmail;
@@ -900,7 +900,7 @@ function setSceneNight(value){sceneOptions.night=!!value;applyScenePreferences()
 $('sceneSettingLabel')?.addEventListener('click',()=>openDrawer('site'));
 function beginAccentPlacement(chairId){if(!requireEventEditing())return false;const chair=byId(CHAIRS,chairId);if(!chair?.isThrone)return;const space=layoutSpace(),w=chair.seatWidthFt,d=chair.seatDepthFt;startPlacement([{id:newItemId(),kind:'chair',chairId,widthFt:w,depthFt:d,x:(space.widthFt-w)/2,y:(space.lengthFt-d)/2,rotationDeg:0}],chair.name,chair.id);$('placementBar').querySelector('.placement-preview').innerHTML=chairVisual(chair);}
 
-['customerName','customerEmail','customerDate'].forEach(function(id){$(id)?.addEventListener('input',function(){window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});});
+['customerName','customerEmail','customerPhone','customerDate'].forEach(function(id){$(id)?.addEventListener('input',function(){window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});});
 
 
 
