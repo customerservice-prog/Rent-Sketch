@@ -546,9 +546,12 @@ function esc(s) {
      }
      function preview(p){
        var phase=catalogAuditPhase(p),focus=phase===2?'inflatable':phase===1?'tent':'';
-       if(!focus)return '<div class="catalog-audit-preview-placeholder"><strong>RentSketch mapping</strong><span>'+esc(p.visual_model_id||'No dedicated visual model')+'</span><a href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open designer ↗</a></div>';
-       var url='/designer/?tenant='+encodeURIComponent(state.tenant)+'&focus='+focus+'&productId='+encodeURIComponent(p.id)+'&autoplace=1&embed=1';
-       return '<iframe loading="lazy" title="RentSketch preview for '+esc(p.name)+'" src="'+url+'"></iframe><a class="catalog-audit-open" href="'+url.replace('&embed=1','')+'" target="_blank" rel="noopener">Open full visual ↗</a>';
+       if(focus){
+         var url='/designer/?tenant='+encodeURIComponent(state.tenant)+'&focus='+focus+'&productId='+encodeURIComponent(p.id)+'&autoplace=1&embed=1';
+         return '<iframe loading="lazy" title="RentSketch preview for '+esc(p.name)+'" src="'+url+'"></iframe><a class="catalog-audit-open" href="'+url.replace('&embed=1','')+'" target="_blank" rel="noopener">Open full visual ↗</a>';
+       }
+       var auditUrl='/catalog-preview/?tenant='+encodeURIComponent(state.tenant)+'&productId='+encodeURIComponent(p.id);
+       return '<iframe loading="lazy" title="Current RentSketch planning visual for '+esc(p.name)+'" src="'+auditUrl+'"></iframe><a class="catalog-audit-open" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open designer ↗</a>';
      }
      mainEl().innerHTML=
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Visual QA system</div><h1 class="dash-title">Catalog Accuracy</h1><p class="dash-subtitle">Website product photo on the left. Current RentSketch representation on the right. Nothing is approved just because the name or price matches.</p></div><div class="tw-actions"><a class="tw-btn" href="#/products">Products</a><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open RentSketch</a></div></div>'+
