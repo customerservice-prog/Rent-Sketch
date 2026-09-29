@@ -1,6 +1,6 @@
 # Phase 4: linens and tabletop accuracy
 
-Source: Friendly public catalog and 40 website image references retrieved on 2026-09-29. The set includes 36 supported linen/tabletop rentals, three reference-only items (100ft aisle runner, linen clips, chair cover), and one bundle which is not a single 3D rental. No photo comparison automatically approves a product.
+Source: Friendly public catalog and 39 website image references retrieved on 2026-09-29. The set includes 35 supported linen/tabletop rentals, three reference-only items (100ft aisle runner, linen clips, chair cover), and one bundle which is not a single 3D rental. No photo comparison automatically approves a product.
 
 ## Changes
 
@@ -17,3 +17,5 @@ The footed-rocks glass photo shows a tall tumbler, conflicting with its name; th
 ## Verification
 
 The focused suite checks unit conversion, cloth drop, source/SKU matching, colors, outages, price preservation, geometry bounds, material differences and one-per-seat quantities. Browser evidence records each supported product at desktop and mobile sizes alongside the website image. The release is not considered live until the tested runtime files and the live color response are verified on production.
+
+The final canonical public image reference fetch returned 39 images. There are 35 production-model previews, 3 reference-only items, and 1 multi-item bundle. These are not blanket visual approvals.

@@ -59,7 +59,7 @@ function clothTorso(){
   for(let i=0;i<p.count;i++){const y=p.getY(i),a=Math.atan2(p.getZ(i),p.getX(i)),fold=Math.sin(a*9+y*4)*.005*(1-Math.min(1,Math.abs(y-.6)));p.setX(i,p.getX(i)*(1+fold));}
   g.computeVertexNormals();return g;
 }
-function sleeveGeometry(){return lathe([[.72,-.54],[.86,-.46],[.89,-.22],[.98,.08],[1,.34],[.91,.51],[.72,.54]],16);}
+function sleeveGeometry(){return lathe([[0,-.55],[.72,-.54],[.86,-.46],[.89,-.22],[.98,.08],[1,.34],[.91,.51],[.72,.54],[0,.55]],16);}
 function shoeGeometry(){return combine([[sphere(0,.01,.02,.155,.085,.29),'#ffffff'],[sphere(0,.075,-.05,.142,.105,.20),'#ffffff'],[new THREE.BoxGeometry(.27,.06,.43).translate(0,-.045,-.03),'#ffffff']]);}
 function skirtGeometry(){
   const g=new THREE.CylinderGeometry(.415,.65,1.65,28,10,true),p=g.attributes.position;
@@ -134,12 +134,12 @@ export function createGuestBatch(people,{mobile=false}={}) {
         limb(dress?'skin':'limb',knee,ankle,.156,.158,dress?skin:pants);
         part(dress?'skin':'detail',...knee,.153,.13,.151,dress?skin:pants);
         part('shoe',side*.26,.105+(!seated?Math.max(0,pose.gait*side)*.1:0),footZ+.10,1,1,1,dress?'#765343':'#34383a');
-        const shoulder=[side*.54,top-.16,0],talk=side===1?pose.gesture:1-pose.gesture;
+        const shoulder=[side*.50,top-.22,0],talk=side===1?pose.gesture:1-pose.gesture;
         let elbow=[side*.65,hip+.56,seated?.43:-stride*.38],hand=[side*.46,seated?hip+.66:hip+.02,seated?1.03:-stride*.52];
         if(person.activity==='conversation'&&side===1){hand=[.47,hip+.62+talk*.28,.85+talk*.16];elbow=[.66,hip+.44,.38];}
         if(person.activity==='cocktail'){elbow=[side*.62,hip+.58,.28];hand=[side*.29,hip+.91+(side===1?talk*.28:0),.53];}
         if(person.activity==='dance'){elbow=[side*(.62+talk*.10),hip+(side===1?.89:.36)+talk*.16,.22];hand=[side*.56,hip+(side===1?1.44:.57)+talk*.18,.51];}
-        part('detail',...shoulder,jacket?.183:.17,.183,.17,cloth);
+        // Overlapping closed sleeves avoid toy-like shoulder balls.
         limb('limb',shoulder,elbow,jacket?.175:.16,.17,cloth);
         part('skin',...elbow,.118,.105,.12,skin);
         limb('skin',elbow,hand,.12,.125,skin);
