@@ -1,0 +1,54 @@
+name: Live guests, Phase 4 and Book Now verification
+on:
+  push:
+    branches: [qa/phase4-finish-20260929]
+    paths: [.github/workflows/guest-phase4-live.yml]
+permissions: {contents: read}
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 485a87d9b67ead7e7d4cc88011eabbe5fad7e773
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Wait for exact tested files and verify live product references
+        run: |
+          mkdir -p qa-live-phase4
+          node <<'JS'
+          const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+          const paths=['designer/index.html','customer-experience.css','catalog-preview/index.html','dashboard/app.js','dashboard/index.html','js/ui/scene-guests.js','js/data/guest-anatomy.js','js/data/linens.js','js/data/linen-spec.js','js/data/tabletop.js','js/data/tabletop-reference.js','js/ui/catalog-phase4.js','js/ui/catalog-furniture3d.js','js/ui/linen-fabric3d.js','js/ui/tabletop3d.js','js/ui/tabletop-reference3d.js','js/ui/tabletop-symbols.js','js/ui/tableStudio.js','js/ui/equipment-controls.js','js/ui/equipment3d.js','js/core/contextual-products.js','js/core/bookingHandoff.js','js/ui/booking-handoff.js'];
+          const digest=b=>crypto.createHash('sha256').update(b).digest('hex'),wait=ms=>new Promise(r=>setTimeout(r,ms));
+          (async()=>{let rows=[],last;
+           for(let attempt=0;attempt<30;attempt++){try{rows=[];for(const path of paths){const r=await fetch('https://rentsketch.com/'+path+'?release=485a87d9&n='+attempt,{signal:AbortSignal.timeout(15000)});assert.equal(r.ok,true,path);const actual=digest(Buffer.from(await r.arrayBuffer())),expected=digest(fs.readFileSync(path));assert.equal(actual,expected,path+' must match tested source');rows.push({path,sha256:actual,match:true});}last=null;break;}catch(e){last=e;console.log('Waiting for release:',e.message.split('\n')[0]);await wait(10000);}}
+           if(last)throw last;
+           const get=async u=>{const r=await fetch(u,{signal:AbortSignal.timeout(20000)});assert.equal(r.ok,true,u);return r.json();};
+           const web=(await get('https://www.friendlypartyrental.com/api/items')).items;let catalog;
+           for(let i=0;i<10;i++){catalog=(await get('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products')).products;if(catalog.some(p=>p.metadata?.referenceStatus==='matched'))break;await wait(12000);}
+           const verified=[];for(const p of catalog){if(!p.external_id?.startsWith('fpr:'))continue;const matches=web.filter(w=>w.slug===p.external_id.slice(4));if(matches.length!==1)continue;const w=matches[0];assert.equal(p.metadata.referenceStatus,'matched',p.name);assert.equal(p.metadata.referenceItemId,String(w.id),p.name);assert.deepEqual(p.metadata.colors,[...new Set((w.colorOptions||[]).filter(c=>typeof c==='string'&&c.trim()&&c.length<=80).map(c=>c.trim()))],p.name);verified.push({slug:w.slug,colorOptions:p.metadata.colors.length});}
+           assert.ok(verified.length>35);fs.writeFileSync('qa-live-phase4/report.json',JSON.stringify({release:'485a87d9b67ead7e7d4cc88011eabbe5fad7e773',files:rows,liveCatalogMatches:verified,realOrdersCreated:0,realPaymentsSubmitted:0,checkedAt:new Date().toISOString()},null,2));console.log('PASS '+rows.length+' deployed module hashes and '+verified.length+' live color/identity references');
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - run: npm install --prefix /tmp/booking-browser --no-save playwright@1.56.1
+      - run: /tmp/booking-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Re-run prior public cart and checkout tests without real writes
+        env: {NODE_PATH: /tmp/booking-browser/node_modules}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/customerservice-prog/friendly-tent-mapping-system/2aaed161faa865b8d7e470234db82d0a46487276/tests/book-now-live-browser.cjs -o tests/book-now-live-browser.cjs
+          node tests/book-now-live-browser.cjs
+      - name: Confirm the standalone designer and corrected hidden control on live HTML and CSS
+        env: {NODE_PATH: /tmp/booking-browser/node_modules}
+        run: |
+          node <<'JS'
+          const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=require('playwright');(async()=>{const b=await chromium.launch({headless:true}),context=await b.newContext();await context.route('**/*',r=>['GET','HEAD'].includes(r.request().method())?r.continue():r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"skipped":true}'}));const p=await context.newPage();await p.goto('https://rentsketch.com/designer/?tenant=friendly&source=qa_no_purchase',{waitUntil:'domcontentloaded'});await p.waitForSelector('#step-review',{state:'attached'});await p.evaluate(()=>{document.querySelectorAll('.step').forEach(el=>el.classList.remove('active'));document.querySelector('#step-review').classList.add('active');});assert.equal(await p.locator('#btnPayDeposit').isVisible(),false);await p.screenshot({path:'qa-live-phase4/live-review-shell.png',fullPage:true});fs.writeFileSync('qa-live-phase4/control-check.json',JSON.stringify({hiddenDeposit:true,realPayment:false}));await b.close();})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-guests-phase4-booking
+          path: |
+            qa-live-phase4
+            qa-book-now-live
+          retention-days: 7
