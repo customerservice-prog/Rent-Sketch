@@ -1,0 +1,63 @@
+name: Furniture accuracy evidence
+on:
+  push:
+    branches: [qa/furniture-accuracy-20260929]
+permissions:
+  contents: read
+jobs:
+  furniture-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/furniture-browser --no-save playwright@1.56.1
+      - run: /tmp/furniture-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Capture public furniture reference and real renderer
+        env:
+          NODE_PATH: /tmp/furniture-browser/node_modules
+        run: |
+          mkdir -p qa-furniture
+          cat > qa-furniture/capture.cjs <<'JS'
+          const fs=require('node:fs'),http=require('node:http'),path=require('node:path');
+          const {chromium}=require('playwright');
+          const root=process.cwd(),out=path.join(root,'qa-furniture');
+          const origin='https://www.friendlypartyrental.com';
+          const get=async url=>{const r=await fetch(url,{signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(r.status+' '+url);return r;};
+          (async()=>{
+            const products=await (await get('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products')).json();
+            const website=await (await get(origin+'/api/items')).json();
+            fs.writeFileSync(out+'/rentsketch-products.json',JSON.stringify(products,null,2));fs.writeFileSync(out+'/website-items.json',JSON.stringify(website,null,2));
+            const rows=products.products.filter(p=>['table','chair'].includes(p.category)&&String(p.external_id).startsWith('fpr:'));
+            for(const p of rows){const slug=p.external_id.slice(4),item=website.items.find(i=>i.slug===slug);if(!item)throw Error('Missing live website SKU '+slug);const url=item.picture?new URL(item.picture,origin).href:origin+'/api/item-image/'+encodeURIComponent(slug);const r=await get(url);fs.writeFileSync(out+'/'+slug+'-reference.img',Buffer.from(await r.arrayBuffer()));p.websiteReference={url,itemId:item.id,slug,description:item.description};}
+            const harness=`<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#f5f6f5;width:100%;height:100%;overflow:hidden}canvas{display:block}</style><script type="importmap">{"imports":{"three":"/tests/node_modules/three/build/three.module.js","three/addons/":"/tests/node_modules/three/examples/jsm/"}}</script></head><body><script type="module">
+            import * as THREE from 'three';import {liveCatalog} from '/js/data/catalog.js';import {TABLES} from '/js/data/tables.js';import {CHAIRS} from '/js/data/chairs.js';import {makeTable,makeChair} from '/js/ui/equipment3d.js';
+            const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(1);renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.shadowMap.enabled=true;document.body.appendChild(renderer.domElement);
+            const scene=new THREE.Scene();scene.background=new THREE.Color('#f5f6f5');scene.add(new THREE.HemisphereLight('#ffffff','#d2c9bd',2.7));const sun=new THREE.DirectionalLight('#fff8ed',3);sun.position.set(-6,10,8);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);const fill=new THREE.DirectionalLight('#e8f3ff',1.2);fill.position.set(6,5,-4);scene.add(fill);
+            const floor=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.MeshStandardMaterial({color:'#eeefec',roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=-.015;floor.receiveShadow=true;scene.add(floor);const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.01,150);let model=null;
+            window.renderFurniture=(product,angle=0)=>{if(model){scene.remove(model);model.traverse(o=>{o.geometry?.dispose();});}const category=product.category,defs=category==='table'?TABLES:CHAIRS;const def=liveCatalog(category,defs,[product],false,product.id)[0];if(!def)throw Error('No mapped renderer '+product.name);const i=defs.findIndex(d=>d.id===def.id);if(i>=0)defs[i]=def;else defs.push(def);const object={id:'qa-'+product.id,tableId:def.id,kind:'table',shape:def.shape,widthFt:def.diameterFt||def.widthFt,depthFt:def.diameterFt||def.depthFt,modelWidthFt:def.widthFt,modelDepthFt:def.depthFt,rotationDeg:0,seatCount:0,chairId:'plastic-white'};model=category==='table'?makeTable(object):makeChair(def);scene.add(model);const b=new THREE.Box3().setFromObject(model),size=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());const direction=angle===1?new THREE.Vector3(0,.20,1).normalize():new THREE.Vector3(.8,.62,1).normalize();const radius=Math.max(size.x,size.y,size.z);const distance=radius/(2*Math.tan(camera.fov*Math.PI/360))*1.5;camera.position.copy(center).addScaledVector(direction,distance);camera.lookAt(center);renderer.render(scene,camera);let meshes=0,vertices=0;model.traverse(o=>{if(o.isMesh){meshes++;vertices+=o.geometry.attributes.position?.count||0;}});return {id:product.id,name:product.name,category,definition:def,bounds:{x:size.x,y:size.y,z:size.z},meshes,vertices};};window.harnessReady=true;
+            </script></body></html>`;
+            fs.writeFileSync(out+'/harness.html',harness);
+            const server=http.createServer((req,res)=>{const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname),file=path.resolve(root,'.'+pathname);if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}try{const data=fs.readFileSync(file);res.setHeader('Content-Type',file.endsWith('.html')?'text/html':file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(data);}catch(e){res.writeHead(404).end();}}).listen(8124,'127.0.0.1');
+            const browser=await chromium.launch({headless:true,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});const page=await browser.newPage({viewport:{width:800,height:600}});const errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.goto('http://127.0.0.1:8124/qa-furniture/harness.html');await page.waitForFunction(()=>window.harnessReady,{timeout:20000});
+            const report=[];for(const p of rows){const slug=p.external_id.slice(4);const result=await page.evaluate(p=>window.renderFurniture(p),p);await page.screenshot({path:out+'/'+slug+'-model.png'});await page.evaluate(p=>window.renderFurniture(p,1),p);await page.screenshot({path:out+'/'+slug+'-front.png'});report.push({...result,websiteReference:p.websiteReference});}
+            fs.writeFileSync(out+'/report.json',JSON.stringify({commit:process.env.GITHUB_SHA,checkedAt:new Date().toISOString(),items:report,errors},null,2));await browser.close();server.close();if(errors.length)throw Error(errors.join('\n'));console.log('Rendered '+report.length+' live furniture SKUs, two views each.');
+          })().catch(e=>{console.error(e);process.exit(1);});
+          JS
+          node qa-furniture/capture.cjs
+      - name: Run focused furniture regression tests
+        run: |
+          set -o pipefail
+          node --test tests/furniture-catalog.test.mjs tests/furniture-seating.test.mjs tests/furniture-placement.test.mjs tests/contextual-products.test.mjs | tee qa-furniture/tests.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs | tee -a qa-furniture/tests.log
+          node --experimental-vm-modules tests/furniture-plan-dom.cjs | tee -a qa-furniture/tests.log
+          if test -f tests/furniture-accuracy.test.mjs; then node --test tests/furniture-accuracy.test.mjs | tee -a qa-furniture/tests.log; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: furniture-accuracy-evidence
+          retention-days: 7
+          path: qa-furniture/
