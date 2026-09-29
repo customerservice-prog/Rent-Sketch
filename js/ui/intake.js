@@ -47,7 +47,18 @@ function renderFriendlyIntake(bridge) {
   if (!host || host.dataset.addressPlannerMounted === '1') return true;
   host.dataset.addressPlannerMounted = '1';
   host.innerHTML = `
-    <div style="max-width:760px;margin:32px auto;padding:0 16px 40px">
+    <style>
+      .rs-property-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
+      .rs-property-actions{display:flex;gap:8px;flex-wrap:wrap}
+      .rs-property-actions input{min-width:0}
+      @media (max-width:640px){
+        .rs-property-grid{grid-template-columns:1fr}
+        .rs-property-actions{display:grid;grid-template-columns:1fr}
+        .rs-property-actions button{width:100%}
+        #plannerMap iframe{height:210px!important}
+      }
+    </style>
+    <div style="max-width:760px;margin:24px auto;padding:0 14px 40px">
       <div style="background:#fff;border:1px solid #dfe7df;border-radius:22px;padding:24px;box-shadow:0 18px 50px rgba(25,58,34,.08)">
         <p style="margin:0 0 8px;font-weight:800;color:#2f7a3c;letter-spacing:.04em;text-transform:uppercase;font-size:12px">Friendly Party Rental · Free RentSketch Planner</p>
         <h2 style="margin:0 0 10px;font-size:clamp(28px,5vw,42px);line-height:1.05">What can fit at your event address?</h2>
@@ -55,14 +66,14 @@ function renderFriendlyIntake(bridge) {
 
         <form id="friendlyAddressPlanner" novalidate>
           <label style="display:block;font-weight:700;margin-bottom:7px" for="plannerAddress">Event address</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="rs-property-actions">
             <input id="plannerAddress" autocomplete="street-address" placeholder="123 Main St, Syracuse, NY 13202" required style="flex:1 1 420px;padding:13px 14px;border:1px solid #bbc9bf;border-radius:12px;font:inherit">
             <button id="plannerFind" type="button" style="padding:13px 18px;border:0;border-radius:12px;background:#183429;color:#fff;font-weight:800;cursor:pointer">Find property</button>
           </div>
           <div id="plannerLookupStatus" role="status" aria-live="polite" style="min-height:24px;margin:8px 0 4px;color:#53625a;font-size:14px"></div>
           <div id="plannerMap" style="display:none;margin:10px 0 18px;border:1px solid #d7e1d9;border-radius:14px;overflow:hidden;background:#f4f7f4"></div>
 
-          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px">
+          <div class="rs-property-grid">
             <label style="font-weight:700">Usable width (ft)
               <input id="plannerWidth" inputmode="decimal" type="number" min="10" max="500" step="1" value="40" required style="display:block;width:100%;box-sizing:border-box;margin-top:7px;padding:12px;border:1px solid #bbc9bf;border-radius:12px;font:inherit">
             </label>
@@ -83,6 +94,7 @@ function renderFriendlyIntake(bridge) {
             </label>
           </div>
 
+          <div style="margin:14px 0 4px;padding:12px 14px;background:#f7f9f7;border-radius:12px;color:#53625a;font-size:13px;line-height:1.5"><strong style="color:#263d2f">How to measure:</strong> use the clear, usable rectangle where rentals can actually go—not the full lot. Measure between the house, fences, trees, pools, driveways, septic areas, overhead lines, or other no-place zones. You can refine obstacles later in RentSketch.</div>
           <label style="display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-weight:650">
             <input id="plannerDance" type="checkbox" style="margin-top:3px"> I want space for a dance floor
           </label>
