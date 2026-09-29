@@ -80,7 +80,8 @@ export function buildEventEquipment(root,ref){
   box(.94,.94,.014,material('#244c29'),0,.48,0,.007);
   const leaves=[material('#375d2c',{side:THREE.DoubleSide}),material('#476f31',{side:THREE.DoubleSide}),material('#687c34',{side:THREE.DoubleSide}),material('#244626',{side:THREE.DoubleSide})];
   const leafGeo=new THREE.BufferGeometry();leafGeo.setAttribute('position',new THREE.Float32BufferAttribute([0,-.012,0,-.006,-.006,.001,-.007,.004,.001,0,.014,0,.007,.004,.001,.006,-.006,.001,0,0,.003],3));leafGeo.setIndex([6,0,1,6,1,2,6,2,3,6,3,4,6,4,5,6,5,0]);leafGeo.computeVertexNormals();
-  for(let row=0;row<80;row++)for(let col=0;col<80;col++){const seed=(row*137+col*73)%101,leaf=mesh(leafGeo,leaves[(seed+row)%4],-.467+col*.0118+Math.sin(seed)*.003,.012+row*.0118+.003*Math.cos(seed),.013+(seed%13)*.0015);leaf.rotation.z=seed*.71;leaf.rotation.x=Math.sin(seed)*.38;leaf.scale.setScalar(.65+(seed%7)*.06);}
+  let seed=19483;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  for(let row=0;row<80;row++)for(let col=0;col<80;col++){const shade=Math.floor(random()*4),xj=(random()-.5)*.009,yj=(random()-.5)*.009,zj=random()*.021,leaf=mesh(leafGeo,leaves[shade],-.467+col*.0118+xj,.012+row*.0118+yj,.013+zj);leaf.rotation.z=random()*Math.PI*2;leaf.rotation.x=(random()-.5)*.8;leaf.scale.setScalar(.72+random()*.40);}
   f={...f,foliageLeaves:6400,nominalFaceFt:[8,8],supportFootprintVerified:false,neonSignIncluded:false,flowersOutsidePanelIncluded:false};
  }else if(ref.type==='sequin-wall'||ref.type==='leg-drape'){
   const sequin=ref.type==='sequin-wall',m=clothMaterial(sequin?'Gold':'White',sequin?'sequin':'polyester'),geo=new THREE.PlaneGeometry(.94,.98,96,48),p=geo.attributes.position;

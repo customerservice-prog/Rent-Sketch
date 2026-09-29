@@ -535,7 +535,7 @@ function esc(s) {
    try{
      var data=await api('/api/tenants/'+state.tenant+'/products'),products=data.products||[];
      if(gen!==renderGeneration)return;
-     const b=await import('../js/data/phase6b-reference.js?v=20260929-phase6b-2');phase6bAuditReference=b.phase6bReference;
+     const b=await import('../js/data/phase6b-reference.js?v=20260929-phase6b-3');phase6bAuditReference=b.phase6bReference;
      const phase6=await import('../js/data/phase6-reference.js?v=20260929-phase6-core3');phase6AuditReference=phase6.phase6Reference;phase6AuditConfiguration=phase6.isPhase6Configuration;
      if(gen!==renderGeneration)return;
      var selected=Number(new URLSearchParams((location.hash.split('?')[1]||'')).get('phase')||1);

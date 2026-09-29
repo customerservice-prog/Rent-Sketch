@@ -37,6 +37,7 @@ export function buildServiceware(root,ref){
    for(let j=0;j<stations.length-1;j++){const k=j*4;for(const [p,q] of [[0,1],[1,3],[3,2],[2,0]])indices.push(k+p,k+q,k+p+4,k+q,k+q+4,k+p+4);}
    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();mesh(geometry,steel);
   }
+  for(let i=0;i<3;i++){const a=i*Math.PI*2/3;rod([0,.10,0],[Math.cos(a)*.405,.10,Math.sin(a)*.405],.016,steel);}cyl(.25,.015,steel,0,.091,0,40);
   burners(1,.11);
   if(soup){
    lathe([[0,.015],[.39,.015],[.425,.037],[.44,.43],[.448,.455],[.418,.46],[.406,.07],[0,.058]],steel,0,bodyY,0,56);
@@ -83,11 +84,12 @@ export function buildServiceware(root,ref){
  }else if(ref.type==='serving-tongs'||ref.type==='cake-server'){
   const m=ref.type==='cake-server'?gold:steel;
   if(ref.type==='serving-tongs'){
+   const spoonMaterial=m.clone();spoonMaterial.side=THREE.DoubleSide;
    for(const upper of [false,true]){
-    const g=new THREE.Group();root.add(g);g.position.set(0,.035,.43);g.rotation.x=upper?.23:0;const q=shapes(g);
-    q.box(.068,.015,.59,m,0,0,-.29,.009);const head=q.mesh(new THREE.SphereGeometry(1,28,16,0,Math.PI*2,0,Math.PI/2),m,0,.006,-.73);head.scale.set(.118,.014,.172);head.rotation.z=Math.PI;
+    const g=new THREE.Group();root.add(g);g.position.set(0,upper?.070:.035,.43);g.rotation.x=upper?.16:0;const q=shapes(g);
+    q.box(.068,.015,.59,m,0,0,-.29,.009);const head=q.mesh(new THREE.SphereGeometry(1,28,16,0,Math.PI*2,0,Math.PI/2),spoonMaterial,0,.006,-.73);head.scale.set(.118,.014,.172);head.rotation.z=Math.PI;
    }
-   curve([[0,.035,.39],[0,.072,.482],[0,.118,.452],[0,.143,.36]],.026,m);f={...f,joinedSpring:true,physicalCount:1};
+   curve([[0,.035,.435],[0,.035,.495],[0,.070,.495],[0,.070,.435]],.020,m);f={...f,joinedSpring:true,physicalCount:1};
   }else{
    box(.073,.024,.59,m,0,.025,.185,.027);const shape=new THREE.Shape();shape.moveTo(-.07,-.03);shape.quadraticCurveTo(-.15,-.27,0,-.53);shape.quadraticCurveTo(.15,-.27,.07,-.03);shape.closePath();const g=new THREE.ExtrudeGeometry(shape,{depth:.014,bevelEnabled:true,bevelSize:.005,bevelThickness:.003,bevelSegments:1});g.rotateX(Math.PI/2);mesh(g,m,0,.041,0);for(let i=0;i<21;i++)box(.057,.003,.006,material('#c7a15f',{metalness:.6}),0,.039,.06+i*.017,.001);f={...f,triangularBlade:true,finish:'gold',physicalCount:1};
   }

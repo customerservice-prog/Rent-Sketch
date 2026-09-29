@@ -46,6 +46,13 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
   if(ref.type==='sequin-wall'){
    let textureProof=false;g.traverse(o=>{if(o.isMesh&&o.material.map&&o.material.bumpMap){const uv=o.geometry.getAttribute('uv');let max=0;for(let i=0;i<uv.count;i++)max=Math.max(max,uv.getX(i),uv.getY(i));textureProof=max>=12&&o.material.bumpScale<=.002;}});check(textureProof,slug+' fine sequin scale instead of oversized checker texture');
   }
+  if(ref.type==='serving-tongs'){
+   const hits=new THREE.Raycaster(new THREE.Vector3(0,expected.heightFt*2,-expected.depthFt*.33),new THREE.Vector3(0,-1,0)).intersectObject(g,true);
+   check(hits.some(hit=>hit.object.material.side===THREE.DoubleSide),slug+' spoon head remains visible from above');
+  }
+  if(['chafer-round','chafer-round-gold','chafer-soup'].includes(ref.type)){
+   const components=[];g.traverse(o=>{if(o.isMesh)components.push(o);});check(components.length>0,slug+' empty burner holder has modeled support');
+  }
   rows.push({slug,name:p.name,placement:ref.kind,meshes,vertices,dimensions:{width:size.x,depth:size.z,height:size.y},features:g.userData.features});
  }
  check(factory.createPhase6bModel({externalId:'other:bus-bin',name:'Bus Bin'})===null,'foreign similar name not matched');
