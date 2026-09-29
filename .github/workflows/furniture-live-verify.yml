@@ -1,0 +1,38 @@
+name: Verify live furniture release
+on:
+  push:
+    branches: [qa/furniture-accuracy-20260929]
+permissions:
+  contents: read
+jobs:
+  live-assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify production files match tested release
+        run: |
+          mkdir -p qa-live-furniture
+          node <<'JS'
+          const fs=require('node:fs'),crypto=require('node:crypto');
+          const paths=[['js/ui/equipment3d.js','?v=20260926-furniture-1'],['js/ui/equipment-base3d.js',''],['js/ui/furniture-reference3d.js',''],['js/ui/catalog-furniture3d.js','?v=20260929-phase3-1'],['catalog-preview/index.html',''],['js/ui/accessory-controls.js','?v=20260929-catalog-audit-1'],['js/ui/review-actions.js','?v=20260929-exact-pricing-2']];
+          const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+          (async()=>{
+            let checks=[];for(let attempt=0;attempt<48;attempt++){
+              checks=await Promise.all(paths.map(async([file,query])=>{try{const r=await fetch('https://rentsketch.com/'+file+query,{cache:'no-store',signal:AbortSignal.timeout(12000)}),body=Buffer.from(await r.arrayBuffer()),expected=hash(fs.readFileSync(file)),actual=hash(body);return {file,status:r.status,cacheControl:r.headers.get('cache-control'),expected,actual,match:r.ok&&expected===actual};}catch(error){return {file,match:false,error:String(error)};}}));
+              if(checks.every(c=>c.match))break;await new Promise(r=>setTimeout(r,5000));
+            }
+            const r=await fetch('https://rentsketch.com/designer/?tenant=friendly&source=home_designer_section',{cache:'no-store',signal:AbortSignal.timeout(12000)}),html=await r.text();
+            const report={verifiedAt:new Date().toISOString(),testedRelease:'6edbdbecc78c1c1553c82eab621fe84a8498595e',checks,designer:{status:r.status,hasCanvas:html.includes('id="canvas"')}};
+            fs.writeFileSync('qa-live-furniture/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));if(!r.ok||!report.designer.hasCanvas||checks.some(c=>!c.match))process.exitCode=1;
+          })().catch(e=>{console.error(e);process.exit(1);});
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-furniture-release-check
+          retention-days: 7
+          path: qa-live-furniture/
