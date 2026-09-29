@@ -1,0 +1,23 @@
+// Browser-render the actual shared runtime with read-only captured public fixtures.
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const {chromium}=require('playwright');
+const root=path.resolve(__dirname,'..'),out=root+'/qa-phase6';
+(async()=>{
+ const catalog=JSON.parse(fs.readFileSync(out+'/catalog.json')),geometry=JSON.parse(fs.readFileSync(out+'/geometry.json'));
+ const slugs=new Set(geometry.rows.map(p=>p.slug).concat(['keg-coolertub','sugar-and-creamer-set','cotton-candy-floss-sugar-pink']));
+ const products=catalog.products.filter(p=>slugs.has(String(p.external_id||'').replace(/^fpr:/,'')));
+ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!file.startsWith(root+path.sep))return res.writeHead(403).end();try{if(fs.statSync(file).isDirectory())file=path.join(file,'index.html');let data=fs.readFileSync(file);if(file.endsWith('catalog-preview/index.html'))data=Buffer.from(data.toString().replaceAll('https://cdn.jsdelivr.net/npm/three@0.160.0/','/tests/node_modules/three/'));res.setHeader('Content-Type',file.endsWith('.html')?'text/html':file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.css')?'text/css':'application/octet-stream');res.end(data);}catch{res.writeHead(404).end();}}).listen(8139,'127.0.0.1');
+ const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE||undefined,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']}),page=await browser.newPage({viewport:{width:900,height:670}}),errors=[],views=[];
+ page.on('pageerror',e=>errors.push(String(e)));await page.route('**/*',route=>{const u=new URL(route.request().url());if(!['GET','HEAD'].includes(route.request().method()))return route.abort();if(u.hostname==='127.0.0.1')return route.continue();if(u.hostname==='rentsketch-api-production.up.railway.app'&&u.pathname==='/api/tenants/friendly/products')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(catalog)});return route.abort();});
+ fs.mkdirSync(out+'/renders',{recursive:true});
+ for(const width of [900,390])for(const product of products){
+  const slug=product.external_id.slice(4),refOnly=['keg-coolertub','sugar-and-creamer-set'].includes(slug),config=slug==='cotton-candy-floss-sugar-pink';
+  await page.setViewportSize({width,height:670});await page.goto('http://127.0.0.1:8139/catalog-preview/?tenant=friendly&productId='+product.id,{waitUntil:'domcontentloaded'});
+  if(refOnly||config){await page.waitForFunction(text=>document.getElementById('status').textContent===text,config?'Configuration item — no standalone model':'Reference conflict — no verified model');assert.equal(await page.locator('canvas').count(),0);}else{await page.waitForFunction(()=>document.getElementById('visual').dataset.renderReady==='1',null,{timeout:20000});assert.equal(await page.locator('canvas').count(),1);assert.equal(await page.locator('#visual').getAttribute('data-product-id'),product.id);}
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,slug);await page.screenshot({path:out+'/renders/'+slug+'-'+width+'.png'});
+  if(width===900&&!refOnly&&!config){const box=await page.locator('canvas').boundingBox(),before=await page.locator('canvas').screenshot();await page.mouse.move(box.x+box.width*.5,box.y+box.height*.5);await page.mouse.down();await page.mouse.move(box.x+box.width*.65,box.y+box.height*.53,{steps:8});await page.mouse.up();const after=await page.locator('canvas').screenshot();assert.notEqual(before.toString('base64'),after.toString('base64'),'rotatable preview '+slug);await page.screenshot({path:out+'/renders/'+slug+'-turned.png'});}
+  views.push({slug,width,mode:config?'configuration':refOnly?'reference-only':'actual-model',noOverflow:true});
+ }
+ await page.goto('http://127.0.0.1:8139/catalog-preview/?tenant=friendly&productId=unknown');await page.waitForFunction(()=>document.getElementById('status').textContent==='Preview unavailable');assert.equal(await page.locator('canvas').count(),0);assert.deepEqual(errors,[]);
+ fs.writeFileSync(out+'/browser-report.json',JSON.stringify({views,errors,realOrdersCreated:0,realPaymentsSubmitted:0,checkedAt:new Date().toISOString()},null,2));console.log('PASS '+views.length+' product preview views, rotatable shared geometry and explicit no-model states.');await browser.close();server.close();
+})().catch(e=>{fs.mkdirSync(out,{recursive:true});fs.writeFileSync(out+'/browser-failure.txt',String(e.stack||e));console.error(e);process.exit(1);});

@@ -1,3 +1,4 @@
+import {phase6Reference,isPhase6Configuration} from './phase6-reference.js';
 import { equipmentAssetDescriptor, equipmentOperationProfile } from './asset-registry.js';
 // General rental visual catalog.
 // Anything not already handled by tents/tables/chairs/linens/lighting/dance floor
@@ -46,6 +47,7 @@ const PROFILES=[
 ];
 
 function profileFor(product){
+  const reference=phase6Reference(product);if(reference?.kind==='equipment'){const [w,d,h]=reference.dimensions;return {type:reference.type,category:reference.category.replace(/^./,c=>c.toUpperCase()),w,d,h};}
   const identity=normal((product.name||'')+' '+(product.external_id||''));
   const text=normal(identity+' '+(product.category||''));
   if(/bounce|water ?slide|waterslide|inflatable|obstacle course/.test(identity))return {exclude:'inflatable'};
@@ -66,7 +68,7 @@ export function accessoryCatalog(products,showPrices=true){
   for(const product of Array.isArray(products)?products:[]){
     if(!product||product.active===false||EXCLUDED_CATEGORIES.has(product.category))continue;
     const searchable=String(product.name||'')+' '+String(product.external_id||'');
-    if(NON_PLACEABLE.test(searchable))continue;
+    if(NON_PLACEABLE.test(searchable)||isPhase6Configuration(product))continue;
     const p=profileFor(product);if(p.exclude)continue;
     const sourceWidth=finite(product.width_ft)||finite(product.widthFt),sourceDepth=finite(product.length_ft)||finite(product.depth_ft)||finite(product.lengthFt)||finite(product.depthFt);
     const width=sourceWidth||p.w;
@@ -110,6 +112,7 @@ export function accessoryItem(product,id,x,y){
     modelDepthFt:product.depthFt,
     accessoryId:product.id,
     productId:product.productId||null,
+    externalId:product.externalId||null,
     name:product.name,
     accessoryType:product.accessoryType,
     visualCategory:product.visualCategory,

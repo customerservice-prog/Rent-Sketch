@@ -1,3 +1,4 @@
+import {createPhase6Equipment} from './phase6-equipment3d.js';
 import { createEquipment } from './equipment-motion3d.js';
 import { createHeroEquipment } from './hero-equipment3d.js';
 import { attachEquipmentOperation } from './equipment-operation.js';
@@ -202,6 +203,7 @@ export function createAccessory3d(item){
   };
   const type=canonicalEquipmentType(item.accessoryType);
   const product={...item,type,externalId:item.externalId||item.asset?.source?.externalId};
+  const phase6=createPhase6Equipment(product,{...item,rotationDeg:0});if(phase6){phase6.userData.kind='accessory';return phase6;}
   const hero=createHeroEquipment(product,item);
   if(hero){hero.userData.itemId=item.id;hero.userData.kind='accessory';return hero;}
   if(['power-distribution','speaker','generator','photobooth','chocolate-fountain','red-carpet','cornhole','connect-four','tumbling-timbers','heater','stage'].includes(type)){const model=createEquipment({...item,visualType:type,rotationDeg:0});model.userData.kind='accessory';return model;}

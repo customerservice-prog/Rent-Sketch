@@ -1,3 +1,4 @@
+import {phase6Reference,isPhase6Configuration} from './phase6-reference.js';
 import {phase5Reference} from './phase5-reference.js';
 import { equipmentAssetDescriptor, equipmentOperationProfile } from './asset-registry.js';
 // Visual planning profiles, not stock records. Tenant products supply identity,
@@ -45,6 +46,7 @@ function finitePositive(value){const n=Number(value);return Number.isFinite(n)&&
 function price(value){if(value==null||value==='')return null;const n=Number(value);return Number.isFinite(n)&&n>=0?n:null;}
 function metadata(product){const raw=product.metadata;return raw&&typeof raw==='object'?raw:{};}
 export function equipmentType(product){
+  const phase6=phase6Reference(product);if(phase6?.kind==='equipment')return phase6.type;
   const reference=phase5Reference(product);
   if(reference?.kind==='equipment'&&byType(reference.type))return reference.type;
   const n=String(product?.name||'').toLowerCase(),m=metadata(product||{});
@@ -83,6 +85,7 @@ export function equipmentType(product){
   return null;
 }
 export function isCatalogConfiguration(product){
+  if(isPhase6Configuration(product))return true;
   const n=String(product?.name||''),c=String(product?.category||'').toLowerCase();
   if(/photo\s*booth/i.test(n)&&!/extra\s*hour|upgrade|print|template|backdrop/i.test(n))return false;
   return /^(linen|lighting|package)$/.test(c)||/syrup|floss sugar|popcorn kernel|fuel cans|propane tank/i.test(n)||/side\s*wall|sidewall|dance\s*floor|\bpackage\b|extra\s*hour|\bupgrade\b|\bdelivery\b|\bsetup\b|\battendant\b|\bsupplies\b/i.test(n);
@@ -97,9 +100,9 @@ export function equipmentCatalog(products=[],showPrices=false,mappedIds=null){
     // catalog items still get an explicitly approximate footprint, never vanish.
     if(mappedIds?.has(p.id))return [];
     if(!type&&(isInflatableProduct(p)||(!mappedIds&&inferVisualModel(p))||isCatalogConfiguration(p)))return [];
-    const model=byType(type||'generic'),m=metadata(p);
+    const phase6=phase6Reference(p),model=phase6?.kind==='equipment'?profile(phase6.type,p.name,phase6.category,...phase6.dimensions):byType(type||'generic'),m=metadata(p);
     const width=finitePositive(p.width_ft||m.widthFt),depth=finitePositive(p.length_ft||m.depthFt||m.lengthFt),height=finitePositive(p.height_ft||m.heightFt||m.height_ft);
-    return [{...model,asset:equipmentAssetDescriptor(p,model.type),id:'equipment-'+p.id,productId:p.id,externalId:p.external_id||null,name:p.name||model.name,reference:phase5Reference(p),sourceCategory:p.category||'other',photoUrl:safeProductPhoto(p.photo_url||p.image_url),pricePerDay:showPrices?price(p.price_per_day):null,widthFt:width||model.widthFt,depthFt:depth||model.depthFt,heightFt:height||model.heightFt,dimensionsConfirmed:!!(width&&depth),heightConfirmed:!!height,visualFidelity:type?'illustrative':'footprint',isPreview:false}];
+    return [{...model,asset:equipmentAssetDescriptor(p,model.type),id:'equipment-'+p.id,productId:p.id,externalId:p.external_id||null,name:p.name||model.name,reference:phase6||phase5Reference(p),sourceCategory:p.category||'other',photoUrl:safeProductPhoto(p.photo_url||p.image_url),pricePerDay:showPrices?price(p.price_per_day):null,widthFt:width||model.widthFt,depthFt:depth||model.depthFt,heightFt:height||model.heightFt,dimensionsConfirmed:!!(width&&depth),heightConfirmed:!!height,visualFidelity:type?'illustrative':'footprint',isPreview:false}];
   });
 }
 export function genericEquipment(){return EQUIPMENT_PROFILES.filter(p=>p.type!=='generic').map(p=>({...p,asset:equipmentAssetDescriptor({},p.type),id:'preview-'+p.type,productId:null,externalId:null,photoUrl:null,pricePerDay:null,dimensionsConfirmed:false,heightConfirmed:false,visualFidelity:'illustrative',isPreview:true}));}
