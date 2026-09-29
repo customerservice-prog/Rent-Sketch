@@ -1,0 +1,27 @@
+name: Guest graphical asset reference
+on:
+  push:
+    branches: [qa/phase4-finish-20260929]
+    paths: [.github/workflows/guest-reference-assets.yml]
+permissions:
+  contents: read
+jobs:
+  reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read official MakeHuman core graphical assets and license
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/makehumancommunity/makehuman.git /tmp/mh
+          cd /tmp/mh
+          git sparse-checkout set makehuman/data/3dobjs makehuman/data/skins makehuman/data/rigs makehuman/data/eyes makehuman/data/hair makehuman/data/eyebrows
+          mkdir -p /tmp/reference
+          git rev-parse HEAD > /tmp/reference/source-commit.txt
+          find makehuman/data -type f > /tmp/reference/files.txt
+          cp LICENSE* /tmp/reference/
+          tar -czf /tmp/reference/graphical-assets.tgz makehuman/data
+      - uses: actions/upload-artifact@v4
+        with:
+          name: guest-graphical-reference
+          path: /tmp/reference
+          retention-days: 7
