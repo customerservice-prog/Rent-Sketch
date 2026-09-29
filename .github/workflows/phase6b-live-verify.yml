@@ -1,0 +1,57 @@
+name: Live Phase 6B model and checkout verification
+on:
+  push:
+    branches: [qa/phase6b-service-20260929]
+    paths: [.github/workflows/phase6b-live-verify.yml]
+permissions: {contents: read}
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RELEASE_SHA: 86d97dda0694c353794104fb0bfa6d803db676f4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 86d97dda0694c353794104fb0bfa6d803db676f4
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Verify exact served runtime, retained seating and ordinary booking files
+        run: |
+          mkdir -p qa-phase6b-live
+          node <<'JS'
+          const fs=require('node:fs'),cp=require('node:child_process'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+          const release=process.env.RELEASE_SHA,base='e20f7131fbeb41e0961b9c3310287024ace6d4fc',digest=x=>crypto.createHash('sha256').update(x).digest('hex');
+          (async()=>{const paths=cp.execFileSync('git',['diff','--name-only',base,'HEAD','--','js','designer','catalog-preview','dashboard'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);for(const p of ['js/core/bookingHandoff.js','js/ui/booking-handoff.js','js/ui/review-actions.js','js/core/eventSummary.js','js/core/seating.js','js/core/world-space.js','js/core/geometry.js','js/core/photo-geometry.js','js/ui/view3d.js','js/ui/equipment3d.js','js/ui/party-styling.js','js/ui/scene-guests.js','script.js','customer-experience.css'])if(!paths.includes(p))paths.push(p);
+           let last;for(let i=0;i<60;i++){try{const r=await fetch('https://rentsketch.com/designer/index.html?verify='+release+'&attempt='+i,{signal:AbortSignal.timeout(15000)});assert.equal(r.ok,true);assert.equal(digest(Buffer.from(await r.arrayBuffer())),digest(fs.readFileSync('designer/index.html')));last=null;break;}catch(e){last=e;console.log('Waiting for tested Phase 6B release');await new Promise(r=>setTimeout(r,10000));}}if(last)throw last;
+           const files=[];for(const path of paths){const r=await fetch('https://rentsketch.com/'+path+'?verify='+release,{signal:AbortSignal.timeout(20000)});assert.equal(r.ok,true,path);const hash=digest(Buffer.from(await r.arrayBuffer()));assert.equal(hash,digest(fs.readFileSync(path)),path);files.push({path,sha256:hash,match:true});}fs.writeFileSync('qa-phase6b-live/deployed-files.json',JSON.stringify({release,files,checkedAt:new Date().toISOString()},null,2));console.log('PASS '+files.length+' exact production runtime/booking/seating file hashes');
+          })().catch(e=>{fs.writeFileSync('qa-phase6b-live/file-failure.txt',String(e.stack||e));console.error(e);process.exitCode=1});
+          JS
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase6b-live-browser --no-save playwright@1.56.1
+      - run: /tmp/phase6b-live-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Live source previews and actual mixed tabletop/equipment summary into checkout
+        env: {NODE_PATH: /tmp/phase6b-live-browser/node_modules}
+        run: node tests/phase6b-live.cjs
+      - name: Preserve existing carts, linen colors and unmatched-item rejection
+        env: {NODE_PATH: /tmp/phase6b-live-browser/node_modules}
+        run: |
+          git fetch --depth=1 origin 2aaed161faa865b8d7e470234db82d0a46487276
+          git show 2aaed161faa865b8d7e470234db82d0a46487276:tests/book-now-live-browser.cjs > /tmp/phase6b-booking-check.cjs
+          node /tmp/phase6b-booking-check.cjs
+      - name: Verify live seating with only the private test shell supplied locally
+        env: {NODE_PATH: /tmp/phase6b-live-browser/node_modules}
+        run: |
+          git fetch --depth=1 origin 82533d957b669285c60910753be609ccb683cfc4
+          git show 82533d957b669285c60910753be609ccb683cfc4:tests/seating-live-browser.cjs > /tmp/phase6b-seating-check.cjs
+          node /tmp/phase6b-seating-check.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-phase6b-verified
+          path: |
+            qa-phase6b-live
+            qa-book-now-live
+            qa-live-seating
+          retention-days: 7
