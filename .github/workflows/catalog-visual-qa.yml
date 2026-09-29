@@ -1,0 +1,108 @@
+name: Catalog visual evidence
+on:
+  push:
+    branches: [qa/catalog-visual-20260929]
+permissions:
+  contents: read
+concurrency:
+  group: catalog-visual-qa
+  cancel-in-progress: true
+jobs:
+  visual-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/catalog-browser --no-save playwright@1.56.1
+      - run: /tmp/catalog-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Capture public reference photos and actual renderer
+        env:
+          NODE_PATH: /tmp/catalog-browser/node_modules
+        run: |
+          mkdir -p qa-catalog
+          cat > qa-catalog/harness.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><style>body{margin:0}canvas{display:block}</style>
+          <script type="importmap">{"imports":{"three":"/tests/node_modules/three/build/three.module.js","three/addons/":"/tests/node_modules/three/examples/jsm/"}}</script>
+          <script type="module">
+          import * as THREE from 'three';
+          import {inflatableCatalog} from '/js/data/inflatables.js';
+          import {createInflatable} from '/js/ui/inflatable3d.js';
+          import {makeTent} from '/js/ui/tent3d.js';
+          const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+          renderer.setSize(720,600);renderer.setPixelRatio(1);renderer.outputColorSpace=THREE.SRGBColorSpace;
+          renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+          document.body.appendChild(renderer.domElement);
+          window.renderRental=(product,kind='inflatable')=>{
+            const scene=new THREE.Scene();scene.background=new THREE.Color('#eff2ef');
+            scene.add(new THREE.HemisphereLight(0xffffff,0x858e88,2.6));
+            const sun=new THREE.DirectionalLight(0xffffff,3);sun.position.set(-25,45,35);scene.add(sun);
+            let model,definition;
+            if(kind==='sidewall'){
+              definition={id:'frame-20x40',name:'20x40 Frame Tent',type:'frame',widthFt:20,lengthFt:40};
+              const walls=[];for(const side of ['front','left'])for(let i=0;i<(side==='front'?2:4);i++)walls.push({id:side+i,panelId:side+Math.floor(i/2),side,type:'window',startFt:i*10,lengthFt:10,panelWidthFt:20});
+              model=makeTent(definition,'none',walls);
+            }else{definition=inflatableCatalog([product],false)[0];if(!definition)throw new Error('No inflatable mapping for '+product.name);model=createInflatable({id:'qa-item',inflatableId:definition.id,rotationDeg:0},definition);}
+            scene.add(model);
+            const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
+            const camera=new THREE.PerspectiveCamera(36,720/600,.05,1500),dist=Math.max(size.x,size.y,size.z)*1.75;
+            const dir=kind==='sidewall'?new THREE.Vector3(-.8,.52,-1):new THREE.Vector3(.85,.6,1);dir.normalize();
+            camera.position.copy(center).addScaledVector(dir,dist);camera.lookAt(center);renderer.render(scene,camera);
+            return {name:definition.name,slug:definition.slug,variant:definition.variant,style:definition.style,lanes:definition.lanes,widthFt:definition.widthFt,depthFt:definition.depthFt,heightFt:definition.heightFt,bounds:size.toArray(),meshes:(()=>{let n=0;model.traverse(o=>{if(o.isMesh)n++;});return n;})()};
+          };window.qaReady=true;
+          </script>
+          HTML
+          cat > qa-catalog/capture.cjs <<'JS'
+          const fs=require('node:fs'),path=require('node:path'),{chromium}=require('playwright');
+          const out='qa-catalog';
+          async function json(url){const r=await fetch(url,{signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error(url+' HTTP '+r.status);return r.json();}
+          (async()=>{
+            const catalog=await json('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products');
+            const website=await json('https://www.friendlypartyrental.com/api/items');
+            fs.writeFileSync(out+'/rentsketch-products.json',JSON.stringify(catalog,null,2));
+            fs.writeFileSync(out+'/website-items.json',JSON.stringify(website,null,2));
+            const products=catalog.products||[],siteItems=website.items||[],selected=products.filter(p=>/bounce\s*house|water\s*slide|waterslide|side\s*wall|sidewall/i.test(p.name));
+            const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']}),page=await browser.newPage({viewport:{width:720,height:600}});
+            const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+            await page.goto('http://127.0.0.1:8765/qa-catalog/harness.html');await page.waitForFunction(()=>window.qaReady===true);
+            const report=[];
+            for(const p of selected){
+              const slug=String(p.external_id||'').replace(/^fpr:/,'');
+              const matches=siteItems.filter(x=>x.slug===slug||String(x.id)===String(p.id));
+              const match=matches.length===1?matches[0]:null;
+              const key=slug.replace(/[^a-zA-Z0-9_-]/g,'_')||p.id;
+              const entry={id:p.id,name:p.name,slug,websiteMatch:match?{id:match.id,slug:match.slug,name:match.name,setupArea:match.setupArea,description:match.description}:null,referenceUrl:match?'https://www.friendlypartyrental.com/api/item-image/'+encodeURIComponent(match.slug):p.photo_url};
+              if(entry.referenceUrl){try{const r=await fetch(entry.referenceUrl,{signal:AbortSignal.timeout(20000)});entry.photoHttp=r.status;entry.photoType=r.headers.get('content-type');if(r.ok&&entry.photoType?.startsWith('image/')){fs.writeFileSync(path.join(out,key+'-reference.img'),Buffer.from(await r.arrayBuffer()));entry.referenceFile=key+'-reference.img';}}catch(e){entry.photoError=String(e);}}
+              if(!/side\s*wall|sidewall/i.test(p.name)){
+                try{entry.render=await page.evaluate(p=>window.renderRental(p),p);await page.screenshot({path:path.join(out,key+'-model.png')});entry.modelFile=key+'-model.png';}catch(e){entry.renderError=String(e);}
+              }
+              report.push(entry);
+            }
+            try{report.push({type:'window-wall-render',render:await page.evaluate(()=>window.renderRental(null,'sidewall')),modelFile:'window-sidewalls-model.png'});await page.screenshot({path:out+'/window-sidewalls-model.png'});}catch(e){report.push({type:'window-wall-render',renderError:String(e)});}
+            fs.writeFileSync(out+'/report.json',JSON.stringify({capturedAt:new Date().toISOString(),errors,products:report},null,2));
+            console.log(JSON.stringify({captured:report.length,errors,renderFailures:report.filter(r=>r.renderError),photoFailures:report.filter(r=>r.referenceUrl&&!r.referenceFile).map(r=>({name:r.name,status:r.photoHttp,error:r.photoError}))},null,2));
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exitCode=1;});
+          JS
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/catalog-http.log 2>&1 &
+          node qa-catalog/capture.cjs
+      - name: Run focused regression tests
+        if: always()
+        run: |
+          node --test tests/contextual-products.test.mjs tests/inflatable-state.test.mjs tests/furniture-catalog.test.mjs > qa-catalog/tests.log 2>&1
+          node --experimental-vm-modules tests/inflatable-state-mesh.cjs >> qa-catalog/tests.log 2>&1
+          cat qa-catalog/tests.log
+      - name: Package code for inspection
+        if: always()
+        run: |
+          tar --exclude=node_modules --exclude='*.mp4' --exclude='*.png' --exclude='*.jpg' --exclude='*.webm' -czf qa-catalog/source.tgz js tests server script.js designer dashboard catalog-preview *.css Caddyfile
+          tar -czf qa-catalog/three-dependency.tgz tests/node_modules/three
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catalog-visual-evidence
+          retention-days: 7
+          path: qa-catalog/
