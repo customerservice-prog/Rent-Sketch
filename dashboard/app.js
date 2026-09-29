@@ -506,11 +506,14 @@ function esc(s) {
    return 6;
  }
  function catalogAuditStatus(product){
-   var phase=catalogAuditPhase(product),name=String(product.name||'').toLowerCase(),meta=product.metadata||{};
-   if(phase===2) return {kind:'rebuild',label:'Rebuild required',detail:'Current inflatable is a procedural illustrative model. Approve only after the live RentSketch shape matches the Friendly product photo.'};
+   var phase=catalogAuditPhase(product),name=String(product.name||'').toLowerCase(),meta=product.metadata||{},saved=meta.visualAudit||{};
+   if(saved.status==='approved')return {kind:'approved',label:'Approved',detail:saved.note||'Visual checked against the Friendly website product reference.',saved:true};
+   if(saved.status==='rebuild')return {kind:'rebuild',label:'Rebuild required',detail:saved.note||'Marked for visual rebuild after comparison.',saved:true};
+   if(saved.status==='review')return {kind:'review',label:'Needs review',detail:saved.note||'Requires another side-by-side visual check.',saved:true};
+   if(phase===2) return {kind:'rebuild',label:'Rebuild required',detail:'Current inflatable is a procedural planning model. Approve only after the live RentSketch shape has been checked against the Friendly product photo.'};
    if(/side\s*wall|sidewall/.test(name)){
      var size=Number(meta.panel_width_ft||product.width_ft||((name.match(/\b(10|20)\s*(?:ft|foot|feet|['′])/i)||[])[1]));
-     if(size===10||size===20) return {kind:'review',label:'Physical rule enforced',detail:(size===10?'10 ft: pop-up tents only':'20 ft: pole/frame tents only')+'. Visual window pattern still requires photo review.'};
+     if(size===10||size===20) return {kind:'review',label:'Physical rule enforced',detail:(size===10?'10 ft: pop-up tents only':'20 ft: pole/frame tents only')+'. Compare the updated window/solid rendering against the website reference before approval.'};
      return {kind:'rebuild',label:'Sidewall size missing',detail:'Panel width must be identified before this item can be approved.'};
    }
    if(product.visual_model_id) return {kind:'review',label:'Visual mapped',detail:'Compare the mapped RentSketch visual against the website photo before approval.'};
@@ -535,7 +538,7 @@ function esc(s) {
        ['Final full-catalog audit','Anything unmatched or still unapproved']
      ];
      var rows=products.filter(function(p){return selected===7||catalogAuditPhase(p)===selected;});
-     var counts={rebuild:0,review:0,missing:0};
+     var counts={approved:0,rebuild:0,review:0,missing:0};
      rows.forEach(function(p){var s=catalogAuditStatus(p);counts[s.kind]=(counts[s.kind]||0)+1;});
      function websitePhoto(p){
        var src=p.photo_url||p.image_url||'';
@@ -552,13 +555,28 @@ function esc(s) {
        '<section class="catalog-phase-tabs">'+phases.map(function(x,i){var n=i+1;return '<a class="'+(selected===n?'active':'')+'" href="#/catalog-audit?phase='+n+'"><b>Phase '+n+'</b><span>'+esc(x[0])+'</span></a>';}).join('')+'</section>'+
        '<section class="tw-metrics">'+
          '<article class="tw-metric"><div class="tw-metric-label">Phase items</div><div class="tw-metric-value">'+rows.length+'</div><div class="tw-metric-detail">'+esc(phases[selected-1][0])+'</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Approved</div><div class="tw-metric-value">'+(counts.approved||0)+'</div><div class="tw-metric-detail">Side-by-side check completed</div></article>'+
          '<article class="tw-metric"><div class="tw-metric-label">Rebuild required</div><div class="tw-metric-value">'+(counts.rebuild||0)+'</div><div class="tw-metric-detail">Known inaccurate/illustrative visuals</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Needs visual review</div><div class="tw-metric-value">'+(counts.review||0)+'</div><div class="tw-metric-detail">Compare side by side before approval</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Missing reference</div><div class="tw-metric-value">'+(counts.missing||0)+'</div><div class="tw-metric-detail">No reliable photo/visual mapping</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Needs review</div><div class="tw-metric-value">'+((counts.review||0)+(counts.missing||0))+'</div><div class="tw-metric-detail">Not yet approved</div></article>'+
        '</section>'+
-       '<div class="catalog-audit-grid">'+rows.map(function(p){var st=catalogAuditStatus(p);return '<article class="catalog-audit-card '+st.kind+'"><header><div><span class="catalog-audit-phase">Phase '+catalogAuditPhase(p)+'</span><h2>'+esc(p.name)+'</h2><p>'+esc(p.category||'Uncategorized')+' · '+money(p.price_per_day)+'</p></div><span class="catalog-audit-status '+st.kind+'">'+esc(st.label)+'</span></header><div class="catalog-compare"><section><h3>Friendly website</h3><div class="catalog-media">'+websitePhoto(p)+'</div></section><section><h3>RentSketch now</h3><div class="catalog-media rentsketch">'+preview(p)+'</div></section></div><footer><strong>'+esc(st.detail)+'</strong><span>Product ID: '+esc(p.id)+'</span></footer></article>';}).join('')+
+       '<div class="catalog-audit-grid">'+rows.map(function(p){var st=catalogAuditStatus(p),phase=catalogAuditPhase(p);return '<article class="catalog-audit-card '+st.kind+'" data-product-id="'+esc(p.id)+'"><header><div><span class="catalog-audit-phase">Phase '+phase+'</span><h2>'+esc(p.name)+'</h2><p>'+esc(p.category||'Uncategorized')+' · '+money(p.price_per_day)+'</p></div><span class="catalog-audit-status '+st.kind+'">'+esc(st.label)+'</span></header><div class="catalog-compare"><section><h3>Friendly website</h3><div class="catalog-media">'+websitePhoto(p)+'</div></section><section><h3>RentSketch now</h3><div class="catalog-media rentsketch">'+preview(p)+'</div></section></div><div class="catalog-audit-actions"><button type="button" data-audit="approved" data-id="'+esc(p.id)+'" data-phase="'+phase+'">✓ Approve visual</button><button type="button" data-audit="review" data-id="'+esc(p.id)+'" data-phase="'+phase+'">Needs review</button><button type="button" data-audit="rebuild" data-id="'+esc(p.id)+'" data-phase="'+phase+'">Rebuild required</button></div><footer><strong>'+esc(st.detail)+'</strong><span>Product ID: '+esc(p.id)+'</span></footer></article>';}).join('')+
        (rows.length?'':'<div class="dash-empty"><h3>No products in this phase</h3></div>')+
        '</div>';
+     Array.prototype.forEach.call(document.querySelectorAll('[data-audit]'),function(btn){
+       btn.addEventListener('click',async function(){
+         var status=btn.getAttribute('data-audit'),id=btn.getAttribute('data-id'),phase=Number(btn.getAttribute('data-phase'));
+         var note='';
+         if(status!=='approved'){
+           note=window.prompt(status==='rebuild'?'What is visually wrong or needs rebuilding?':'What still needs review?','')||'';
+           if(!note)return;
+         }
+         btn.disabled=true;
+         try{
+           await api('/api/tenants/'+state.tenant+'/products/'+id+'/visual-audit',{method:'PATCH',body:{status:status,phase:phase,note:note||null}});
+           viewCatalogAudit(route,++renderGeneration);
+         }catch(error){window.alert('Could not save visual audit: '+error.message);btn.disabled=false;}
+       });
+     });
    }catch(err){mainEl().innerHTML=errorHtml(err);}
  }
 
