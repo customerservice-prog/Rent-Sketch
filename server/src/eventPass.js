@@ -11,7 +11,11 @@ function getStripe() {
 }
 
 function isPassEnabled(tenant) {
-  return process.env.EVENT_PASS_ENABLED === 'true' && (!tenant || ['friendly', 'generic'].includes(tenant.slug));
+  // Friendly Party Rental uses RentSketch as a free sales/planning layer.
+  // Keep the standalone generic consumer Event Pass intact for rentsketch.com,
+  // but never put Friendly shoppers behind the RentSketch paywall.
+  if (tenant?.slug === 'friendly') return false;
+  return process.env.EVENT_PASS_ENABLED === 'true' && (!tenant || tenant.slug === 'generic');
 }
 
 function passOffer(tenant) {
