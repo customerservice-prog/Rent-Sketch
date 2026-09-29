@@ -512,6 +512,7 @@ function esc(s) {
    if(saved.status==='approved')return {kind:'approved',label:'Approved',detail:saved.note||'Visual checked against the Friendly website product reference.',saved:true};
    if(saved.status==='rebuild')return {kind:'rebuild',label:'Rebuild required',detail:saved.note||'Marked for visual rebuild after comparison.',saved:true};
    if(saved.status==='review')return {kind:'review',label:'Needs review',detail:saved.note||'Requires another side-by-side visual check.',saved:true};
+   if(product.external_id==='fpr:stage-ramp')return {kind:'review',label:'Photo/spec conflict',detail:'Stage Ramp photo appears to show a flat platform; ramp dimensions, rise/slope and access suitability need confirmation. No model is approved.'};
    if(phase===2) return {kind:'rebuild',label:'Rebuild required',detail:'Current inflatable is a procedural planning model. Approve only after the live RentSketch shape has been checked against the Friendly product photo.'};
    if(/side\s*wall|sidewall/.test(name)){
      var size=Number(meta.panel_width_ft||product.width_ft||((name.match(/\b(10|20)\s*(?:ft|foot|feet|['′])/i)||[])[1]));

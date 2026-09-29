@@ -1,3 +1,4 @@
+import {phase5Reference} from './phase5-reference.js';
 import { equipmentAssetDescriptor, equipmentOperationProfile } from './asset-registry.js';
 // Visual planning profiles, not stock records. Tenant products supply identity,
 // photos, pricing and measured dimensions. Profile dimensions remain illustrative.
@@ -34,6 +35,8 @@ export const EQUIPMENT_PROFILES = [
   profile('tumbling-timbers','Tumbling Timbers','games',1.5,1.5,5),
   profile('photobooth','Photo booth','photo',3,3,6),
   profile('stage','Stage section','flooring',4,8,1.5),
+  profile('stage-stair','Stage stair','flooring',3,4,4),
+  profile('stage-skirt','Stage skirt','flooring',8,.12,31/12),
   profile('generic','Rental equipment','accessories',2,2,2),
 ];
 const byType=type=>EQUIPMENT_PROFILES.find(p=>p.type===type);
@@ -42,6 +45,8 @@ function finitePositive(value){const n=Number(value);return Number.isFinite(n)&&
 function price(value){if(value==null||value==='')return null;const n=Number(value);return Number.isFinite(n)&&n>=0?n:null;}
 function metadata(product){const raw=product.metadata;return raw&&typeof raw==='object'?raw:{};}
 export function equipmentType(product){
+  const reference=phase5Reference(product);
+  if(reference?.kind==='equipment'&&byType(reference.type))return reference.type;
   const n=String(product?.name||'').toLowerCase(),m=metadata(product||{});
   const visual=String(product?.visual_model_id||'').trim();
   const visualAliases={'photo-booth':'photobooth','tumbling-blocks':'tumbling-timbers'};
@@ -94,7 +99,7 @@ export function equipmentCatalog(products=[],showPrices=false,mappedIds=null){
     if(!type&&(isInflatableProduct(p)||(!mappedIds&&inferVisualModel(p))||isCatalogConfiguration(p)))return [];
     const model=byType(type||'generic'),m=metadata(p);
     const width=finitePositive(p.width_ft||m.widthFt),depth=finitePositive(p.length_ft||m.depthFt||m.lengthFt),height=finitePositive(p.height_ft||m.heightFt||m.height_ft);
-    return [{...model,asset:equipmentAssetDescriptor(p,model.type),id:'equipment-'+p.id,productId:p.id,externalId:p.external_id||null,name:p.name||model.name,sourceCategory:p.category||'other',photoUrl:safeProductPhoto(p.photo_url||p.image_url),pricePerDay:showPrices?price(p.price_per_day):null,widthFt:width||model.widthFt,depthFt:depth||model.depthFt,heightFt:height||model.heightFt,dimensionsConfirmed:!!(width&&depth),heightConfirmed:!!height,visualFidelity:type?'illustrative':'footprint',isPreview:false}];
+    return [{...model,asset:equipmentAssetDescriptor(p,model.type),id:'equipment-'+p.id,productId:p.id,externalId:p.external_id||null,name:p.name||model.name,reference:phase5Reference(p),sourceCategory:p.category||'other',photoUrl:safeProductPhoto(p.photo_url||p.image_url),pricePerDay:showPrices?price(p.price_per_day):null,widthFt:width||model.widthFt,depthFt:depth||model.depthFt,heightFt:height||model.heightFt,dimensionsConfirmed:!!(width&&depth),heightConfirmed:!!height,visualFidelity:type?'illustrative':'footprint',isPreview:false}];
   });
 }
 export function genericEquipment(){return EQUIPMENT_PROFILES.filter(p=>p.type!=='generic').map(p=>({...p,asset:equipmentAssetDescriptor({},p.type),id:'preview-'+p.type,productId:null,externalId:null,photoUrl:null,pricePerDay:null,dimensionsConfirmed:false,heightConfirmed:false,visualFidelity:'illustrative',isPreview:true}));}

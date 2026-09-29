@@ -17,7 +17,7 @@ export function contextualProducts(catalog={}){
   const name=text(p.name),category=text(p.category).toLowerCase(),metadata=p.metadata||{};
   if(category==='lighting'){
    const visual=(catalog.lighting||[]).find(o=>o.id===p.visual_model_id);if(!visual||visual.id==='lighting-none')continue;
-   rows.push({id:p.id,productId:p.id,sourceId:visual.id,kind:'lighting',name,photoUrl:p.photo_url||p.image_url||null,visual:visual.visual,widthFt:Number(p.width_ft)||null,lengthFt:Number(p.length_ft)||null,pricePerDay:catalog.showPrices===false?null:amount(p.price_per_day)});
+   rows.push({id:p.id,productId:p.id,externalId:p.external_id||null,sourceId:visual.id,kind:'lighting',name,photoUrl:p.photo_url||p.image_url||null,visual:visual.visual,widthFt:Number(p.width_ft)||null,lengthFt:Number(p.length_ft)||null,pricePerDay:catalog.showPrices===false?null:amount(p.price_per_day)});
   }else if(/side\s*wall/i.test(name)||category==='sidewall'){
    const parsed=name.match(/(?:^|\D)(10|15|20|30|40)\s*(?:ft|foot|feet|['′])/i);
    const reference=FRIENDLY_WALLS[p.external_id]||{};

@@ -1,3 +1,4 @@
+import {phase5Reference} from './phase5-reference.js';
 // RentSketch lighting renderer primitives. Tenant catalog/API data supplies
 // customer-facing names and prices; these defaults intentionally carry no
 // rental-company pricing so one tenant can never leak into another.
@@ -27,31 +28,34 @@ export function lightingForTent(id,tent){
  const option=byId(id);if(!option)return null;if(id==='lighting-none')return option;
  const sized=LIGHTING_PRODUCTS_BY_SIZE.get(id),key=tent?tent.widthFt+'x'+tent.lengthFt:'';
  const exact=sized?.get(key)||sized?.get(tent?.lengthFt+'x'+tent?.widthFt);
- if(exact)return {...option,...exact,id:option.id,available:true,dynamic:false};
+ if(exact)return {...option,...exact,id:option.id,available:exact.available!==false&&!!exact.productId,dynamic:false};
  if(sized?.size)return {...option,productId:null,pricePerDay:null,available:false};
  return {...option,available:!liveCatalogLoaded||!!option.productId,pricePerDay:option.dynamic?tentLightingPriceFor(tent):option.pricePerDay};
 }
 function resetLivePricing(){
   LIGHTING_PRODUCTS_BY_SIZE.clear();
   Object.keys(TENT_LIGHTING_PRICE_BY_SIZE).forEach(k=>{TENT_LIGHTING_PRICE_BY_SIZE[k]=null;});
-  LIGHTING_OPTIONS.forEach(o=>{if(o.id!=='lighting-none'){o.pricePerDay=null;o.name=LIGHTING_LABELS.get(o.id);delete o.productId;delete o.photoUrl;}});
+  LIGHTING_OPTIONS.forEach(o=>{if(o.id!=='lighting-none'){o.pricePerDay=null;o.name=LIGHTING_LABELS.get(o.id);delete o.productId;delete o.photoUrl;delete o.externalId;delete o.reference;delete o.ambiguous;}});
 }
-function numericPrice(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)?n:null;}
-function applyTenantLighting(detail){
+function numericPrice(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)&&n>=0?n:null;}
+export function applyTenantLighting(detail){
   resetLivePricing();
-  const tenant=detail&&detail.tenant||window.ACTIVE_TENANT||{};
+  const tenant=detail&&detail.tenant||(typeof window!=='undefined'?window.ACTIVE_TENANT:null)||{};
   liveCatalogLoaded=tenant.slug!=='generic';
   const showPrices=tenant.slug!=='generic'&&tenant.showPrices!==false;
   const products=Array.isArray(detail&&detail.products)?detail.products:[];
+  const seen=new Map();
   products.filter(p=>p&&p.active!==false&&String(p.category||'').toLowerCase()==='lighting').forEach(p=>{
     const visual=p.visual_model_id,option=byId(visual);if(!option)return;
-    const value={name:p.name||option.name,pricePerDay:showPrices?numericPrice(p):null,productId:p.id,photoUrl:/^https?:\/\//i.test(p.photo_url||'')?p.photo_url:null};
+    const value={name:p.name||option.name,externalId:p.external_id||null,reference:phase5Reference(p),pricePerDay:showPrices?numericPrice(p):null,productId:p.id,photoUrl:/^https?:\/\//i.test(p.photo_url||'')?p.photo_url:null};
     const w=Number(p.width_ft),l=Number(p.length_ft);
     if(w>0&&l>0){
       if(!LIGHTING_PRODUCTS_BY_SIZE.has(visual))LIGHTING_PRODUCTS_BY_SIZE.set(visual,new Map());
-      LIGHTING_PRODUCTS_BY_SIZE.get(visual).set(w+'x'+l,value);
+      const sized=LIGHTING_PRODUCTS_BY_SIZE.get(visual),key=w+'x'+l,canonical=[w,l].sort((a,b)=>a-b).join('x'),seenKey=visual+':'+canonical;
+      if(seen.has(seenKey)){const previous=seen.get(seenKey);const blocked={productId:null,pricePerDay:null,available:false,ambiguous:true};sized.set(previous,blocked);sized.set(key,blocked);}else{sized.set(key,value);seen.set(seenKey,key);}
       if(visual==='lighting-tent')TENT_LIGHTING_PRICE_BY_SIZE[w+'x'+l]=value.pricePerDay;
-    }else Object.assign(option,value);
+    }else if(seen.has(visual)){Object.assign(option,{productId:null,pricePerDay:null,ambiguous:true});}
+    else{Object.assign(option,value);seen.set(visual,true);}
   });
 }
 

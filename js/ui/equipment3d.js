@@ -10,7 +10,10 @@ import {referenceChair,refineReferenceTable} from './furniture-reference3d.js';
 import {chairPositions} from '../core/seating.js';
 import {byId as chairById} from '../data/chairs.js';
 import {byId as tableById} from '../data/tables.js';
-export {mergeParts,makeDanceFloor} from './equipment-base3d.js';
+export {mergeParts} from './equipment-base3d.js';
+import {DANCE_SECTION} from '../data/danceFloor.js';
+import {makeReferenceFloor} from './phase5-floor3d.js';
+export function makeDanceFloor(items,tent){return DANCE_SECTION.externalId==='fpr:dance-floor-3x3-section'?makeReferenceFloor(items,tent):base.makeDanceFloor(items,tent);}
 export function tableProfile(item){return linenDrapeProfile(item,base.tableProfile(item),linenById(item.linenId));}
 export function makeChair(def={}){return referenceChair(def,base.mergeParts)||base.makeChair(def);}
 export function makeTable(item){
