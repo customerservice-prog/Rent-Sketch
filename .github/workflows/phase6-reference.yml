@@ -1,0 +1,30 @@
+name: Phase 6 public reference capture
+on:
+  push:
+    branches: [qa/phase6-accessories-20260929]
+    paths: [.github/workflows/phase6-reference.yml]
+permissions: {contents: read}
+jobs:
+  reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Capture only public catalog and original photos
+        run: |
+          mkdir -p qa-phase6/references
+          node <<'JS'
+          const fs=require('node:fs');
+          function phase(p){const n=String(p.name||'').toLowerCase(),c=p.category;if(c==='tent'||/\btent\b|canopy|side\s*wall|sidewall/.test(n))return 1;if(/bounce\s*house|water\s*slide|waterslide|inflatable|obstacle\s*course/.test(n))return 2;if(c==='linen'||c==='tabletop'||/linen|napkin|runner|spandex|tablecloth|overlay|table\s*cover|chair\s*cover|charger|\bplate\b|goblet|\bfork\b|\bspoon\b|\bknife\b|martini|wine glass|beer glass|rocks glass|coffee mug|carafe/.test(n))return 4;if(c==='table'||c==='chair'||/\btable\b|\bchair\b/.test(n))return 3;if(c==='lighting'||c==='dance_floor'||/light|dance\s*floor|fan|generator|power|distribution/.test(n))return 5;return 6;}
+          const read=async u=>{const r=await fetch(u,{signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(u+' '+r.status);return r.json()};
+          (async()=>{const catalog=await read('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products'),website=await read('https://www.friendlypartyrental.com/api/items');fs.writeFileSync('qa-phase6/catalog.json',JSON.stringify(catalog));fs.writeFileSync('qa-phase6/website.json',JSON.stringify(website));const items=[];for(const p of catalog.products){if(p.active===false||!p.external_id?.startsWith('fpr:')||phase(p)!==6)continue;const slug=p.external_id.slice(4),row={id:p.id,slug,name:p.name,error:null};try{const r=await fetch('https://www.friendlypartyrental.com/api/item-image/'+encodeURIComponent(slug),{signal:AbortSignal.timeout(20000)});if(!r.ok||!r.headers.get('content-type')?.startsWith('image/'))throw Error('Photo '+r.status);fs.writeFileSync('qa-phase6/references/'+slug+'.img',Buffer.from(await r.arrayBuffer()));}catch(e){row.error=e.message}items.push(row)}fs.writeFileSync('qa-phase6/manifest.json',JSON.stringify({base:'a55f64fb2ce883fad078eb128194e38470176349',checkedAt:new Date().toISOString(),items},null,2));console.log(JSON.stringify(items));})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+          git archive --format=tar.gz HEAD -o qa-phase6/source.tgz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase6-public-references
+          path: qa-phase6
+          retention-days: 7
