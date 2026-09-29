@@ -8,7 +8,7 @@ export function phase4Model(product,products,color){
  applyTenantLinens({tenant:{slug:'friendly',showPrices:false},products});
  TABLETOP.splice(0,TABLETOP.length,...tabletopCatalog(products,false));
  const linen=LINENS.find(l=>l.productId===product.id&&l.active!==false),top=TABLETOP.find(p=>p.productId===product.id);
- if(top){
+ if(top&&top.type!=='runner'){
   return {model:makeTabletop({id:'catalog-preview',shape:'rect',widthFt:6,depthFt:2.5,seatCount:0,tabletop:[{productId:top.id,qty:1,perSeat:false,color:color||top.colors?.[0]||'White'}]},0),colors:top.colors||[],colorsVerified:top.colorsVerified,note:top.reference?.referenceNote||'Photo-referenced planning model; dimensions are approximate.'};
  }
  if(!linen)return null;

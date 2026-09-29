@@ -13,7 +13,7 @@ export function clothMaterial(color='White',finish='polyester'){
     ctx.fillStyle=`rgb(${shade},${shade},${shade})`;ctx.beginPath();ctx.ellipse(x,y,6,5.3,(row+col)*.41,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#666';ctx.lineWidth=.7;ctx.stroke();
    }else for(let i=0;i<256;i+=4){ctx.strokeStyle=i%8?'#e0e0e0':'#f7f7f7';ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,256);ctx.moveTo(0,i);ctx.lineTo(256,i);ctx.stroke();}
    const bump=new THREE.CanvasTexture(canvas);bump.wrapS=bump.wrapT=THREE.RepeatWrapping;bump.repeat.set(finish==='sequin'?5:6,finish==='sequin'?7:6);material.bumpMap=bump;material.bumpScale=finish==='sequin'?.018:.003;
-   if(finish==='sequin'){material.roughnessMap=bump;material.clearcoat=.5;material.clearcoatRoughness=.35;}
+   if(finish==='sequin'){const colorMap=bump.clone();colorMap.colorSpace=THREE.SRGBColorSpace;colorMap.needsUpdate=true;material.map=colorMap;material.roughnessMap=bump;material.clearcoat=.5;material.clearcoatRoughness=.35;}
   }
  }
  return material;
@@ -45,8 +45,20 @@ export function makeLinen(item,baseProfile){
   }
   let y;
   if(p.stretch){
-   const waist=round?.57:.22,scale=1-waist*Math.pow(Math.sin(Math.PI*t),.85)-.16*t;
-   x*=scale;z*=scale;const arch=round?Math.abs(Math.sin(2*a))*.58:Math.pow(Math.sin(Math.PI*edgeU),.7)*.65;
+   // A fitted dining-table cover is not a cocktail hourglass. Its lower
+   // corners follow the actual folding-leg positions in the shared table model.
+   // Retain a vertical rim band so the fabric covers the protective table edge.
+   const u=Math.max(0,(t-.07)/.93);let arch;
+   if(round&&spec.tableSizeIn===60){
+    const fx=p.w*.30+.04,fz=p.d*.39+.04,r=Math.min(fx/Math.max(.0001,Math.abs(nx)),fz/Math.max(.0001,Math.abs(nz)));
+    const targetX=nx*r,targetZ=nz*r,edge=Math.abs(targetX)>=fx-.001?(targetZ/fz+1)/2:(targetX/fx+1)/2;
+    x=x*1.015*(1-u)+targetX*u;z=z*1.015*(1-u)+targetZ*u;arch=Math.pow(Math.sin(Math.PI*edge),.7)*.55;
+   }else if(round){
+    const scale=1.025-.165*u-.42*Math.pow(Math.sin(Math.PI*u),.85);x*=scale;z*=scale;arch=Math.abs(Math.sin(2*a))*.58;
+   }else{
+    const footX=p.w>=p.d?.60:.78,footZ=p.w>=p.d?.78:.60;
+    x*=1.015-(1.015-footX)*u;z*=1.015-(1.015-footZ)*u;arch=Math.pow(Math.sin(Math.PI*edgeU),.7)*.65;
+   }
    y=p.height+.035-(p.height+.01-arch)*t;
   }else{
    const traveled=physical*t,fall=Math.min(traveled,p.height-.03),pool=Math.max(0,traveled-(p.height-.03));

@@ -95,7 +95,7 @@ const root=path.resolve(__dirname,'..');
  const drops=rain.geometry.attributes.position;for(let i=0;i<drops.count;i+=2){assert.ok([drops.getX(i),drops.getY(i),drops.getZ(i)].every(Number.isFinite));assert.ok(drops.getY(i)<0||Math.abs(drops.getX(i))>=11.5||Math.abs(drops.getZ(i))>=11.5,'no rain through the roof');}
  weather.userData.setWeather('clear');assert.ok(!rain.visible&&weather.getObjectByName('Moon').visible);
  const guestObjects=[{...item,kind:'table',x:2,y:2}],beforeGuests=JSON.stringify(guestObjects),guests=guestModule.namespace.createGuests(tent,guestObjects,{mobile:true});
- assert.ok(guests.children.length<=10);assert.equal(guests.userData.people.filter(p=>p.seated).length,8);
+ assert.ok(guests.children.length<=11);assert.equal(guests.userData.people.filter(p=>p.seated).length,8);
  assert.ok(guests.userData.people.every(p=>Math.abs(p.x)<tent.widthFt/2&&Math.abs(p.z)<tent.lengthFt/2),'party guests stay under the tent');
  const matrices=Array.from(guests.children[0].instanceMatrix.array);guests.userData.update(.1);assert.notDeepEqual(Array.from(guests.children[0].instanceMatrix.array),matrices);
  for(const batch of guests.children){assert.ok(batch.isInstancedMesh);assert.ok(Array.from(batch.instanceMatrix.array).every(Number.isFinite));assert.ok(batch.count<=batch.instanceMatrix.count);}

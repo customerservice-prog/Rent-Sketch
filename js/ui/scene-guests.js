@@ -26,9 +26,10 @@ function headGeometry(){
   const p=g.attributes.position,c=[];
   for(let i=0;i<p.count;i++){
     const x=p.getX(i)/.32,y=p.getY(i)/.32+7.24,z=p.getZ(i)/.32+.60;
-    const lip=y>6.48&&y<6.74&&Math.abs(x)<.34&&z>1.32;
-    const brow=y>7.46&&y<7.59&&Math.abs(x)>.13&&Math.abs(x)<.60&&z>1.13;
-    const shade=lip?[.72,.39,.35]:brow?[.30,.24,.20]:[1,.97,.94];c.push(...shade);
+    const front=Math.max(0,Math.min(1,(z-1.34)/.18));
+    const lip=Math.exp(-Math.pow((y-6.60)/.075,2)-Math.pow(x/.29,4))*front;
+    const brow=Math.exp(-Math.pow((y-7.48)/.035,2)-Math.pow((Math.abs(x)-.37)/.20,4))*Math.max(0,Math.min(1,(z-1.18)/.15));
+    c.push(1-.14*lip-.30*brow,.98-.20*lip-.34*brow,.95-.18*lip-.33*brow);
   }
   g.setAttribute('color',new THREE.Float32BufferAttribute(c,3));return g;
 }
@@ -58,7 +59,8 @@ function clothTorso(){
   for(let i=0;i<p.count;i++){const y=p.getY(i),a=Math.atan2(p.getZ(i),p.getX(i)),fold=Math.sin(a*9+y*4)*.005*(1-Math.min(1,Math.abs(y-.6)));p.setX(i,p.getX(i)*(1+fold));}
   g.computeVertexNormals();return g;
 }
-function sleeveGeometry(){return lathe([[.71,-.5],[.80,-.44],[.88,-.20],[.94,.12],[.95,.34],[.76,.49]],14);}
+function sleeveGeometry(){return lathe([[.72,-.54],[.86,-.46],[.89,-.22],[.98,.08],[1,.34],[.91,.51],[.72,.54]],16);}
+function shoeGeometry(){return combine([[sphere(0,.01,.02,.155,.085,.29),'#ffffff'],[sphere(0,.075,-.05,.142,.105,.20),'#ffffff'],[new THREE.BoxGeometry(.27,.06,.43).translate(0,-.045,-.03),'#ffffff']]);}
 function skirtGeometry(){
   const g=new THREE.CylinderGeometry(.415,.65,1.65,28,10,true),p=g.attributes.position;
   for(let i=0;i<p.count;i++){const a=Math.atan2(p.getZ(i),p.getX(i)),v=(.825-p.getY(i))/1.65,f=1+Math.sin(a*14)*.035*v;p.setX(i,p.getX(i)*f);p.setZ(i,p.getZ(i)*f*.80);}
@@ -88,7 +90,7 @@ export function createGuestBatch(people,{mobile=false}={}) {
     skin:{n:36,g:new THREE.SphereGeometry(1,12,8),m:{roughness:.72}},limb:{n:8,g:sleeveGeometry()},
     torso:{n:1,g:clothTorso()},
     head:{n:1,g:headGeometry(),m:{vertexColors:true,roughness:.72}},face:{n:1,g:faceGeometry(),m:{vertexColors:true,roughness:.75}},
-    hair:{n:1,g:hairGeometry(),m:{roughness:.90}},detail:{n:7,g:new THREE.SphereGeometry(1,10,7)},
+    hair:{n:1,g:hairGeometry(),m:{roughness:.90}},detail:{n:16,g:new THREE.SphereGeometry(1,14,9)},shoe:{n:2,g:shoeGeometry(),m:{roughness:.65}},
     garment:{n:10,g:new THREE.BoxGeometry(1,1,1)},skirt:{n:1,g:skirtGeometry()},
     drink:{n:1,g:new THREE.CylinderGeometry(.10,.073,.30,12),m:{color:'#e8d5aa',roughness:.22,transparent:true,opacity:.78}},
   };
@@ -118,25 +120,28 @@ export function createGuestBatch(people,{mobile=false}={}) {
       if(index%4===1){part('detail',0,headY-.07,-.20,.25,.29,.12,hair,headQ);part('detail',0,headY+.14,-.25,.13,.14,.12,hair,headQ);}
       else if(index%4===2)part('detail',.12,headY+.31,-.15,.15,.08,.13,hair,headQ);
       // Collars, shirt opening, belt and buttons distinguish outfits at table scale.
-      part('garment',0,top-.07,.245,.19,.22,.026,jacket?'#eee8d9':skin);
-      for(const side of [-1,1]){jointQ.setFromAxisAngle(new THREE.Vector3(0,0,1),side*.45);part('garment',side*.18,top-.04,.258,.20,.17,.04,jacket?'#faf5e9':cloth,jointQ);}
-      if(jacket){for(const side of [-1,1]){jointQ.setFromAxisAngle(new THREE.Vector3(0,0,1),side*.31);part('garment',side*.16,top-.35,.315,.11,.45,.028,'#293a50',jointQ);}}
-      for(let i=0;i<3;i++)part('garment',0,top-.37-i*.23,.32,.034,.035,.02,'#d6d5ca');
-      if(!dress)part('garment',0,hip+.025,.01,.81,.085,.44,'#433b33');
+      // Collars sit on the cloth surface, not above the shoulder.
+      for(const side of [-1,1]){jointQ.setFromAxisAngle(new THREE.Vector3(0,0,1),side*.45);part('garment',side*.125,top-.16,.24,.105,.14,.022,jacket?'#faf5e9':cloth,jointQ);}
+      if(jacket){for(const side of [-1,1]){jointQ.setFromAxisAngle(new THREE.Vector3(0,0,1),side*.31);part('garment',side*.105,top-.39,.262,.065,.35,.022,'#293a50',jointQ);}}
+      for(let i=0;i<3;i++)part('detail',0,top-.36-i*.23,.274,.017,.017,.01,jacket?'#27394b':'#bbc1ba');
+      if(!dress)part('garment',0,hip+.018,.01,.78,.055,.41,'#433b33');
       if(dress&&!seated)part('skirt',0,hip-.70,0,build,1,1,cloth);
       if(dress&&seated)part('detail',0,hip-.01,.35,.58,.16,.60,cloth);
       for(const side of [-1,1]){
         const stride=pose.gait*side*.47,footZ=seated?.89:stride,footY=.13+(!seated?Math.max(0,pose.gait*side)*.1:0);
         const knee=[side*.25,seated?1.44:1.5*height,seated?.9:stride*.40],ankle=[side*.26,footY+.12,footZ];
         limb('limb',[side*.25,hip-.02,0],knee,.205,.19,dress?cloth:pants);
-        limb(dress?'skin':'limb',knee,ankle,.135,.15,dress?skin:pants);
-        part('detail',side*.26,footY,footZ+.12,.18,.125,.35,dress?'#765343':'#34383a');
+        limb(dress?'skin':'limb',knee,ankle,.156,.158,dress?skin:pants);
+        part(dress?'skin':'detail',...knee,.153,.13,.151,dress?skin:pants);
+        part('shoe',side*.26,.105+(!seated?Math.max(0,pose.gait*side)*.1:0),footZ+.10,1,1,1,dress?'#765343':'#34383a');
         const shoulder=[side*.54,top-.16,0],talk=side===1?pose.gesture:1-pose.gesture;
         let elbow=[side*.65,hip+.56,seated?.43:-stride*.38],hand=[side*.46,seated?hip+.66:hip+.02,seated?1.03:-stride*.52];
         if(person.activity==='conversation'&&side===1){hand=[.47,hip+.62+talk*.28,.85+talk*.16];elbow=[.66,hip+.44,.38];}
         if(person.activity==='cocktail'){elbow=[side*.62,hip+.58,.28];hand=[side*.29,hip+.91+(side===1?talk*.28:0),.53];}
         if(person.activity==='dance'){elbow=[side*(.62+talk*.10),hip+(side===1?.89:.36)+talk*.16,.22];hand=[side*.56,hip+(side===1?1.44:.57)+talk*.18,.51];}
+        part('detail',...shoulder,jacket?.183:.17,.183,.17,cloth);
         limb('limb',shoulder,elbow,jacket?.175:.16,.17,cloth);
+        part('skin',...elbow,.118,.105,.12,skin);
         limb('skin',elbow,hand,.12,.125,skin);
         part('skin',...hand,.095,.115,.065,skin);
         // Individual fingers and an opposed thumb, rather than ball-shaped hands.
@@ -151,5 +156,5 @@ export function createGuestBatch(people,{mobile=false}={}) {
     for(const [name,def] of Object.entries(definitions)){def.mesh.count=cursors[name];def.mesh.instanceMatrix.needsUpdate=true;if(first&&def.mesh.instanceColor)def.mesh.instanceColor.needsUpdate=true;}
     first=false;
   }
-  draw();group.userData.people=people;group.userData.visualVersion='anatomical-guests-20260929';group.userData.update=dt=>{const delta=Number(dt);if(!Number.isFinite(delta)||delta<=0)return;time+=Math.min(.1,delta);draw();};return group;
+  draw();group.userData.people=people;group.userData.visualVersion='anatomical-guests-20260929-refined';group.userData.update=dt=>{const delta=Number(dt);if(!Number.isFinite(delta)||delta<=0)return;time+=Math.min(.1,delta);draw();};return group;
 }
