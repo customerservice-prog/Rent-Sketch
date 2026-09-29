@@ -1,4 +1,4 @@
-import {buildBookingHandoff,friendlyBookingUrl} from '../core/bookingHandoff.js';
+import {buildBookingHandoff,friendlyBookingUrl} from '../core/bookingHandoff.js?v=20260929-book-now-1';
 let products=[],busy=false;
 const params=new URLSearchParams(location.search),section=document.getElementById('friendlyBooking'),button=document.getElementById('btnBookRentals'),status=document.getElementById('bookingStatus');
 const tenant=()=>window.ACTIVE_TENANT?.slug||window.RENTSKETCH_TENANT_SLUG;

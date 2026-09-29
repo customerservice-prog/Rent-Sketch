@@ -625,3 +625,7 @@ body:has(#step-review.active) #app{max-width:1220px;margin:24px auto 44px;paddin
 .catalog-accuracy-badge.exact{background:#e8f5eb;color:#2e6940;border:1px solid #c5dfcb}
 .catalog-accuracy-badge.review{background:#fff5df;color:#805d18;border:1px solid #ead5a1}
 @media(max-width:720px){.catalog-reference-card img{max-height:135px}.catalog-accuracy-badge{white-space:normal}}
+
+/* Book Now is the primary Friendly review action. */
+#step-review .review-side-column #friendlyBooking{order:-1}
+#friendlyBooking[hidden]{display:none!important}
