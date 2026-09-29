@@ -24,7 +24,9 @@ const ORIGIN='https://www.friendlypartyrental.com',OUT='qa-book-now-live';
   if(seed)await context.addInitScript(data=>{if(location.hostname.includes('friendlypartyrental.com')&&!sessionStorage.getItem('qa_seed_done')){localStorage.setItem('fpr_cart',JSON.stringify(data));sessionStorage.setItem('qa_seed_done','1');}},seed);
   const page=await context.newPage();page.on('pageerror',e=>errors.push({width,message:e.message}));return{context,page};
  };
- async function ready(page){await page.getByRole('heading',{name:'Your Event',exact:true}).waitFor({state:'visible',timeout:30000});await page.getByRole('button',{name:'Continue to Delivery →',exact:true}).waitFor({state:'visible'});await page.getByLabel('Event starts *',{exact:true}).waitFor({state:'visible'});}
+ const start=page=>page.locator('label').filter({hasText:'Event starts'}).locator('select');
+ const end=page=>page.locator('label').filter({hasText:'Event ends'}).locator('select');
+ async function ready(page){await page.getByRole('heading',{name:'Your Event',exact:true}).waitFor({state:'visible',timeout:30000});await page.getByRole('button',{name:'Continue to Delivery →',exact:true}).waitFor({state:'visible'});await page.screenshot({path:OUT+'/ready-'+page.viewportSize().width+'.png',fullPage:true});await start(page).waitFor({state:'visible'});}
  for(const width of [1440,390]){
   const {context,page}=await contextFor(width);
   await page.goto(url(handoff),{waitUntil:'domcontentloaded'});await page.waitForURL(u=>u.pathname.startsWith('/checkout'),{timeout:45000});await ready(page);
@@ -33,7 +35,7 @@ const ORIGIN='https://www.friendlypartyrental.com',OUT='qa-book-now-live';
   for(const [color,qty] of [[linen.colorOptions[0],2],[linen.colorOptions[1],1]]){const item=state.items.find(x=>x.id===linen.id&&x.selectedColor===color);assert.ok(item);assert.equal(item.quantity,qty);assert.equal(item.price,Number(linen.cost));}
   assert.equal(state.booking.designId,handoff.designId);assert.equal(state.booking.eventDate,date);assert.equal(state.overflow,false);
   await page.screenshot({path:OUT+'/checkout-'+width+'.png',fullPage:true});await page.reload({waitUntil:'domcontentloaded'});await ready(page);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('fpr_cart')).length),3);
-  await page.getByLabel('Event starts *',{exact:true}).selectOption('12:00');await page.getByLabel('Event ends *',{exact:true}).selectOption('16:00');await page.getByRole('button',{name:'Continue to Delivery →',exact:true}).click();await page.waitForURL(u=>u.pathname==='/checkout/delivery',{timeout:30000});await page.locator('h1').waitFor({state:'visible'});await page.screenshot({path:OUT+'/delivery-'+width+'.png',fullPage:true});
+  await start(page).selectOption('12:00');await end(page).selectOption('16:00');await page.getByRole('button',{name:'Continue to Delivery →',exact:true}).click();await page.waitForURL(u=>u.pathname==='/checkout/delivery',{timeout:30000});await page.locator('h1').waitFor({state:'visible'});await page.screenshot({path:OUT+'/delivery-'+width+'.png',fullPage:true});
   results.push({scenario:'empty cart automatically reaches rendered checkout and continues to delivery',width,path:new URL(page.url()).pathname,items:state.items.map(i=>({id:i.id,quantity:i.quantity,color:i.selectedColor||null})),eventControlsRendered:true,persistedAfterReload:true,noOverflow:true});await context.close();
  }
  const seed=[{id:chair.id,name:chair.name,price:Number(chair.cost),quantity:8,maxQuantity:Number(chair.available??chair.quantity),eventDate:date,picture:'/api/item-image/'+chair.slug},{id:other.id,name:other.name,price:Number(other.cost),quantity:1,maxQuantity:Number(other.available??other.quantity),eventDate:date,picture:'/api/item-image/'+other.slug}];
