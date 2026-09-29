@@ -15,8 +15,12 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
     const wallCounts={solid:0,window:0},exactWalls=new Map();
     scene.sidewalls.forEach(w=>{if(!w)return;if(w.productId){const entry=exactWalls.get(w.productId)||new Set();entry.add(w.panelId||w.id);exactWalls.set(w.productId,entry);}else if(wallCounts[w.type]!==undefined)wallCounts[w.type]++;});
     exactWalls.forEach((panels,id)=>{const product=(catalog.contextual||[]).find(p=>p.kind==='sidewall'&&p.productId===id)||{productId:id,name:'Sidewall — confirm catalog item',pricePerDay:null};add(product,panels.size,'sidewall','Sidewall — confirm selection');});
-    if(wallCounts.solid) add(null,wallCounts.solid,'sidewall','Solid 10 ft Sidewall — confirm pricing','Solid 10 ft Sidewall');
-    if(wallCounts.window) add(null,wallCounts.window,'sidewall','Window 10 ft Sidewall — confirm pricing','Window 10 ft Sidewall');
+    function legacyWallProduct(type){
+      const candidates=(catalog.contextual||[]).filter(p=>p.kind==='sidewall'&&p.type===type&&Number(p.panelFt)===10);
+      return candidates.length===1?candidates[0]:null;
+    }
+    if(wallCounts.solid){const live=legacyWallProduct('solid');add(live,wallCounts.solid,'sidewall','Solid 10 ft Sidewall — confirm pricing',live?live.name:'Solid 10 ft Sidewall');}
+    if(wallCounts.window){const live=legacyWallProduct('window');add(live,wallCounts.window,'sidewall','Window 10 ft Sidewall — confirm pricing',live?live.name:'Window 10 ft Sidewall');}
   }
   const inflatables=new Map();
   for(const object of objects)if(object.kind==='inflatable'){
