@@ -7,13 +7,26 @@ import {material,shapes,mergeStatic} from './phase5-shapes3d.js';
 // Source-keyed, normalized appearance models. This is deliberately separate
 // from price, stock, placement, clearance and the definition of a rental set.
 export function createPhase6Equipment(product,item={}){
- const ref=phase6Reference(product);if(!ref||ref.kind!=='equipment')return null;
+ const ref=phase6Reference(product);if(!ref)return null;
  const root=new THREE.Group(),body=new THREE.Group();root.add(body);root.name=product.name||ref.type;
  const dim=(v,f)=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):f;
- const quarter=Math.abs((Number(item.rotationDeg)||0)%180-90)<1e-7;
- const w=dim(item.modelWidthFt,dim(quarter?item.depthFt:item.widthFt,dim(product.widthFt,ref.dimensions[0])));
- const d=dim(item.modelDepthFt,dim(quarter?item.widthFt:item.depthFt,dim(product.depthFt,ref.dimensions[1])));
- const h=dim(item.heightFt,dim(product.heightFt,ref.dimensions[2]));root.scale.set(w,h,d);
+ const quarter=Math.abs(Math.abs((Number(item.rotationDeg)||0)%180)-90)<1e-7;
+ const defaults=ref.dimensions||[2,2,2];
+ const w=dim(item.modelWidthFt,dim(quarter?item.depthFt:item.widthFt,dim(product.widthFt,defaults[0])));
+ const d=dim(item.modelDepthFt,dim(quarter?item.widthFt:item.depthFt,dim(product.depthFt,defaults[1])));
+ const h=dim(item.heightFt,dim(product.heightFt,defaults[2]));root.scale.set(w,h,d);
+ // A contradictory/missing reference may retain a saved rental selection,
+ // but it must not quietly fall through to a convincing, wrong generic model.
+ if(ref.kind==='reference-only'){
+  const geometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(.98,.98,.98));
+  const outline=new THREE.LineSegments(geometry,new THREE.LineDashedMaterial({color:'#a17737',dashSize:.06,gapSize:.035}));
+  outline.position.y=.49;outline.computeLineDistances();body.add(outline);
+  root.name='Unverified footprint — '+(product.name||ref.type);
+  root.userData={kind:'equipment',itemId:item.id,reference:ref,referenceOnly:true,dimensionsVerified:false,
+   features:{type:'unverified-footprint',physicalModel:false},
+   asset:{...equipmentAssetDescriptor(product,'generic'),fidelity:'footprint',source:{kind:'unverified-reference',externalId:ref.externalId,referenceUrl:ref.referenceUrl,notes:ref.note}}};
+  root.traverse(o=>{o.userData.itemId=item.id;});attachEquipmentOperation(root,'generic',item);return root;
+ }
  const s=shapes(body),{mesh,box,cyl,rod,curve,lathe}=s;
  const black=material('#202326',{roughness:.76}),rubber=material('#151718',{roughness:.95}),steel=material('#b8c1c5',{metalness:.72,roughness:.29}),white=material('#eeeee8'),blue=material('#294e7c'),red=material('#bc2530'),pink=material('#de72aa'),wood=material('#be915e',{roughness:.8}),darkWood=material('#695036',{roughness:.8}),glass=material('#edf7f4',{transparent:true,opacity:.16,roughness:.08,depthWrite:false,side:THREE.DoubleSide});
  const sphere=(r,m,x,y,z)=>mesh(new THREE.SphereGeometry(r,16,10),m,x,y,z);
@@ -118,8 +131,9 @@ export function createPhase6Equipment(product,item={}){
   features={...features,yellowCannon:true,tripod:true,sprayClearanceVerified:false};
  }else if(ref.type==='cotton-candy'){
   box(.58,.35,.55,pink,0,.225,0,.025);feet(.23,.21,.025);box(.48,.16,.012,black,0,.23,.279,.004);knobs([-.15],.24,.30);for(const x of [.06,.18])box(.055,.049,.019,red,x,.25,.30,.005);vents(0,.1,-.282,7,.4);
-  lathe([[.20,0],[.25,.035],[.39,.13],[.46,.42],[.48,.50],[.47,.53],[.45,.50],[.43,.42],[.36,.14],[.24,.06],[.20,.05]],steel,0,.4,0,40);horizontalRing(.473,.008,steel,0,.91,0);
-  const rotor=new THREE.Group();const r=shapes(rotor);r.cyl(.07,.08,steel,0,.52,0);r.box(.18,.016,.019,black,0,.565,0);animated.push(rotor);root.add(rotor);motion=t=>{rotor.rotation.y=t*2.7;};features={...features,openSteelBowl:true,pinkTabletopBase:true,noCart:true};
+  // Reference bowl has near-vertical sides and a rolled lip, not a salad-bowl cone.
+  lathe([[.13,.03],[.37,.03],[.438,.055],[.465,.105],[.468,.485],[.481,.493],[.481,.510],[.455,.507],[.450,.48],[.448,.12],[.426,.086],[.365,.067],[.13,.067],[.13,.03]],steel,0,.4,0,48);horizontalRing(.473,.009,steel,0,.903,0);
+  const rotor=new THREE.Group();const r=shapes(rotor);r.cyl(.07,.08,steel,0,.52,0);r.box(.18,.016,.019,black,0,.565,0);animated.push(rotor);root.add(rotor);motion=t=>{rotor.rotation.y=t*2.7;};features={...features,openSteelBowl:true,wallProfile:'near-cylindrical',pinkTabletopBase:true,noCart:true};
  }else if(ref.type==='popcorn'){
   cabinet(.16,.87,.36);box(.80,.14,.81,red,0,.905,0,.012);box(.65,.095,.02,steel,0,.215,.386,.005);box(.69,.055,.76,steel,0,.075,0,.009);
   for(const x of [-.18,.18])rod([x,.84,0],[x,.60,0],.009,steel);
@@ -135,13 +149,17 @@ export function createPhase6Equipment(product,item={}){
   cyl(.055,.57,steel,0,.67,0);for(const [r,y] of [[.25,.59],[.195,.77],[.13,.91]])lathe([[.055,0],[r*.82,.015],[r,.04],[r,.045],[r*.72,.06],[.047,.09]],steel,0,y,0,32);feet(.18,.18,.02);const flow=new THREE.Group(),f=shapes(flow),brown=material('#5a321c',{roughness:.35});root.add(flow);for(const [r,y] of [[.24,.60],[.185,.78],[.12,.92]])f.lathe([[r*.78,.043],[r,.032],[r*.98,-.05],[r*.9,-.05]],brown,0,y,0,24);effects.push(flow);animated.push(flow);motion=t=>{brown.roughness=.34+Math.sin(t*1.4)*.018;};
   features={...features,tiers:3,steelBase:true,foodIncluded:false};
  }else if(ref.type==='bun-warmer'){
-  box(.94,.81,.90,steel,0,.47,0,.025);box(.85,.66,.025,material('#9ca8ad',{metalness:.58}),0,.49,.462,.008);box(.61,.023,.045,black,0,.29,.49,.008);knobs([.29],.12,.465);box(.065,.055,.011,material('#256b41'),.41,.12,.47,.004);feet(.39,.37,.035);features={...features,drawer:true,rollersIncluded:false};
+  box(.94,.81,.90,steel,0,.47,0,.025);box(.85,.66,.025,material('#9ca8ad',{metalness:.58}),0,.49,.462,.008);box(.84,.012,.022,steel,0,.167,.484,.003);for(const x of [-.38,.38])for(const y of [.23,.74])disc(.008,.006,steel,x,y,.481);knobs([.29],.12,.465);box(.065,.055,.011,material('#256b41'),.41,.12,.47,.004);feet(.39,.37,.035);features={...features,drawer:true,rollersIncluded:false};
  }else if(ref.type==='cheese-warmer'){
   box(.79,.59,.78,steel,0,.34,0,.022);feet(.3,.3,.025);cyl(.345,.065,steel,0,.655,0);horizontalRing(.34,.009,steel,0,.691,0);rod([0,.69,0],[0,.97,0],.02,steel);box(.095,.03,.11,black,0,.98,0,.009);curve([[.075,.67,0],[.075,.81,.12],[.075,.81,.43],[.075,.77,.45]],.014,steel);features={...features,pump:true,roundLid:true};
  }else if(ref.type==='roller-grill'){
   box(.87,.23,.78,steel,0,.175,0,.015);feet(.35,.3,.025);for(let i=0;i<7;i++){const q=cyl(.037,.74,steel,0,.31,-.30+i*.10,20);q.rotation.z=Math.PI/2;}
-  for(const x of [-.42,.42]){box(.018,.49,.79,glass,x,.57,0,.005);rod([x,.33,-.35],[x,.87,-.23],.009,steel);}
-  const cover=box(.86,.012,.84,glass,0,.851,0,.005);cover.rotation.x=-.13;knobs([-.26,.04,.29],.17,.405);features={...features,rollers:7,sneezeGuard:true,foodIncluded:false};
+  // Curved clear guard follows the reference instead of a tilted solid slab.
+  const profile=[];for(let i=0;i<=20;i++){const a=i/20*Math.PI/2;profile.push({y:.38+.50*Math.cos(a),z:-.38+.82*Math.sin(a)});}
+  const vertices=[],indices=[];for(const v of profile)vertices.push(-.42,v.y,v.z,.42,v.y,v.z);
+  for(let i=0;i<profile.length-1;i++){const a=i*2;indices.push(a,a+1,a+2,a+1,a+3,a+2);}
+  const guard=new THREE.BufferGeometry();guard.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));guard.setIndex(indices);guard.computeVertexNormals();mesh(guard,glass);
+  for(const x of [-.42,.42]){curve(profile.map(v=>[x,v.y,v.z]),.006,steel);rod([x,.33,-.38],[x,.88,-.38],.008,steel);}knobs([-.26,.04,.29],.17,.405);features={...features,rollers:7,sneezeGuard:true,curvedGuard:true,foodIncluded:false};
  }else if(ref.type==='pretzel-warmer'){
   cabinet(.16,.94,.36);box(.76,.05,.76,steel,0,.949,0,.008);box(.74,.22,.74,steel,0,.14,0,.012);rod([0,.31,0],[0,.87,0],.014,steel);
   for(const y of [.48,.72])for(let i=0;i<4;i++){const a=i*Math.PI/2;rod([0,y,0],[Math.cos(a)*.28,y,Math.sin(a)*.28],.008,steel);rod([Math.cos(a)*.28,y,Math.sin(a)*.28],[Math.cos(a)*.28,y+.04,Math.sin(a)*.28],.008,steel);}

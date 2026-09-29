@@ -5,7 +5,10 @@ import {PHASE6_SLUGS,phase6Reference,isPhase6Configuration} from '../js/data/pha
 import {equipmentCatalog,equipmentItem} from '../js/data/equipment.js';
 import {accessoryCatalog,accessoryItem} from '../js/data/accessories.js';
 import {buildBookingHandoff} from '../js/core/bookingHandoff.js';
-const products=JSON.parse(fs.readFileSync(new URL('../qa-phase6/catalog.json',import.meta.url))).products;
+// Synthetic prices and IDs here are test fixtures only; production still reads
+// Friendly's live catalog. Live IDs/photos are separately checked in browser QA.
+const product=slug=>({id:'test-'+slug,external_id:'fpr:'+slug,name:slug.replaceAll('-',' '),category:'other',active:true,price_per_day:'37.25'});
+const products=PHASE6_SLUGS.map(product).concat(['cotton-candy-floss-sugar-pink','snow-cone-syrup-cherry','55-oz-popcorn-kernel','sterno-fuel-cans-pack-of-2','20-lb-propane-tank','100-lb-propane-tank','photobooth-extra-hour-attended','photobooth-4x6-print-upgrade','photobooth-custom-backdrop-upgrade'].map(product));
 const pFor=slug=>products.find(p=>p.external_id==='fpr:'+slug);
 for(const slug of PHASE6_SLUGS){
  test('exact identity and immutable catalog: '+slug,()=>{
