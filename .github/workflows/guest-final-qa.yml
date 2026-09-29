@@ -24,11 +24,13 @@ jobs:
           p=Path('tests/guest-realism-harness.html');s=p.read_text();needle='window.renderPose='
           addition="""const seatedItem={id:'qa-seated',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:7.5,y:7.5,seatCount:8,chairId:'resin-white',linenId:'linen-round-120',linenColor:'White'};
           let seatedGroup=null;const seatedSource=JSON.stringify(seatedItem);
-          window.renderSeated=(dt=0)=>{guests.visible=false;if(!seatedGroup){seatedGroup=new THREE.Group();const table=makeTable(seatedItem);seatedGroup.add(table);const people=createGuests({type:'frame',widthFt:20,lengthFt:20},[seatedItem]);seatedGroup.add(people);seatedGroup.userData.guests=people;scene.add(seatedGroup);}seatedGroup.userData.guests.userData.update(dt);camera.position.set(8,8,Math.max(13,11/(2*Math.tan(camera.fov*Math.PI/360)*camera.aspect))));camera.lookAt(0,1.9,0);paint();return{people:seatedGroup.userData.guests.userData.people.length,seated:seatedGroup.userData.guests.userData.people.filter(p=>p.seated).length,batches:seatedGroup.userData.guests.children.length,unchanged:JSON.stringify(seatedItem)===seatedSource};};
+          window.renderSeated=(dt=0)=>{guests.visible=false;if(!seatedGroup){seatedGroup=new THREE.Group();const table=makeTable(seatedItem);seatedGroup.add(table);const people=createGuests({type:'frame',widthFt:20,lengthFt:20},[seatedItem]);seatedGroup.add(people);seatedGroup.userData.guests=people;scene.add(seatedGroup);}seatedGroup.userData.guests.userData.update(dt);camera.position.set(8,8,Math.max(13,11/(2*Math.tan(camera.fov*Math.PI/360)*camera.aspect)));camera.lookAt(0,1.9,0);paint();return{people:seatedGroup.userData.guests.userData.people.length,seated:seatedGroup.userData.guests.userData.people.filter(p=>p.seated).length,batches:seatedGroup.userData.guests.children.length,unchanged:JSON.stringify(seatedItem)===seatedSource};};
           """
           assert needle in s;s=s.replace(needle,addition+needle);p.write_text(s)
+          Path('/tmp/guest-harness.mjs').write_text(re.search(r'<script type="module">(.*?)</script>',s,re.S).group(1))
           p=Path('tests/guest-realism-browser.cjs');s=p.read_text();old='await page.close();';new="const seated=await page.evaluate(()=>window.renderSeated(.033));assert.equal(seated.seated,8);assert.equal(seated.batches,11);assert.equal(seated.unchanged,true);await page.screenshot({path:out+'/seated-'+width+'.png'});reports.push({width,mode:'seated',...seated});await page.close();";assert old in s;s=s.replace(old,new);p.write_text(s)
           PY
+          node --check /tmp/guest-harness.mjs
           node --check js/ui/scene-guests.js
           git diff --check
       - run: npm --prefix tests ci
@@ -56,7 +58,7 @@ jobs:
         run: |
           git config user.name 'RentSketch QA'
           git config user.email 'rentsketch-qa@users.noreply.github.com'
-          git add js tests/guest* tests/scene-environment.cjs designer
+          git add js tests/guest* tests/scene-environment.cjs designer scripts/build-guest-anatomy.py
           git commit -m 'Refine guest facial tones and seams, fit cloth to real table supports, and verify seated scenes'
           git push origin HEAD:refs/heads/qa/phase4-finish-20260929
           git rev-parse HEAD > qa-phase4/tested-commit.txt
