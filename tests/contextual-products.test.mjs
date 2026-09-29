@@ -54,3 +54,29 @@ test('Friendly sidewall inventory sizes are enforced by tent type',()=>{
  assert.equal(sidewallPanelCount(wall10,frame,'front'),0,'10 ft wall must never be offered on a frame tent');
  assert.equal(sidewallPanelCount(wall20,frame,'front'),1);
 });
+
+
+test('legacy 10ft render segments become one 20ft physical sidewall on frame/pole tents',()=>{
+ const tent={id:'frame20',type:'frame',name:'20x20 Frame',widthFt:20,lengthFt:20};
+ const wall={id:'wall20-live',productId:'wall20-live',kind:'sidewall',type:'window',panelFt:20,name:'Window 20 ft Sidewall',pricePerDay:55};
+ const scene={tentId:'frame20',objects:[],sidewalls:[
+   {id:'a',side:'front',type:'window',startFt:0,lengthFt:10},
+   {id:'b',side:'front',type:'window',startFt:10,lengthFt:10}
+ ]};
+ const summary=summarizeEvent(scene,{tents:[tent],tables:[],chairs:[],linens:[],lighting:[],contextual:[wall],tabletop:[]});
+ const line=summary.lines.find(l=>l.category==='sidewall');
+ assert.equal(line.productId,'wall20-live');
+ assert.equal(line.qty,1);
+ assert.equal(line.amount,55);
+});
+
+test('partial legacy pole/frame wall stays unpriced instead of guessing a 20ft panel',()=>{
+ const tent={id:'pole20',type:'pole',name:'20x20 Pole',widthFt:20,lengthFt:20};
+ const wall={id:'wall20-live',productId:'wall20-live',kind:'sidewall',type:'solid',panelFt:20,name:'Solid 20 ft Sidewall',pricePerDay:55};
+ const scene={tentId:'pole20',objects:[],sidewalls:[{id:'a',side:'front',type:'solid',startFt:0,lengthFt:10}]};
+ const summary=summarizeEvent(scene,{tents:[tent],tables:[],chairs:[],linens:[],lighting:[],contextual:[wall],tabletop:[]});
+ const line=summary.lines.find(l=>l.category==='sidewall');
+ assert.equal(line.productId,null);
+ assert.equal(line.amount,null);
+ assert.match(line.label,/confirm panel quantity/i);
+});
