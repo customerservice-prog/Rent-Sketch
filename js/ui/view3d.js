@@ -766,7 +766,7 @@ export function init(container,callbacks={}) {
   }
   function placedModel(item){
     const unrotated={...item,...modelDimensionsFor(item),rotationDeg:0};
-    const model=item.kind==='equipment'?createEquipment(unrotated,{mobile}):item.kind==='accessory'?createAccessory3d(item):item.kind==='inflatable'?createInflatable(unrotated):item.kind==='chair'?makeStandaloneChair(unrotated):table(unrotated);
+    const model=item.kind==='equipment'?createEquipment(unrotated,{mobile}):item.kind==='accessory'?createAccessory3d(item):item.kind==='inflatable'?createInflatable(unrotated):item.kind==='chair'?makeStandaloneChair(unrotated):table(item);
     model.rotation.y=-(Number(item.rotationDeg)||0)*Math.PI/180;
     model.traverse(part=>{if(part.isMesh)part.userData.itemId=item.id;});
     return model;

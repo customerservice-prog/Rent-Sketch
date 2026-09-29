@@ -145,7 +145,7 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
 }
 
 function planModelDimensions(item){
-  if(!currentData?.photoSitePlan&&item.shape!=='half-round')return {widthFt:item.widthFt,depthFt:item.depthFt};
+  if(!currentData?.photoSitePlan&&item.kind!=='table'&&item.shape!=='half-round')return {widthFt:item.widthFt,depthFt:item.depthFt};
   return objectLocalDimensions(item);
 }
 function positionObjectElement(element,item,x,y){
@@ -393,7 +393,7 @@ renderLighting(data,tent,structureHost);
   positionObjectElement(wrap,item,item.x,item.y);
   wrap.style.width = (dispSize.w * pxPerFt) + 'px';
   wrap.style.height = (dispSize.d * pxPerFt) + 'px';
-  if(data.photoSitePlan||item.shape==='half-round'){wrap.style.transformOrigin='50% 50%';wrap.style.transform='rotate('+((rotate90?-1:1)*(Number(item.rotationDeg)||0))+'deg)';}
+  if(data.photoSitePlan||item.kind==='table'||item.shape==='half-round'){wrap.style.transformOrigin='50% 50%';wrap.style.transform='rotate('+((rotate90?-1:1)*(Number(item.rotationDeg)||0))+'deg)';}
   wrap.dataset.worldX=item.x;wrap.dataset.worldY=item.y;wrap.dataset.rotation=item.rotationDeg||0;
   wrap.dataset.itemId = item.id;
   if(tableDef)wrap.dataset.tableId=tableDef.id;
@@ -415,7 +415,7 @@ renderLighting(data,tent,structureHost);
     if(item.linenId==='linen-runner-9ft'){accent.style.width=(Math.max(dispSize.w,dispSize.d)*pxPerFt)+'px';accent.style.height=(1.1*pxPerFt)+'px';if(dispSize.d>dispSize.w)accent.style.transform='translate(-50%,-50%) rotate(90deg)';}
     top.appendChild(accent);
   }else if(item.linenId){top.classList.add('has-linen');top.style.background=linenColorHex(item.linenColor);}
-  if(tableDef&&item.tabletop?.length){const rentals=document.createElement('div');rentals.className='plan-tabletop';rentals.innerHTML=tabletopSvg(item.shape==='half-round'?{...item,...local,rotationDeg:0}:item,undefined,rotate90);top.appendChild(rentals);}
+  if(tableDef&&item.tabletop?.length){const rentals=document.createElement('div');rentals.className='plan-tabletop';rentals.innerHTML=tabletopSvg(item.kind==='table'?{...item,...local,rotationDeg:0}:item,undefined,rotate90);top.appendChild(rentals);}
   const label = document.createElement('span');
   label.className = 'plan2d-table-label';
   if (isDance) {

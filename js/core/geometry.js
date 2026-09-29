@@ -1,3 +1,4 @@
+import { objectLocalDimensions } from './world-space.js';
 // RentSketch shared 2D geometry helpers.
 // Objects are represented by an axis-aligned bounding box for collision and
 // containment. For rotated rectangles the AABB is calculated from the actual
@@ -8,6 +9,10 @@ function number(v, fallback) { v = Number(v); return Number.isFinite(v) ? v : fa
 export function rectFromObject(obj) {
   const w = number(obj.widthFt, number(obj.footprintFt, 0));
   const d = number(obj.depthFt, number(obj.lengthFt, number(obj.footprintFt, 0)));
+  if(obj.kind==='table'){
+    const local=objectLocalDimensions(obj),a=number(obj.rotationDeg,0)*Math.PI/180,c=Math.abs(Math.cos(a)),s=Math.abs(Math.sin(a)),width=local.widthFt*c+local.depthFt*s,depth=local.widthFt*s+local.depthFt*c;
+    return {x:number(obj.x,0)+w/2-width/2,y:number(obj.y,0)+d/2-depth/2,width,depth};
+  }
   if(obj.footprintOriented===true||['accessory','inflatable'].includes(obj.kind))return {x:number(obj.x,0),y:number(obj.y,0),width:w,depth:d};
   const angle = number(obj.rotationDeg, number(obj.rotation, 0)) * Math.PI / 180;
   const c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));

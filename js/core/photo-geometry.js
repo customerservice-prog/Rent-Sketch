@@ -1,3 +1,4 @@
+import { objectLocalDimensions } from './world-space.js';
 function clamp(n,min,max,fallback){
   n=Number(n);
   return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback;
@@ -129,6 +130,9 @@ export function photoTentTransform(tent,site,placement){
   return {x:Number.isFinite(Number(placement?.x))?Number(placement.x):Math.max(0,(site.widthFt-tent.widthFt)/2),y:Number.isFinite(Number(placement?.y))?Number(placement.y):Math.max(0,(site.lengthFt-tent.lengthFt)/2),rotationDeg:Number(placement?.rotationDeg)||0};
 }
 export function rentalPhotoPlacement(item,tent,site,placement){
+  // Resolve tent-local dimensions before an independent photo rotation replaces
+  // the editor angle, otherwise a quarter-turned table is swapped a second time.
+  if(item.kind==='table'){const local=objectLocalDimensions(item);item={...item,modelWidthFt:local.widthFt,modelDepthFt:local.depthFt};}
   if(item.photoPlacement)return {...item,x:Number(item.photoPlacement.x)||0,y:Number(item.photoPlacement.y)||0,rotationDeg:Number(item.photoPlacement.rotationDeg)||0};
   if(tent.isSite)return {...item};
   const p=photoTentTransform(tent,site,placement),a=p.rotationDeg*Math.PI/180,dx=Number(item.x||0)+item.widthFt/2-tent.widthFt/2,dy=Number(item.y||0)+item.depthFt/2-tent.lengthFt/2;

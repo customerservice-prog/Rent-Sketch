@@ -15,7 +15,7 @@ const mime={'.html':'text/html','.js':'application/javascript','.mjs':'applicati
   for(const baseline of [true,false])for(const width of baseline?[1440]:[1440,390]){
    const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:1,serviceWorkers:'block'});
    await context.route('**/*',r=>{const q=r.request();return q.method()==='GET'&&q.url().startsWith(origin)?r.continue():r.abort();});
-   const p=await context.newPage();p.on('pageerror',e=>errors.push({baseline,width,error:String(e)}));
+   const p=await context.newPage();p.on('pageerror',e=>{errors.push({baseline,width,error:String(e)});console.error('BROWSER ERROR',baseline,width,e);fs.writeFileSync(path.join(out,'browser-errors.json'),JSON.stringify(errors));});
    await p.goto(origin+(baseline?'/baseline':'')+'/tests/seating-alignment-harness.html',{waitUntil:'domcontentloaded'});
    await p.waitForFunction(()=>window.ready===true,null,{timeout:45000});
    for(const angle of baseline?[90]:[0,90,180,270]){
