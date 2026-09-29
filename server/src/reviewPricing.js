@@ -22,10 +22,11 @@ async function reviewPricing(tenant,{zip='',eventDate='',lines=[]}={},fetcher=fe
  if(eventDate&&!/^\d{4}-\d{2}-\d{2}$/.test(eventDate))throw Object.assign(new Error('Choose a valid event date.'),{status:400});
  const clean=sanitizeLines(lines);
  const itemPath='/api/items'+(eventDate?'?date='+encodeURIComponent(eventDate):'');
- const [itemsResult,taxResult,deliveryResult]=await Promise.allSettled([
+ const [itemsResult,taxResult,deliveryResult,tiersResult]=await Promise.allSettled([
    read(itemPath,fetcher),
    read('/api/tax-rate',fetcher),
    zip?read('/api/delivery-fee?zip='+encodeURIComponent(zip),fetcher):Promise.resolve(null),
+   read('/api/pricing-tiers',fetcher),
  ]);
  if(itemsResult.status!=='fulfilled')throw new Error('Friendly live item pricing is unavailable');
  const friendlyItems=Array.isArray(itemsResult.value?.items)?itemsResult.value.items:[];
@@ -47,12 +48,19 @@ async function reviewPricing(tenant,{zip='',eventDate='',lines=[]}={},fetcher=fe
    };
  });
  const rentalComplete=priced.every(line=>line.exactMatch&&line.amount!=null&&line.availableForDate!==false);
- const rentalCents=priced.reduce((sum,line)=>sum+(line.amount==null?0:Math.round(line.amount*100)),0);
+ const baseRentalCents=priced.reduce((sum,line)=>sum+(line.amount==null?0:Math.round(line.amount*100)),0);
+ const tiers=tiersResult.status==='fulfilled'&&Array.isArray(tiersResult.value?.tiers)?tiersResult.value.tiers:[];
+ const oneDayTier=tiers.find(t=>Number(t.minDays)===1)||tiers[0]||null;
+ const durationPct=oneDayTier?Number(oneDayTier.percent)||0:0;
+ const durationFeeCents=Math.round(baseRentalCents*durationPct/100);
+ const rentalCents=baseRentalCents+durationFeeCents;
  const taxRate=taxResult.status==='fulfilled'&&taxResult.value?.rate?.isActive!==false?amount(taxResult.value?.rate?.rate):null;
  const deliveryFee=deliveryResult.status==='fulfilled'?amount(deliveryResult.value?.fee):null;
  const deliveryCents=deliveryFee==null?null:Math.round(deliveryFee*100);
  const taxCents=rentalComplete&&deliveryCents!=null&&taxRate!=null&&taxRate<=100?Math.round((rentalCents+deliveryCents)*taxRate/100):null;
- const complete=!!eventDate&&!!zip&&rentalComplete&&deliveryCents!=null&&taxCents!=null;
+ const hoursUntilEvent=eventDate?(new Date(eventDate+'T12:00:00-04:00').getTime()-Date.now())/3600000:null;
+ const lastMinuteNeedsCheckout=hoursUntilEvent!=null&&hoursUntilEvent<72;
+ const complete=!!eventDate&&!!zip&&rentalComplete&&deliveryCents!=null&&taxCents!=null&&!lastMinuteNeedsCheckout;
  return {
    available:true,
    complete,
@@ -60,6 +68,9 @@ async function reviewPricing(tenant,{zip='',eventDate='',lines=[]}={},fetcher=fe
    eventDate:eventDate||null,
    zip:zip||null,
    lineItems:priced,
+   baseRentalSubtotal:rentalComplete?baseRentalCents/100:null,
+   durationTier:oneDayTier?{id:oneDayTier.id,label:oneDayTier.label,minDays:oneDayTier.minDays,percent:durationPct}:null,
+   durationFee:rentalComplete?durationFeeCents/100:null,
    rentalSubtotal:rentalComplete?rentalCents/100:null,
    knownSubtotal:rentalCents/100,
    deliveryFee,
@@ -68,6 +79,8 @@ async function reviewPricing(tenant,{zip='',eventDate='',lines=[]}={},fetcher=fe
    taxDelivery:true,
    taxAmount:taxCents==null?null:taxCents/100,
    total:complete?(rentalCents+deliveryCents+taxCents)/100:null,
+   lastMinuteNeedsCheckout,
+   pricingBasis:'One-day standard delivery, no optional add-ons',
    checkedAt:new Date().toISOString(),
  };
 }
