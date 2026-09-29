@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { requireTenantRole } = require('../middleware/requireAuth');
 const router = express.Router();
+const {enrichFriendlyReferences}=require('../friendlyCatalogReference');
 
 function text(value,max,required){if(value==null||value===''){if(required)throw new Error('required');return null;}if(typeof value!=='string')throw new Error('must be text');const v=value.trim();if(required&&!v)throw new Error('required');if(v.length>max)throw new Error(`must be ${max} characters or fewer`);return v||null;}
 function number(value,min,max,integer){if(value==null||value==='')return null;const n=Number(value);if(!Number.isFinite(n)||n<min||n>max||(integer&&!Number.isInteger(n)))throw new Error(`must be ${integer?'a whole number':'a number'} between ${min} and ${max}`);return n;}
@@ -11,7 +12,7 @@ function normalized(input,key){switch(key){case'category':return category(input)
 function validationError(res,key,err){return res.status(400).json({error:`${key} ${err.message||'is invalid'}`});}
 
 router.get('/generic/products', async (req,res)=>{const t=(await db.query('SELECT id FROM tenants WHERE slug=$1',['generic'])).rows[0];if(!t)return res.status(404).json({error:'Generic tenant not found'});const p=await db.query('SELECT * FROM products WHERE tenant_id=$1 AND active=true ORDER BY category,sort_order',[t.id]);res.json({products:p.rows});});
-router.get('/:slug/products', async (req,res)=>{const t=(await db.query('SELECT id FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];if(!t)return res.status(404).json({error:'Tenant not found'});const p=await db.query('SELECT * FROM products WHERE tenant_id=$1 AND active=true ORDER BY category,sort_order',[t.id]);res.json({products:p.rows});});
+router.get('/:slug/products', async (req,res)=>{const t=(await db.query('SELECT id FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];if(!t)return res.status(404).json({error:'Tenant not found'});const p=await db.query('SELECT * FROM products WHERE tenant_id=$1 AND active=true ORDER BY category,sort_order',[t.id]);res.setHeader('Cache-Control','no-store');res.json({products:await enrichFriendlyReferences(req.params.slug,p.rows)});});
 
 router.post('/:slug/products', requireTenantRole('staff'), async (req,res)=>{const body=req.body||{},map={category:'category',name:'name',sku:'sku',pricePerDay:'price_per_day',priceType:'price_type',widthFt:'width_ft',lengthFt:'length_ft',capacity:'capacity',photoUrl:'photo_url',externalId:'external_id',sortOrder:'sort_order',visualModelId:'visual_model_id'},v={};for(const [key,col] of Object.entries(map)){try{v[col]=normalized(body[key],col);}catch(err){return validationError(res,key,err);}}if(!v.category||!v.name)return res.status(400).json({error:'category and name are required'});const r=await db.query(`INSERT INTO products (tenant_id,category,external_id,name,sku,price_per_day,price_type,width_ft,length_ft,capacity,photo_url,sort_order,visual_model_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,[req.tenant.id,v.category,v.external_id,v.name,v.sku,v.price_per_day,v.price_type||'per_day',v.width_ft,v.length_ft,v.capacity,v.photo_url,v.sort_order==null?0:v.sort_order,v.visual_model_id]);res.status(201).json({product:r.rows[0]});});
 

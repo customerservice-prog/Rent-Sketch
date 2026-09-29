@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { activityPositions } from '../core/party-scene.js';
 import { CHAIRS } from '../data/chairs.js';
+import { GUEST_ANATOMY } from '../data/guest-anatomy.js';
 
 // Fully local, articulated party figures. The batches share geometry/materials;
 // facial features, clothes and activities never become quote items.
@@ -17,26 +18,52 @@ function combine(parts,colors=false){
 }
 function sphere(x,y,z,sx,sy,sz){const g=new THREE.SphereGeometry(1,10,7);g.scale(sx,sy,sz);g.translate(x,y,z);return g;}
 function headGeometry(){
-  const head=lathe([[.12,-.42],[.20,-.36],[.275,-.22],[.31,-.04],[.30,.16],[.255,.31],[.14,.39],[0,.42]],16);head.scale(1,1,.9);
-  return combine([[head],[sphere(0,-.08,.28,.074,.12,.105)],[sphere(-.30,-.02,0,.064,.12,.07)],[sphere(.30,-.02,0,.064,.12,.07)]]);
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(GUEST_ANATOMY.positions,3));
+  g.setIndex(GUEST_ANATOMY.indices);g.computeVertexNormals();
+  // Subtle complexion and lips multiply the individual's skin color. The mesh
+  // carries real eyelids, cheeks, jaw, nose, ears and lips instead of glued-on balls.
+  const p=g.attributes.position,c=[];
+  for(let i=0;i<p.count;i++){
+    const x=p.getX(i)/.32,y=p.getY(i)/.32+7.24,z=p.getZ(i)/.32+.60;
+    const front=Math.max(0,Math.min(1,(z-1.34)/.18));
+    const lip=Math.exp(-Math.pow((y-6.60)/.075,2)-Math.pow(x/.29,4))*front;
+    const brow=Math.exp(-Math.pow((y-7.48)/.035,2)-Math.pow((Math.abs(x)-.37)/.20,4))*Math.max(0,Math.min(1,(z-1.18)/.15));
+    c.push(1-.14*lip-.30*brow,.98-.20*lip-.34*brow,.95-.18*lip-.33*brow);
+  }
+  g.setAttribute('color',new THREE.Float32BufferAttribute(c,3));return g;
 }
 function faceGeometry(){
   const parts=[];
   for(const side of [-1,1]){
-    parts.push([sphere(side*.122,.062,.248,.052,.025,.017),'#f4eee2']);
-    parts.push([sphere(side*.122,.059,.266,.019,.022,.009),'#342f28']);
-    const brow=new THREE.BoxGeometry(.105,.018,.018);brow.translate(side*.125,.145,.256);parts.push([brow,'#44382d']);
+    // Eyeballs sit behind the sculpted eyelids. Small irises avoid the old
+    // high-contrast, oversized, staring cartoon eyes.
+    parts.push([sphere(side*.0985,.013,.206,.0465,.043,.047),'#e6ded4']);
+    parts.push([sphere(side*.0985,.013,.250,.018,.018,.004),'#59523f']);
+    parts.push([sphere(side*.0985,.013,.254,.008,.008,.002),'#171b19']);
+    parts.push([sphere(side*.095,.019,.256,.0026,.0026,.001),'#d7dfdc']);
   }
-  parts.push([sphere(0,-.252,.226,.103,.022,.018),'#995f55']);
   return combine(parts,true);
 }
 function hairGeometry(){
-  // A shaped hairline: high at the forehead, lower over the ears and nape.
-  const g=new THREE.SphereGeometry(1,16,9,0,Math.PI*2,0,Math.PI*.75),p=g.attributes.position;
-  for(let i=0;i<p.count;i++){
-    const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-    if(z>.1&&y<.08)p.setY(i,.08+z*.12);
-  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(GUEST_ANATOMY.positions,3));g.setIndex(GUEST_ANATOMY.scalp);g.computeVertexNormals();
+  const p=g.attributes.position,n=g.attributes.normal;
+  for(let i=0;i<p.count;i++)p.setXYZ(i,p.getX(i)+n.getX(i)*.012,p.getY(i)+n.getY(i)*.012,p.getZ(i)+n.getZ(i)*.012);
+  p.needsUpdate=true;g.computeVertexNormals();return g;
+}
+function clothTorso(){
+  const g=lathe([[.33,-.08],[.405,0],[.445,.16],[.408,.35],[.415,.59],[.45,.82],[.51,1.0],[.565,1.12],[.49,1.24],[.24,1.31],[.175,1.36]],20);
+  // Light seam/fold variation reads as fabric without increasing draw calls.
+  const p=g.attributes.position;
+  for(let i=0;i<p.count;i++){const y=p.getY(i),a=Math.atan2(p.getZ(i),p.getX(i)),fold=Math.sin(a*9+y*4)*.005*(1-Math.min(1,Math.abs(y-.6)));p.setX(i,p.getX(i)*(1+fold));}
+  g.computeVertexNormals();return g;
+}
+function sleeveGeometry(){return lathe([[0,-.55],[.72,-.54],[.86,-.46],[.89,-.22],[.98,.08],[1,.34],[.91,.51],[.72,.54],[0,.55]],16);}
+function shoeGeometry(){return combine([[sphere(0,.01,.02,.155,.085,.29),'#ffffff'],[sphere(0,.075,-.05,.142,.105,.20),'#ffffff'],[new THREE.BoxGeometry(.27,.06,.43).translate(0,-.045,-.03),'#ffffff']]);}
+function skirtGeometry(){
+  const g=new THREE.CylinderGeometry(.415,.65,1.65,28,10,true),p=g.attributes.position;
+  for(let i=0;i<p.count;i++){const a=Math.atan2(p.getZ(i),p.getX(i)),v=(.825-p.getY(i))/1.65,f=1+Math.sin(a*14)*.035*v;p.setX(i,p.getX(i)*f);p.setZ(i,p.getZ(i)*f*.80);}
   g.computeVertexNormals();return g;
 }
 export function guestPose(person,index,time){
@@ -52,15 +79,19 @@ export function guestPose(person,index,time){
   return {x,z,heading,gait,sway,lift,headTurn:conversation,gesture,seated};
 }
 export function createGuests(tent,objects,{mobile=false}={}) {
+  return createGuestBatch(guestPositions(tent,objects,mobile?24:40),{mobile});
+}
+// Same production mesh generator is used for isolated visual QA.
+export function createGuestBatch(people,{mobile=false}={}) {
   const group=new THREE.Group();group.name='Preview guests';group.userData.decorative=true;
-  const people=guestPositions(tent,objects,mobile?24:40),dummy=new THREE.Object3D(),direction=new THREE.Vector3(),mid=new THREE.Vector3(),rotation=new THREE.Quaternion(),jointQ=new THREE.Quaternion(),headQ=new THREE.Quaternion();
-  const common={roughness:.86};
+  const dummy=new THREE.Object3D(),direction=new THREE.Vector3(),mid=new THREE.Vector3(),rotation=new THREE.Quaternion(),jointQ=new THREE.Quaternion(),headQ=new THREE.Quaternion();
+  const common={roughness:.92};
   const definitions={
-    skin:{n:10,g:new THREE.SphereGeometry(1,10,7)},limb:{n:8,g:new THREE.CylinderGeometry(.86,1,1,10)},
-    torso:{n:1,g:lathe([[.39,0],[.45,.22],[.44,.47],[.56,.91],[.62,1.13],[.47,1.28],[.23,1.34]],16)},
-    head:{n:1,g:headGeometry()},face:{n:1,g:faceGeometry(),m:{vertexColors:true,roughness:.75}},
-    hair:{n:1,g:hairGeometry()},detail:{n:7,g:new THREE.SphereGeometry(1,10,7)},
-    garment:{n:10,g:new THREE.BoxGeometry(1,1,1)},skirt:{n:1,g:new THREE.CylinderGeometry(.45,.76,1.7,14)},
+    skin:{n:36,g:new THREE.SphereGeometry(1,12,8),m:{roughness:.72}},limb:{n:8,g:sleeveGeometry()},
+    torso:{n:1,g:clothTorso()},
+    head:{n:1,g:headGeometry(),m:{vertexColors:true,roughness:.72}},face:{n:1,g:faceGeometry(),m:{vertexColors:true,roughness:.75}},
+    hair:{n:1,g:hairGeometry(),m:{roughness:.90}},detail:{n:16,g:new THREE.SphereGeometry(1,14,9)},shoe:{n:2,g:shoeGeometry(),m:{roughness:.65}},
+    garment:{n:10,g:new THREE.BoxGeometry(1,1,1)},skirt:{n:1,g:skirtGeometry()},
     drink:{n:1,g:new THREE.CylinderGeometry(.10,.073,.30,12),m:{color:'#e8d5aa',roughness:.22,transparent:true,opacity:.78}},
   };
   const colorCache=new Map();let first=true,time=0;
@@ -72,8 +103,8 @@ export function createGuests(tent,objects,{mobile=false}={}) {
     const cursors=Object.fromEntries(Object.keys(definitions).map(k=>[k,0]));
     people.forEach((person,index)=>{
       const pose=guestPose(person,index,time),seated=person.seated,dress=index%4===1,jacket=index%4===0;
-      const height=1.06+(index%5-2)*.035,hip=seated?1.59:2.95*height,skin=SKIN[index%SKIN.length],hair=HAIR[index%HAIR.length],cloth=OUTFITS[index%OUTFITS.length],pants=jacket?cloth:index%3===0?'#b4a18c':'#3d4650';
-      const top=hip+1.3*height,headY=top+.57*height,cos=Math.cos(pose.heading),sin=Math.sin(pose.heading);
+      const height=1.02+(index%7-3)*.024,build=.96+(index%4)*.028,hip=seated?1.59:2.95*height,skin=SKIN[index%SKIN.length],hair=HAIR[index%HAIR.length],cloth=OUTFITS[index%OUTFITS.length],pants=jacket?cloth:index%3===0?'#b4a18c':'#3d4650';
+      const top=hip+1.3*height,headY=top+.55*height,cos=Math.cos(pose.heading),sin=Math.sin(pose.heading);
       rotation.setFromAxisAngle(UP,pose.heading);headQ.setFromAxisAngle(UP,pose.headTurn);
       function part(kind,x,y,z,sx,sy,sz,color,q){
         dummy.position.set(pose.x+x*cos+z*sin,y+pose.lift,pose.z-x*sin+z*cos);dummy.quaternion.copy(rotation);if(q)dummy.quaternion.multiply(q);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
@@ -81,40 +112,49 @@ export function createGuests(tent,objects,{mobile=false}={}) {
         if(first&&kind!=='face'){if(!colorCache.has(color))colorCache.set(color,new THREE.Color(color));def.mesh.setColorAt(i,colorCache.get(color));}
       }
       function limb(kind,a,b,r1,r2,color){direction.set(b[0]-a[0],b[1]-a[1],b[2]-a[2]);const length=direction.length();mid.set((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);jointQ.setFromUnitVectors(UP,direction.normalize());part(kind,mid.x,mid.y,mid.z,r1,kind==='skin'?length/2+.035:length,r2,color,jointQ);}
-      part('torso',0,hip-.035,0,1,height,.64,cloth);
-      part('skin',0,top+.09,0,.155,.21,.16,skin);
-      part('head',0,headY,.025,height,height,height,skin,headQ);
-      part('face',0,headY,.025,height,height,height,'#ffffff',headQ);
-      part('hair',0,headY+.035,-.015,.324*height,.405*height,.296*height,hair,headQ);
-      if(index%4===1){part('detail',0,headY-.10,-.29,.30,.43,.14,hair,headQ);part('detail',0,headY+.12,-.36,.17,.19,.16,hair,headQ);}
-      else if(index%4===2)part('detail',.17,headY+.25,-.20,.19,.13,.19,hair,headQ);
+      part('torso',0,hip-.035,0,build,height,.60,cloth);
+      part('skin',0,top+.09,0,.135,.21,.14,skin);
+      part('head',0,headY,.025,height*build,height,height,skin,headQ);
+      part('face',0,headY,.025,height*build,height,height,'#ffffff',headQ);
+      part('hair',0,headY,.025,height*build,height,height,hair,headQ);
+      if(index%4===1){part('detail',0,headY-.07,-.20,.25,.29,.12,hair,headQ);part('detail',0,headY+.14,-.25,.13,.14,.12,hair,headQ);}
+      else if(index%4===2)part('detail',.12,headY+.31,-.15,.15,.08,.13,hair,headQ);
       // Collars, shirt opening, belt and buttons distinguish outfits at table scale.
-      part('garment',0,top-.07,.245,.19,.22,.026,jacket?'#eee8d9':skin);
-      for(const side of [-1,1]){jointQ.setFromAxisAngle(new THREE.Vector3(0,0,1),side*.45);part('garment',side*.18,top-.04,.258,.20,.17,.04,jacket?'#faf5e9':cloth,jointQ);}
-      if(jacket){for(const side of [-1,1]){jointQ.setFromAxisAngle(new THREE.Vector3(0,0,1),side*.31);part('garment',side*.16,top-.35,.315,.11,.45,.028,'#293a50',jointQ);}}
-      for(let i=0;i<3;i++)part('garment',0,top-.37-i*.23,.32,.034,.035,.02,'#d6d5ca');
-      if(!dress)part('garment',0,hip+.025,.01,.81,.085,.44,'#433b33');
-      if(dress&&!seated)part('skirt',0,hip-.66,0,1,1,1,cloth);
+      // Collars sit on the cloth surface, not above the shoulder.
+      for(const side of [-1,1]){jointQ.setFromAxisAngle(new THREE.Vector3(0,0,1),side*.45);part('garment',side*.125,top-.16,.24,.105,.14,.022,jacket?'#faf5e9':cloth,jointQ);}
+      if(jacket){for(const side of [-1,1]){jointQ.setFromAxisAngle(new THREE.Vector3(0,0,1),side*.31);part('garment',side*.105,top-.39,.262,.065,.35,.022,'#293a50',jointQ);}}
+      for(let i=0;i<3;i++)part('detail',0,top-.36-i*.23,.274,.017,.017,.01,jacket?'#27394b':'#bbc1ba');
+      if(!dress)part('garment',0,hip+.018,.01,.78,.055,.41,'#433b33');
+      if(dress&&!seated)part('skirt',0,hip-.70,0,build,1,1,cloth);
       if(dress&&seated)part('detail',0,hip-.01,.35,.58,.16,.60,cloth);
       for(const side of [-1,1]){
         const stride=pose.gait*side*.47,footZ=seated?.89:stride,footY=.13+(!seated?Math.max(0,pose.gait*side)*.1:0);
-        const knee=[side*.25,seated?1.20:1.5*height,seated?.9:stride*.40],ankle=[side*.26,footY+.12,footZ];
+        const knee=[side*.25,seated?1.44:1.5*height,seated?.9:stride*.40],ankle=[side*.26,footY+.12,footZ];
         limb('limb',[side*.25,hip-.02,0],knee,.205,.19,dress?cloth:pants);
-        limb(dress?'skin':'limb',knee,ankle,.135,.15,dress?skin:pants);
-        part('detail',side*.26,footY,footZ+.12,.18,.125,.35,dress?'#765343':'#34383a');
-        const shoulder=[side*.54,top-.16,0],talk=side===1?pose.gesture:1-pose.gesture;
+        limb(dress?'skin':'limb',knee,ankle,.156,.158,dress?skin:pants);
+        part(dress?'skin':'detail',...knee,.153,.13,.151,dress?skin:pants);
+        part('shoe',side*.26,.105+(!seated?Math.max(0,pose.gait*side)*.1:0),footZ+.10,1,1,1,dress?'#765343':'#34383a');
+        const shoulder=[side*.50,top-.22,0],talk=side===1?pose.gesture:1-pose.gesture;
         let elbow=[side*.65,hip+.56,seated?.43:-stride*.38],hand=[side*.46,seated?hip+.66:hip+.02,seated?1.03:-stride*.52];
         if(person.activity==='conversation'&&side===1){hand=[.47,hip+.62+talk*.28,.85+talk*.16];elbow=[.66,hip+.44,.38];}
         if(person.activity==='cocktail'){elbow=[side*.62,hip+.58,.28];hand=[side*.29,hip+.91+(side===1?talk*.28:0),.53];}
         if(person.activity==='dance'){elbow=[side*(.62+talk*.10),hip+(side===1?.89:.36)+talk*.16,.22];hand=[side*.56,hip+(side===1?1.44:.57)+talk*.18,.51];}
+        // Overlapping closed sleeves avoid toy-like shoulder balls.
         limb('limb',shoulder,elbow,jacket?.175:.16,.17,cloth);
+        part('skin',...elbow,.118,.105,.12,skin);
         limb('skin',elbow,hand,.12,.125,skin);
-        part('skin',...hand,.11,.15,.075,skin);
+        part('skin',...hand,.095,.115,.065,skin);
+        // Individual fingers and an opposed thumb, rather than ball-shaped hands.
+        for(let finger=0;finger<4;finger++){
+          const length=[.105,.13,.12,.093][finger],fx=hand[0]+(finger-1.5)*.038;
+          part('skin',fx,hand[1]-.105-length/2,hand[2]+.016,.020,length/2,.025,skin);
+        }
+        part('skin',hand[0]-side*.082,hand[1]-.04,hand[2]+.035,.038,.07,.033,skin);
         if(side===1&&person.activity==='cocktail')part('drink',hand[0]-.025,hand[1]+.15,hand[2]+.07,1,1,1,'#f0e5cf');
       }
     });
     for(const [name,def] of Object.entries(definitions)){def.mesh.count=cursors[name];def.mesh.instanceMatrix.needsUpdate=true;if(first&&def.mesh.instanceColor)def.mesh.instanceColor.needsUpdate=true;}
     first=false;
   }
-  draw();group.userData.people=people;group.userData.update=dt=>{time+=dt;draw();};return group;
+  draw();group.userData.people=people;group.userData.visualVersion='anatomical-guests-20260929-refined';group.userData.update=dt=>{const delta=Number(dt);if(!Number.isFinite(delta)||delta<=0)return;time+=Math.min(.1,delta);draw();};return group;
 }

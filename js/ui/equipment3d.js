@@ -1,3 +1,6 @@
+import {makeLinen} from './linen-fabric3d.js';
+import {linenDrapeProfile} from '../data/linen-spec.js';
+import {byId as linenById} from '../data/linens.js';
 // One production renderer is shared by the designer, Table Studio and visual QA.
 // Keep the existing table/linen/floor topology; refine photo-referenced furniture
 // without changing the placement state, product IDs or quote quantities.
@@ -7,10 +10,12 @@ import {referenceChair,refineReferenceTable} from './furniture-reference3d.js';
 import {chairPositions} from '../core/seating.js';
 import {byId as chairById} from '../data/chairs.js';
 import {byId as tableById} from '../data/tables.js';
-export {mergeParts,tableProfile,makeDanceFloor} from './equipment-base3d.js';
+export {mergeParts,makeDanceFloor} from './equipment-base3d.js';
+export function tableProfile(item){return linenDrapeProfile(item,base.tableProfile(item),linenById(item.linenId));}
 export function makeChair(def={}){return referenceChair(def,base.mergeParts)||base.makeChair(def);}
 export function makeTable(item){
- const g=base.makeTable({...item,hideChairs:true}),p=g.userData.profile,def=tableById(item.tableId)||{};
+ const g=base.makeTable({...item,hideChairs:true,linenId:null}),p=tableProfile(item),def=tableById(item.tableId)||{};g.userData.profile=p;
+ const cloth=makeLinen(item,p);if(cloth){base.mergeParts(cloth);while(cloth.children.length)g.add(cloth.children[0]);}
  refineReferenceTable(g,p,def,base.mergeParts);
  const chair=chairById(item.chairId)||{},positions=item.hideChairs?[]:chairPositions({...item,widthFt:p.w,depthFt:p.d,...(p.silhouette==='sweetheart-half-round'?{rotationDeg:0}:{})},chair);
  if(positions.length){

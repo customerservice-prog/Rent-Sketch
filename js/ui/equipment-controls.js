@@ -1,3 +1,4 @@
+import { linenCoverageLabel } from '../data/linen-spec.js';
 import { tabletopSvg } from './tabletop-symbols.js';
 import { chairPlanSvg } from './equipment-symbols.js';
 import { chairPositions } from '../core/seating.js';
@@ -103,7 +104,7 @@ export function tableControls(item, table, chairs, linens, matchingCount=1) {
       </div></div>
     </div>`:'<p class="equipment-note">Standing / service table · no chairs</p>'}
     <label class="equipment-field">Linen<select data-role="insp-linen" data-id="${esc(item.id)}"><option value="">No linen</option>${options(linens,item.linenId)}</select></label>
-    ${item.linenId?`<div class="equipment-field"><span>Linen color · ${esc(color)}</span><div class="linen-swatches" role="group" aria-label="Linen color" data-scroll-key="linen-colors">${colors.map(c=>`<button type="button" class="linen-swatch" style="--swatch:${linenColorHex(c)}" data-role="insp-linen-swatch" data-id="${esc(item.id)}" data-color="${esc(c)}" aria-label="${esc(c)}" title="${esc(c)}" aria-pressed="${c===color}"><span aria-hidden="true">${c===color?'✓':''}</span></button>`).join('')}</div></div>`:''}
+    ${item.linenId?`<p class="equipment-note" data-linen-coverage>${esc(linenCoverageLabel(linen,table))}${linen?.productId&&!colors.includes(color)?' Saved color is no longer listed; confirm it with Friendly.':''}</p><div class="equipment-field"><span>${linen?.colorsVerified?'Catalog color':'Preview color — confirm availability'} · ${esc(color)}</span><div class="linen-swatches" role="group" aria-label="Linen color" data-scroll-key="linen-colors">${colors.map(c=>`<button type="button" class="linen-swatch" style="--swatch:${linenColorHex(c)}" data-role="insp-linen-swatch" data-id="${esc(item.id)}" data-color="${esc(c)}" aria-label="${esc(c)}" title="${esc(c)}" aria-pressed="${c===color}"><span aria-hidden="true">${c===color?'✓':''}</span></button>`).join('')}</div></div>`:''}
     ${matchingCount>1?`<div class="match-table-style"><button type="button" class="btn-secondary" data-role="insp-match-tables" data-id="${esc(item.id)}">Use chairs &amp; linen on all ${matchingCount} matching tables</button><span>Table positions and seat counts stay the same.</span></div>`:''}
     `;
 }
