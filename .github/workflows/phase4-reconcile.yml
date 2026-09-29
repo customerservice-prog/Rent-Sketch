@@ -1,0 +1,35 @@
+name: Phase 4 source reconciliation
+on:
+  push:
+    branches: [qa/phase4-finish-20260929]
+    paths: [.github/workflows/phase4-reconcile.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Capture source and exact pending delta
+        run: |
+          mkdir -p evidence
+          git archive origin/main | gzip > evidence/main-source.tgz
+          git archive origin/qa/phase4-linens-20260929 | gzip > evidence/pending-source.tgz
+          git diff --stat 6edbdbecc78c1c1553c82eab621fe84a8498595e origin/qa/phase4-linens-20260929 > evidence/pending-stat.txt
+          git diff --binary 6edbdbecc78c1c1553c82eab621fe84a8498595e origin/qa/phase4-linens-20260929 > evidence/pending.patch
+          git rev-parse origin/main origin/qa/phase4-linens-20260929 > evidence/refs.txt
+      - name: Runtime dependencies for offline verification
+        run: |
+          npm --prefix tests ci
+          tar -czf evidence/test-deps.tgz -C tests node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase4-reconciliation
+          path: evidence
+          retention-days: 7
