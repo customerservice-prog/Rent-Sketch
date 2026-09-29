@@ -1,6 +1,12 @@
 import { linenFitsTable } from '../data/linens.js';
 // Catalog identities for rentals that attach to a table or a tent.
 const text=value=>String(value||'');
+// Verified Friendly catalog identities, not guessed from display names.
+const FRIENDLY_WALLS={
+ 'fpr:10x10-pop-up-sidewall':{panelFt:10,type:'solid'},
+ 'fpr:20-side-wall-tent':{panelFt:20,type:'solid'},
+ 'fpr:20-side-wall-with-windows':{panelFt:20,type:'window',windowStyle:'cathedral'},
+};
 const amount=value=>value==null||value===''||!Number.isFinite(Number(value))?null:Number(value);
 export function contextualProducts(catalog={}){
  const rows=[],products=(catalog.products||[]).filter(p=>p.active!==false),live=new Map(products.map(p=>[p.id,p]));
@@ -14,8 +20,9 @@ export function contextualProducts(catalog={}){
    rows.push({id:p.id,productId:p.id,sourceId:visual.id,kind:'lighting',name,photoUrl:p.photo_url||p.image_url||null,visual:visual.visual,widthFt:Number(p.width_ft)||null,lengthFt:Number(p.length_ft)||null,pricePerDay:catalog.showPrices===false?null:amount(p.price_per_day)});
   }else if(/side\s*wall/i.test(name)||category==='sidewall'){
    const parsed=name.match(/(?:^|\D)(10|15|20|30|40)\s*(?:ft|foot|feet|['′])/i);
-   const panelFt=Number(metadata.panel_width_ft)||Number(p.width_ft)||(parsed?Number(parsed[1]):null);
-   rows.push({id:p.id,productId:p.id,sourceId:p.visual_model_id||null,kind:'sidewall',name,photoUrl:p.photo_url||p.image_url||null,type:['solid','window'].includes(metadata.sidewall_type)?metadata.sidewall_type:/window|cathedral/i.test(name+' '+(p.visual_model_id||''))?'window':/solid|opaque/i.test(name+' '+(p.visual_model_id||''))?'solid':null,panelFt,pricePerDay:catalog.showPrices===false?null:amount(p.price_per_day)});
+   const reference=FRIENDLY_WALLS[p.external_id]||{};
+   const panelFt=Number(metadata.panel_width_ft)||Number(p.width_ft)||reference.panelFt||(parsed?Number(parsed[1]):null);
+   rows.push({id:p.id,productId:p.id,sourceId:p.visual_model_id||null,kind:'sidewall',name,photoUrl:p.photo_url||p.image_url||null,windowStyle:reference.windowStyle||null,type:['solid','window'].includes(metadata.sidewall_type)?metadata.sidewall_type:reference.type||(/window|cathedral/i.test(name+' '+(p.visual_model_id||''))?'window':/solid|opaque/i.test(name+' '+(p.visual_model_id||''))?'solid':null),panelFt,pricePerDay:catalog.showPrices===false?null:amount(p.price_per_day)});
   }
  }
  return rows.filter((row,index)=>rows.findIndex(other=>other.kind===row.kind&&other.id===row.id)===index);

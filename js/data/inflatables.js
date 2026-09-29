@@ -12,10 +12,10 @@ export const INFLATABLE_PROFILES = [
   profile('wedding-white-bounce-house','white',['#f5f1e8','#fffcf4','#ece7dd','#ffffff'],15,18,14,{variant:'wedding-white'}),
   profile('fire-truck-water-slide-bounce-house','firetruck',['#cf302d','#ed5740','#29313c','#ead6bf'],16,32,15,{combo:true,variant:'firetruck'}),
   profile('pirate-ship-slide-combo-bounce-house','pirate',['#bd643c','#ee9b37','#2849ae','#6e412f'],16,32,16,{combo:true,variant:'pirate'}),
-  profile('tidal-wave-inflatable-water-slide','slide',['#1678b6','#f2f2ec','#2ca6d8','#1e4d83'],16,32,17,{lanes:2,variant:'tidal-wave',wave:true}),
-  profile('fire-red-marble-inflatable-water-slide','slide',['#e44125','#ffca3b','#dc3024','#717a7c'],16,32,18,{lanes:2,marble:true,variant:'fire-marble',flame:true}),
+  profile('tidal-wave-inflatable-water-slide','slide',['#1678b6','#f2f2ec','#2ca6d8','#1e4d83'],16,32,17,{lanes:1,variant:'tidal-wave',wave:true}),
+  profile('fire-red-marble-inflatable-water-slide','slide',['#e44125','#ffca3b','#dc3024','#717a7c'],16,32,18,{lanes:1,marble:true,variant:'fire-marble'}),
   profile('18ft-purple-tropical-marble-double-bay-waterslide','slide',['#753dac','#f2be33','#17b6dd','#702c9c'],18,36,18,{lanes:2,palms:true,marble:true,variant:'purple-tropical'}),
-  profile('22ft-tropical-lava-wave-marble-waterslide','slide',['#b82420','#ffbf2f','#d74329','#e3811d'],18,40,22,{lanes:2,palms:true,marble:true,variant:'lava-wave',wave:true}),
+  profile('22ft-tropical-lava-wave-marble-waterslide','slide',['#b82420','#ffbf2f','#d74329','#e3811d'],18,40,22,{lanes:1,palms:true,marble:true,variant:'lava-wave',wave:true}),
 ];
 const normal=v=>String(v||'').toLowerCase().replace(/×/g,'x').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 export function isInflatableProduct(p){return p?.active!==false && !/package|cover|blower|repair|accessor/i.test(p?.name||'') && /\bbounce\s*house\b|\bwater\s*slide\b|\bwaterslide\b|\bobstacle\s*course\b|\binflatable\s+(?:slide|game|combo)\b/i.test(p?.name||'');}
@@ -23,7 +23,10 @@ function positive(v){const n=Number(v);return Number.isFinite(n)&&n>0&&n<=200?n:
 export function inflatableCatalog(products,showPrices){
   return products.filter(isInflatableProduct).map(p=>{
     const slug=normal(String(p.external_id||'').split(':').pop()),metadata=p.metadata||{};
-    const known=INFLATABLE_PROFILES.find(m=>m.slug===slug||m.slug===normal(p.name));
+    // Stable source identity wins over a renamed or duplicated display name.
+    const bySlug=INFLATABLE_PROFILES.find(m=>m.slug===slug);
+    const nameMatches=INFLATABLE_PROFILES.filter(m=>m.slug===normal(p.name));
+    const known=bySlug||(nameMatches.length===1?nameMatches[0]:null);
     // Unknown tenants get a labeled illustrative profile, never another tenant's item.
     const style=metadata.inflatableStyle || (/slide/i.test(p.name)?(/bounce/i.test(p.name)?'combo':'slide'):'castle');
     const model=known||{style,colors:['#247ab1','#efd33c','#ef644e','#3d9b67'],widthFt:style==='castle'?15:16,depthFt:style==='castle'?18:32,heightFt:16,lanes:1,combo:style==='combo'};
@@ -35,7 +38,7 @@ export function inflatableCatalog(products,showPrices){
 }
 export function byId(id){return INFLATABLES.find(p=>p.id===id);}
 function visualProfile(product={}){
- return {version:2,slug:String(product.slug||''),variant:String(product.variant||''),style:['castle','crayon','white','firetruck','pirate','slide','combo'].includes(product.style)?product.style:'castle',colors:(Array.isArray(product.colors)?product.colors:[]).slice(0,4).map(c=>/^#[0-9a-f]{3,8}$/i.test(c)?c:'#70998b'),combo:product.combo===true,lanes:product.lanes===2?2:1,palms:product.palms===true,marble:product.marble===true,wave:product.wave===true,flame:product.flame===true};
+ return {version:3,slug:String(product.slug||''),variant:String(product.variant||''),style:['castle','crayon','white','firetruck','pirate','slide','combo'].includes(product.style)?product.style:'castle',colors:(Array.isArray(product.colors)?product.colors:[]).slice(0,4).map(c=>/^#[0-9a-f]{3,8}$/i.test(c)?c:'#70998b'),combo:product.combo===true,lanes:product.lanes===2?2:1,palms:product.palms===true,marble:product.marble===true,wave:product.wave===true,flame:product.flame===true};
 }
 export function inflatableItem(product,id,x=0,y=0){
  return {id,kind:'inflatable',inflatableId:product.id,productId:product.productId||null,externalId:product.externalId||null,name:product.name||'Inflatable',widthFt:product.widthFt,depthFt:product.depthFt,modelWidthFt:product.widthFt,modelDepthFt:product.depthFt,heightFt:product.heightFt,footprintOriented:true,dimensionsConfirmed:product.dimensionsConfirmed===true,heightConfirmed:product.heightConfirmed===true,modelProfile:visualProfile(product),rotationDeg:0,x,y};
@@ -46,7 +49,14 @@ export function resolvedInflatableDefinition(item,definition=byId(item?.inflatab
  if(!item)return null;
  const saved=item.modelProfile&&typeof item.modelProfile==='object'?item.modelProfile:null;
  if(!definition&&!saved)return null;
- const profile=visualProfile(saved||definition),local=objectLocalDimensions(item);
+ let profile=visualProfile(saved||definition);
+ // Upgrade only known legacy Friendly visual profiles by their immutable
+ // external identity. Saved dimensions, position and rotation never change.
+ const source=String(item.externalId||definition?.externalId||'');
+ const legacyReference=source.startsWith('fpr:')&&(!saved||Number(saved.version||1)<3)
+   ? INFLATABLE_PROFILES.find(p=>p.slug===source.slice(4)) : null;
+ if(legacyReference)profile=visualProfile(legacyReference);
+ const local=objectLocalDimensions(item);
  if(profile.colors.length<3)profile.colors=['#247ab1','#efd33c','#ef644e','#3d9b67'];
  return {...definition,...profile,id:item.inflatableId||definition?.id,productId:item.productId||definition?.productId||null,externalId:item.externalId||definition?.externalId||null,name:item.name||definition?.name||'Inflatable — confirm selection',widthFt:positive(item.modelWidthFt)||(positive(item.widthFt)&&positive(local.widthFt))||positive(definition?.widthFt)||15,depthFt:positive(item.modelDepthFt)||(positive(item.depthFt)&&positive(local.depthFt))||positive(definition?.depthFt)||18,heightFt:positive(item.heightFt)||positive(definition?.heightFt)||16,dimensionsConfirmed:typeof item.dimensionsConfirmed==='boolean'?item.dimensionsConfirmed:definition?.dimensionsConfirmed===true,heightConfirmed:typeof item.heightConfirmed==='boolean'?item.heightConfirmed:definition?.heightConfirmed===true,pricePerDay:definition?.pricePerDay??null};
 }
@@ -54,7 +64,12 @@ export function inflatableSizeLabel(p){return p.dimensionsConfirmed?`${p.widthFt
 // Shared geometry/activity coordinates: feet, positive Z toward the entrance.
 export function inflatableZones(p){
   const w=p.widthFt,d=p.depthFt,h=p.heightFt;
-  if(p.combo)return {bounce:{x:0,z:-d*.26,w:w*.75,d:d*.32,floor:1.35},slide:{x:0,z0:-d*.08,z1:d*.33,y0:h*.50,y1:1.3,width:w*.48,lanes:1}};
-  if(p.style==='slide')return {slide:{x:0,z0:-d*.33,z1:d*.30,y0:h*.73,y1:1.3,width:w*.74,lanes:p.lanes||1}};
+  if(p.combo)return {bounce:{x:0,z:-d*.25,w:w*.72,d:d*.34,floor:1.35},slide:{x:0,z0:-d*.05,z1:d*.23,y0:h*.48,y1:1.30,width:w*.36,lanes:1,laneWidth:w*.32,climb:{x:-w*.28,width:w*.10}}};
+  if(p.style==='slide'){
+    const photoSingle=['tidal-wave','fire-marble','lava-wave'].includes(p.variant);
+    if(photoSingle)return {slide:{x:w*.18,z0:-d*.33,z1:d*.26,y0:h*.69,y1:1.3,width:w*.35,laneWidth:w*.32,lanes:1,laneCenters:[w*.18],climb:{x:-w*.22,width:w*.22}}};
+    if(p.variant==='purple-tropical')return {slide:{x:0,z0:-d*.33,z1:d*.26,y0:h*.69,y1:1.3,width:w*.98,laneWidth:w*.255,lanes:2,laneCenters:[-w*.245,w*.245],climb:{x:0,width:w*.12}}};
+    return {slide:{x:0,z0:-d*.33,z1:d*.30,y0:h*.73,y1:1.3,width:w*.74,lanes:p.lanes||1}};
+  }
   return {bounce:{x:0,z:-d*.06,w:w*.74,d:d*.64,floor:1.35}};
 }
