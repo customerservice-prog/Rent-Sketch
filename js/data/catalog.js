@@ -30,6 +30,23 @@ export function liveCatalog(category, renderer, products, showPrices, requestedP
   }
   return selected.map(product=>{
     const raw=product.price_per_day,price=raw==null || raw==='' ? null : Number(raw);
-    return {...models.get(product.visual_model_id),id:product.catalogId,visualModelId:product.visual_model_id,productId:product.id,externalId:product.external_id || null,photoUrl:/^(https?:\/\/|\/(?!\/))/i.test(product.photo_url||product.image_url||'')?(product.photo_url||product.image_url):null,name:product.name || models.get(product.visual_model_id).name,pricePerDay:showPrices && price!=null && Number.isFinite(price) && price>=0 ? price : null};
+    const model=models.get(product.visual_model_id),metadata=product.metadata&&typeof product.metadata==='object'?product.metadata:{};
+    const width=Number(product.width_ft||metadata.widthFt||metadata.width_ft),length=Number(product.length_ft||metadata.lengthFt||metadata.length_ft),height=Number(product.height_ft||metadata.heightFt||metadata.height_ft);
+    const hasWidth=Number.isFinite(width)&&width>0,hasLength=Number.isFinite(length)&&length>0,hasHeight=Number.isFinite(height)&&height>0;
+    const hydrated={...model,id:product.catalogId,visualModelId:product.visual_model_id,productId:product.id,externalId:product.external_id || null,photoUrl:/^(https?:\/\/|\/(?!\/))/i.test(product.photo_url||product.image_url||'')?(product.photo_url||product.image_url):null,name:product.name || model.name,pricePerDay:showPrices && price!=null && Number.isFinite(price) && price>=0 ? price : null};
+    if(category==='table'&&hasWidth&&hasLength){
+      if(hydrated.shape==='round'&&Math.abs(width-length)<.15){hydrated.diameterFt=width;hydrated.widthFt=width;hydrated.depthFt=length;}
+      else {hydrated.widthFt=width;hydrated.depthFt=length;}
+      hydrated.dimensionsConfirmed=true;hydrated.dimensionProvenance='live-tenant-catalog';hydrated.dimensionsNote='Dimensions supplied by the live rental catalog.';
+    }
+    if(category==='chair'){
+      if(hasWidth)hydrated.seatWidthFt=width;
+      if(hasLength)hydrated.seatDepthFt=length;
+      if(hasHeight)hydrated.backHeightFt=height;
+      hydrated.dimensionsConfirmed=!!(hasWidth&&hasLength);
+      hydrated.dimensionProvenance=hydrated.dimensionsConfirmed?'live-tenant-catalog':(hydrated.dimensionProvenance||'illustrative-profile');
+      if(!hydrated.dimensionsConfirmed)hydrated.dimensionsNote=hydrated.dimensionsNote||'Chair footprint dimensions are still illustrative until measured catalog dimensions are supplied.';
+    }
+    return hydrated;
   });
 }
