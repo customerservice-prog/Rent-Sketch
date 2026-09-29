@@ -60,6 +60,7 @@ function renderFriendlyIntake(bridge) {
             <button id="plannerFind" type="button" style="padding:13px 18px;border:0;border-radius:12px;background:#183429;color:#fff;font-weight:800;cursor:pointer">Find property</button>
           </div>
           <div id="plannerLookupStatus" role="status" aria-live="polite" style="min-height:24px;margin:8px 0 4px;color:#53625a;font-size:14px"></div>
+          <div id="plannerMap" style="display:none;margin:10px 0 18px;border:1px solid #d7e1d9;border-radius:14px;overflow:hidden;background:#f4f7f4"></div>
 
           <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px">
             <label style="font-weight:700">Usable width (ft)
@@ -97,6 +98,7 @@ function renderFriendlyIntake(bridge) {
   const address = document.getElementById('plannerAddress');
   const status = document.getElementById('plannerLookupStatus');
   const find = document.getElementById('plannerFind');
+  const map = document.getElementById('plannerMap');
   const rec = document.getElementById('plannerRecommendation');
   let propertyMatch = null;
 
@@ -113,8 +115,17 @@ function renderFriendlyIntake(bridge) {
       propertyMatch = data;
       if (data.found) {
         address.value = data.matchedAddress || value;
-        status.innerHTML = '<strong>Property found:</strong> ' + esc(data.matchedAddress || value) + '. Now confirm the usable event-area dimensions below.';
+        status.innerHTML = '<strong>Property found:</strong> ' + esc(data.matchedAddress || value) + '. Confirm this is the right location, then enter the usable event-area dimensions.';
+        const lat = Number(data.coordinates?.latitude), lon = Number(data.coordinates?.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          const delta = .0015;
+          const bbox = [lon-delta,lat-delta,lon+delta,lat+delta].join(',');
+          const src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + encodeURIComponent(bbox) + '&layer=mapnik&marker=' + encodeURIComponent(lat + ',' + lon);
+          map.style.display = 'block';
+          map.innerHTML = '<iframe title="Map showing the matched event address" loading="lazy" referrerpolicy="no-referrer" style="display:block;width:100%;height:260px;border:0" src="' + src + '"></iframe><div style="padding:9px 12px;color:#66736b;font-size:12px">Map confirms the address location only. It does not measure the yard or property boundary.</div>';
+        }
       } else {
+        map.style.display = 'none'; map.innerHTML = '';
         status.textContent = data.note || 'Address was not automatically matched. You can still continue with your measurements.';
       }
       return data;
