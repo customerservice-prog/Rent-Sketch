@@ -496,7 +496,9 @@ function esc(s) {
  }
 
 
+ var phase6AuditReference=null,phase6AuditConfiguration=null;
  function catalogAuditPhase(product){
+   if(phase6AuditReference?.(product)||phase6AuditConfiguration?.(product))return 6;
    var name=String(product.name||'').toLowerCase(),cat=normCategory(product.category);
    if(cat==='tent'||/\btent\b|canopy|side\s*wall|sidewall/.test(name)) return 1;
    if(/bounce\s*house|water\s*slide|waterslide|inflatable|obstacle\s*course/.test(name)) return 2;
@@ -512,6 +514,8 @@ function esc(s) {
    if(saved.status==='approved')return {kind:'approved',label:'Approved',detail:saved.note||'Visual checked against the Friendly website product reference.',saved:true};
    if(saved.status==='rebuild')return {kind:'rebuild',label:'Rebuild required',detail:saved.note||'Marked for visual rebuild after comparison.',saved:true};
    if(saved.status==='review')return {kind:'review',label:'Needs review',detail:saved.note||'Requires another side-by-side visual check.',saved:true};
+   const phase6=phase6AuditReference?.(product);if(phase6)return {kind:'review',label:phase6.kind==='reference-only'?'Photo/spec conflict':'Photo-referenced model',detail:phase6.note};
+   if(phase6AuditConfiguration?.(product))return {kind:'review',label:'Configuration item',detail:'Supply/service option, not a standalone equipment model. No approval is implied.'};
    if(product.external_id==='fpr:stage-ramp')return {kind:'review',label:'Photo/spec conflict',detail:'Stage Ramp photo appears to show a flat platform; ramp dimensions, rise/slope and access suitability need confirmation. No model is approved.'};
    if(phase===2) return {kind:'rebuild',label:'Rebuild required',detail:'Current inflatable is a procedural planning model. Approve only after the live RentSketch shape has been checked against the Friendly product photo.'};
    if(/side\s*wall|sidewall/.test(name)){
@@ -528,6 +532,8 @@ function esc(s) {
    if(!state.tenant){mainEl().innerHTML='<div class="dash-empty">No tenant access.</div>';return;}
    try{
      var data=await api('/api/tenants/'+state.tenant+'/products'),products=data.products||[];
+     if(gen!==renderGeneration)return;
+     const phase6=await import('../js/data/phase6-reference.js?v=20260929-phase6-core1');phase6AuditReference=phase6.phase6Reference;phase6AuditConfiguration=phase6.isPhase6Configuration;
      if(gen!==renderGeneration)return;
      var selected=Number(new URLSearchParams((location.hash.split('?')[1]||'')).get('phase')||1);
      if(!(selected>=1&&selected<=7))selected=1;
