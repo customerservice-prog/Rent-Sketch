@@ -3,14 +3,15 @@ import {structuralProfile} from '../data/tentStructure.js';
 import {phase5Reference} from '../data/phase5-reference.js';
 import {shapes,material,mergeStatic} from './phase5-shapes3d.js';
 export function lightingReference(option={}){return option.reference||phase5Reference(option);}
-function lampMaterials(){return {dark:material('#24262a'),white:material('#eeeade',{roughness:.65}),silver:material('#cfd2d5',{metalness:.65,roughness:.23}),glass:material('#eef4f4',{metalness:.12,roughness:.16,transparent:true,opacity:.72,depthWrite:false}),warm:material('#fff3db',{emissive:'#ffd28a',emissiveIntensity:.7,roughness:.3}),led:material('#b9b2ff',{emissive:'#6452ff',emissiveIntensity:.9,roughness:.25})};}
+function lampMaterials(){return {dark:material('#24262a'),white:material('#eeeade',{roughness:.65}),silver:material('#cfd2d5',{metalness:.65,roughness:.23}),glass:material('#eef4f4',{metalness:.12,roughness:.16,transparent:true,opacity:.72,depthWrite:false}),warm:material('#fff3db',{emissive:'#ffd28a',emissiveIntensity:.7,roughness:.3}),led:material('#6553b2',{emissive:'#4420c5',emissiveIntensity:.9,roughness:.25})};}
 export function createUplight(m=lampMaterials()){
  const g=new THREE.Group(),s=shapes(g);g.name='Six-lens wireless uplight';
- s.box(.56,.56,.54,m.dark,0,.32,0,.04,'Black fixture');
- for(const x of [-.315,.315])s.box(.035,.57,.24,m.dark,x,.29,0,.011);s.box(.67,.04,.37,m.dark,0,.035,0,.014,'Support yoke');
+ s.box(.56,.64,.54,m.dark,0,.37,0,.04,'Black fixture');
+ for(const x of [-.267,.267])s.box(.046,.064,.54,m.dark,x,.718,0,.013,'Lens guard');for(const z of [-.246,.246])s.box(.56,.064,.046,m.dark,0,.718,z,.013,'Lens guard');
+ for(const x of [-.315,.315])s.box(.035,.65,.24,m.dark,x,.33,0,.011);s.box(.67,.04,.37,m.dark,0,.035,0,.014,'Support yoke');
  s.box(.28,.085,.015,m.silver,0,.30,.279,.004);s.box(.24,.055,.015,m.dark,0,.30,.289,.003);
  for(const x of [-.10,-.03,.04,.11]){const a=s.cyl(.012,.012,m.silver,x,.205,.284,10);a.rotation.x=Math.PI/2;}
- for(let i=0;i<6;i++){const a=i===5?0:i/5*Math.PI*2,x=i===5?0:Math.sin(a)*.173,z=i===5?0:Math.cos(a)*.173;s.cyl(.075,.018,m.silver,x,.607,z,18);s.cyl(.061,.021,m.led,x,.617,z,18);}
+ for(let i=0;i<6;i++){const a=i===5?0:i/5*Math.PI*2,x=i===5?0:Math.sin(a)*.173,z=i===5?0:Math.cos(a)*.173;s.cyl(.075,.018,m.silver,x,.696,z,18);s.cyl(.061,.009,m.led,x,.707,z,18);}
  g.userData={fixtureCount:1,lensesPerFixture:6};return mergeStatic(g);
 }
 export function createChandelier(m=lampMaterials()){
@@ -33,7 +34,7 @@ export function createChandelier(m=lampMaterials()){
 }
 export function createRopeReel(m=lampMaterials()){
  const g=new THREE.Group(),s=shapes(g);g.name='LED rope lighting reference reel';
- for(const y of [.08,.92])s.cyl(.49,.035,m.dark,0,y,0,48);s.cyl(.30,.82,m.dark,0,.50,0,32);
+ for(const y of [.08,.92]){const rim=s.mesh(new THREE.TorusGeometry(.455,.035,6,48),m.dark,0,y,0);rim.rotation.x=Math.PI/2;s.cyl(.115,.036,m.dark,0,y,0,24);for(let i=0;i<5;i++){const a=i/5*Math.PI*2;s.rod([Math.sin(a)*.07,y,Math.cos(a)*.07],[Math.sin(a)*.46,y,Math.cos(a)*.46],.025,m.dark);}}s.cyl(.30,.82,m.dark,0,.50,0,32);
  const points=[];for(let i=0;i<=900;i++){const a=i/900*13*Math.PI*2;points.push([Math.sin(a)*.41,.13+i/900*.73,Math.cos(a)*.41]);}
  s.mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),600,.025,6,false),m.white); // A reference spool, not a scale claim about the full cable length.
  for(let i=0;i<168;i++){const t=i/168,a=t*13*Math.PI*2;s.mesh(new THREE.SphereGeometry(.012,5,4),m.warm,Math.sin(a)*.435,.13+t*.73,Math.cos(a)*.435);}
@@ -42,8 +43,8 @@ export function createRopeReel(m=lampMaterials()){
 export function createStringFixture(type='c7',m=lampMaterials()){
  const g=new THREE.Group(),s=shapes(g),isBistro=type==='bistro',socket=isBistro?m.dark:m.white;
  s.cyl(isBistro?.043:.030,isBistro?.12:.065,socket,0,-.055,0,10);
- if(isBistro){const q=s.mesh(new THREE.SphereGeometry(.081,12,10),m.warm,0,-.177,0,'Round bistro bulb');q.scale.y=1.18;}
- else{s.lathe([[0,0],[.014,.025],[.032,.074],[.028,.103],[.022,.119]],m.warm,0,-.205,0,10);}
+ if(isBistro){const glass=material('#eed9b7',{transparent:true,opacity:.48,roughness:.14,depthWrite:false});const q=s.mesh(new THREE.SphereGeometry(.081,16,12),glass,0,-.177,0,'Round bistro bulb');q.scale.y=1.18;s.curve([[-.022,-.115,0],[-.026,-.18,0],[0,-.227,0],[.026,-.18,0],[.022,-.115,0]],.004,m.warm);}else for(let i=0;i<8;i++){const a=i/8*Math.PI*2;s.rod([Math.sin(a)*.028,-.083,Math.cos(a)*.028],[Math.sin(a)*.028,-.025,Math.cos(a)*.028],.003,m.white);}
+ if(!isBistro){s.lathe([[0,0],[.014,.025],[.032,.074],[.028,.103],[.022,.119]],m.warm,0,-.205,0,10);}
  return g;
 }
 // Used by both the real tent renderer and the product audit. Photometric output is illustrative.

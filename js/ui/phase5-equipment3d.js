@@ -35,7 +35,7 @@ export function createPhase5Equipment(product,item={}){
   for(const x of [-.42,.42])box(.025,.88,.72,yellow,x,.46,.03,.008);
   box(.32,.035,.28,yellow,0,.963,-.08,.012,'Carrying handle');for(const x of [-.15,.15])box(.025,.08,.16,yellow,x,.92,-.08);
   box(.075,.27,.025,black,-.18,.66,.23,.008,'Switch');box(.20,.29,.025,black,.14,.66,.23,.01,'Breaker cover');
-  for(const x of [-.18,.15])for(const y of [.20,.35]){const ring=cyl(.077,.028,black,x,y,.237,20);ring.rotation.x=Math.PI/2;for(const dx of [-.021,.021])box(.011,.039,.006,silver,x+dx,y+.01,.256,.001);const ground=cyl(.014,.008,silver,x,y-.027,.257,10);ground.rotation.x=Math.PI/2;}
+  for(const x of [-.18,.15])for(const y of [.20,.35]){const ring=cyl(.064,.028,black,x,y,.237,20);ring.scale.set(1.2,1,.70);ring.rotation.x=Math.PI/2;for(const dx of [-.021,.021])box(.011,.039,.006,silver,x+dx,y+.01,.256,.001);const ground=cyl(.014,.008,silver,x,y-.027,.257,10);ground.rotation.x=Math.PI/2;}
   for(const x of [-.27,.27])for(const y of [.10,.84]){const screw=cyl(.016,.009,silver,x,y,.222,10);screw.rotation.x=Math.PI/2;}
   root.userData.features={enclosure:'yellow',visibleReceptacles:4,producesPower:false};mergeStatic(body);
  }else if(ref.type==='stage'){

@@ -7,7 +7,7 @@ const scene=new THREE.Scene();scene.background=new THREE.Color('#e6ebe7');scene.
 const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,.005,500);let model;
 window.renderProduct=(id,installed=false,night=false)=>{
  if(model){scene.remove(model);model.traverse(o=>o.geometry?.dispose());}
- const p=products.find(p=>p.id===id),result=phase5Model(p,products,{installed});if(!result)return {id,supported:false};model=result.model;scene.add(model);model.userData.setNight?.(night);
+ const p=products.find(p=>p.id===id),result=phase5Model(p,products,{installed});if(!result)return {id,supported:false};model=result.model;scene.background.set(model.userData.previewBackground||'#e6ebe7');scene.add(model);model.userData.setNight?.(night);
  const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),direction=new THREE.Vector3(.75,.62,1).normalize();
  const dist=Math.max(size.x,size.y,size.z)/(2*Math.tan(camera.fov*Math.PI/360))*1.65;camera.position.copy(center).addScaledVector(direction,dist);camera.lookAt(center);r.render(scene,camera);
  return {id,name:p.name,supported:true,note:result.note,features:model.userData.features||null,meshChildren:model.children.length};
