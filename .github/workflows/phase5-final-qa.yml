@@ -1,0 +1,71 @@
+name: Reviewed Phase 5 final QA
+on:
+  push:
+    branches: [qa/phase5-equipment-20260929]
+    paths: [.github/workflows/phase5-final-qa.yml]
+permissions: {contents: write, actions: read}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply reviewed detail corrections
+        run: |
+          python3 .github/phase5-visual-refine.py
+          node --check js/ui/lighting-reference3d.js
+          node --check js/ui/catalog-phase5.js
+          node --check js/ui/catalog-furniture3d.js
+          git diff --check
+          git diff --exit-code 485a87d9b67ead7e7d4cc88011eabbe5fad7e773 -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js
+      - name: Restore only public reference fixtures from the successful first comparison
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh run download 36600156515 -n phase5-model-review -D /tmp/phase5-original
+          mkdir -p qa-phase5/references
+          cp /tmp/phase5-original/catalog.json /tmp/phase5-original/website.json /tmp/phase5-original/manifest.json qa-phase5/
+          cp /tmp/phase5-original/references/* qa-phase5/references/
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase5-browser --no-save playwright@1.56.1
+      - run: /tmp/phase5-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Focused source, geometry and unchanged booking tests
+        run: |
+          set -o pipefail
+          node --test tests/phase5-catalog.test.mjs tests/book-now-contract.test.mjs tests/contextual-products.test.mjs tests/party-scene.test.mjs tests/equipment-assets.test.mjs tests/furniture-catalog.test.mjs tests/phase4-linens.test.mjs | tee qa-phase5/unit-tests.log
+          node --experimental-vm-modules tests/phase5-mesh.cjs | tee qa-phase5/mesh-tests.log
+          node --experimental-vm-modules tests/equipment-assets-mesh.cjs | tee qa-phase5/equipment-regression.log
+          node --experimental-vm-modules tests/phase4-render.cjs | tee qa-phase5/linen-regression.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs | tee qa-phase5/furniture-regression.log
+      - name: Inspect actual desktop and mobile 3D previews
+        env: {NODE_PATH: /tmp/phase5-browser/node_modules}
+        run: node tests/phase5-browser.cjs
+      - name: Save tested candidate to QA only and create exact release entries
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js/ui/catalog-phase5.js js/ui/catalog-furniture3d.js js/ui/lighting-reference3d.js js/ui/phase5-floor3d.js js/ui/phase5-equipment3d.js catalog-preview/index.html designer/index.html tests/phase5-harness.html
+          git commit -m 'Refine inspected lamp closeups, reel spokes, recessed lenses and floor finish'
+          git push origin HEAD:refs/heads/qa/phase5-equipment-20260929
+          python3 - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          base='485a87d9b67ead7e7d4cc88011eabbe5fad7e773'
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          paths=[p for p in paths if not p.startswith('.github/')]
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()} for p in paths]
+          Path('qa-phase5/release-tree.json').write_text(json.dumps({'base':base,'testedCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'entries':entries},indent=2))
+          PY
+      - name: Package exact rendered source
+        if: always()
+        run: |
+          mkdir -p qa-phase5
+          tar -czf qa-phase5/runtime-source.tgz js tests/phase5* catalog-preview designer dashboard docs/phase5-equipment-20260929.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase5-final-reviewed
+          path: qa-phase5
+          retention-days: 7
