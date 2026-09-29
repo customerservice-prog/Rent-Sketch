@@ -1,3 +1,4 @@
+import {phase5Reference} from './phase5-reference.js';
 // RentSketch dance-floor and stage renderer primitives. Prices are tenant data
 // and are hydrated from the live catalog after tenant startup.
 
@@ -28,20 +29,19 @@ export const STAGE_STAIR = { id: 'stage-stair', name: 'Stage Stair', pricePerDay
 export const STAGE_SKIRT = { id: 'stage-skirt', name: 'Stage Skirt', pricePerDay: null };
 
 function price(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)?n:null;}
-function reset(){[DANCE_SECTION,STAGE_SECTION,STAGE_RAMP,STAGE_STAIR,STAGE_SKIRT].forEach(x=>{x.pricePerDay=null;delete x.productId;delete x.photoUrl;delete x.dimensionsConfirmed;});}
-function applyTenantDance(detail){
+function reset(){[DANCE_SECTION,STAGE_SECTION,STAGE_RAMP,STAGE_STAIR,STAGE_SKIRT].forEach(x=>{x.pricePerDay=null;delete x.productId;delete x.photoUrl;delete x.dimensionsConfirmed;delete x.externalId;delete x.reference;});}
+export function applyTenantDance(detail){
   reset();
-  const tenant=detail&&detail.tenant||window.ACTIVE_TENANT||{};
-  if(tenant.slug==='generic'||tenant.showPrices===false)return;
-  const products=(detail&&detail.products)||[];
-  const live=products.filter(p=>p&&p.active!==false&&String(p.category||'').toLowerCase()==='dance_floor');
-  const exactFloors=live.filter(p=>p.visual_model_id==='dance-floor'&&(/3\s*[x×]\s*3/i.test(p.name||'')||(Number(p.width_ft)===3&&Number(p.length_ft)===3)));
-  const floor=exactFloors.length===1?exactFloors[0]:null;
-  if(floor&&price(floor)!=null){DANCE_SECTION.pricePerDay=price(floor);DANCE_SECTION.productId=floor.id;DANCE_SECTION.photoUrl=floor.photo_url||floor.image_url||null;DANCE_SECTION.dimensionsConfirmed=true;if(floor.name)DANCE_SECTION.name=floor.name;}
-  const stage=live.find(p=>p.visual_model_id==='stage-section');
-  if(stage&&price(stage)!=null){STAGE_SECTION.pricePerDay=price(stage);STAGE_SECTION.productId=stage.id;if(stage.name)STAGE_SECTION.name=stage.name;}
-  const ramp=live.find(p=>/stage\s*ramp/i.test(p.name||''));if(ramp&&price(ramp)!=null){STAGE_RAMP.pricePerDay=price(ramp);STAGE_RAMP.productId=ramp.id;STAGE_RAMP.name=ramp.name||STAGE_RAMP.name;}
-  const stair=live.find(p=>/stage\s*stair/i.test(p.name||''));if(stair&&price(stair)!=null){STAGE_STAIR.pricePerDay=price(stair);STAGE_STAIR.productId=stair.id;STAGE_STAIR.name=stair.name||STAGE_STAIR.name;}
-  const skirt=live.find(p=>/stage\s*skirt/i.test(p.name||''));if(skirt&&price(skirt)!=null){STAGE_SKIRT.pricePerDay=price(skirt);STAGE_SKIRT.productId=skirt.id;STAGE_SKIRT.name=skirt.name||STAGE_SKIRT.name;}
+  const tenant=detail?.tenant||(typeof window!=='undefined'?window.ACTIVE_TENANT:null)||{};
+  if(tenant.slug==='generic')return;
+  const live=(detail?.products||[]).filter(p=>p&&p.active!==false&&String(p.category||'').toLowerCase()==='dance_floor');
+  const unique=predicate=>{const rows=live.filter(predicate);return rows.length===1?rows[0]:null;};
+  const assign=(target,product)=>{if(!product)return;target.productId=product.id;target.externalId=product.external_id||null;target.name=product.name||target.name;target.photoUrl=product.photo_url||product.image_url||null;target.pricePerDay=tenant.showPrices===false?null:price(product);target.reference=phase5Reference(product);};
+  const floor=unique(p=>p.visual_model_id==='dance-floor'&&(/3\s*[x×]\s*3/i.test(p.name||'')||(Number(p.width_ft)===3&&Number(p.length_ft)===3)));
+  assign(DANCE_SECTION,floor);if(floor)DANCE_SECTION.dimensionsConfirmed=true;
+  assign(STAGE_SECTION,unique(p=>p.visual_model_id==='stage-section'));
+  assign(STAGE_RAMP,unique(p=>p.external_id==='fpr:stage-ramp'||/stage\s*ramp/i.test(p.name||'')));
+  assign(STAGE_STAIR,unique(p=>p.external_id==='fpr:stage-stair'||/stage\s*stair/i.test(p.name||'')));
+  assign(STAGE_SKIRT,unique(p=>p.external_id==='fpr:8ft-x-31in-stage-skirt'||/stage\s*skirt/i.test(p.name||'')));
 }
 if(typeof window!=='undefined')window.addEventListener('rentsketch:catalogReady',e=>applyTenantDance(e.detail||{}));

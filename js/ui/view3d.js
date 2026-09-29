@@ -17,7 +17,8 @@ import { createWeather } from './scene-weather.js';
 import { createGuests } from './scene-guests.js';
 import { createPartyStyling } from './party-styling.js';
 import { sceneSetting } from './scene-setting.js';
-import { byId as lightingById } from '../data/lighting.js';
+import { lightingForTent } from '../data/lighting.js';
+import { makeReferenceLighting } from './lighting-reference3d.js';
 import { fitTentCamera } from './view3d-framing.js';
 import { createMarketingDetails } from './marketing-details.js';
 import { structuralProfile } from '../data/tentStructure.js';
@@ -32,50 +33,7 @@ function box(w,h,d,m){return new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m)}
 function tube(a,b,r,m,n=10){const d=new THREE.Vector3().subVectors(b,a),q=cyl(r,d.length(),m,n);q.position.copy(a).add(b).multiplyScalar(.5);q.quaternion.setFromUnitVectors(UP,d.clone().normalize());return q}
 function canvasTexture(draw,size=256){const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');draw(x,size);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;return t}
 function sky(night,raining=false){const c=document.createElement('canvas');c.width=8;c.height=256;const x=c.getContext('2d'),gr=x.createLinearGradient(0,0,0,256);if(night){gr.addColorStop(0,'#07101e');gr.addColorStop(.55,'#16263d');gr.addColorStop(1,'#334257')}else if(raining){gr.addColorStop(0,'#586b7e');gr.addColorStop(.5,'#8e9ea9');gr.addColorStop(1,'#ced8d8')}else{gr.addColorStop(0,'#79b5df');gr.addColorStop(.5,'#c5e1ef');gr.addColorStop(1,'#edf2e8')}x.fillStyle=gr;x.fillRect(0,0,8,256);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t}
-function lighting(tent, id) {
-  const option=lightingById(id),group=new THREE.Group();
-  if(!option||option.visual==='none')return group;
-  const profile=structuralProfile(tent.type,tent.widthFt,tent.lengthFt);
-  const wire=new THREE.MeshStandardMaterial({color:0x383d35,roughness:.8});
-  const bulb=new THREE.MeshStandardMaterial({color:0xffedcb,emissive:0xffc77a,emissiveIntensity:.25,roughness:.32});
-  const crystal=new THREE.MeshPhysicalMaterial({color:0xf2ead9,metalness:.08,roughness:.12,transparent:true,opacity:.82});
-  const h=profile.eaveHeightFt-.45,hw=tent.widthFt/2,hl=tent.lengthFt/2;
-  const lines=option.visual==='bistro-cross-runs'?profile.lighting.bistro:profile.lighting.perimeter;
-  if(option.visual==='chandelier'){
-    const center=tent.type==='pole'?2.4:0;
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(.85,.035,8,36),wire);ring.rotation.x=Math.PI/2;ring.position.set(center,h-.1,0);group.add(ring);
-    for(let i=0;i<8;i++){
-      const a=i*Math.PI/4,x=Math.cos(a),z=Math.sin(a);
-      const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(center,h+.35,0),new THREE.Vector3(center+x*.45,h-.2,z*.45),new THREE.Vector3(center+x*.85,h,z*.85)]);
-      group.add(new THREE.Mesh(new THREE.TubeGeometry(curve,12,.035,6,false),wire));
-      const candle=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.24,10),crystal);candle.position.set(center+x*.85,h+.12,z*.85);group.add(candle);
-      const q=new THREE.Mesh(new THREE.SphereGeometry(.10,10,8),bulb);q.scale.y=1.6;q.position.set(center+x*.85,h+.31,z*.85);group.add(q);
-      for(const r of [.43,.8]){const drop=new THREE.Mesh(new THREE.OctahedronGeometry(.095,0),crystal);drop.scale.y=2.1;drop.position.set(center+x*r,h-.3,z*r);group.add(drop);}
-    }
-    group.add(tube(new THREE.Vector3(center,h+.3,0),new THREE.Vector3(center,profile.peakHeightFt-1,0),.025,wire));
-  }else if(option.visual.startsWith('uplight')){
-    const count=option.visual==='uplight-single'?1:12;
-    for(let i=0;i<count;i++){const a=i/count*Math.PI*2,x=Math.cos(a)*(hw-.5),z=Math.sin(a)*(hl-.5),q=box(.5,.65,.5,wire);q.position.set(x,.325,z);group.add(q);const bracket=box(.65,.06,.65,wire);bracket.position.set(x,.04,z);group.add(bracket);for(let n=0;n<6;n++){const a=n*Math.PI/3,lamp=new THREE.Mesh(new THREE.CircleGeometry(.062,8),bulb);lamp.rotation.x=-Math.PI/2;lamp.position.set(x+Math.cos(a)*.13,.66,z+Math.sin(a)*.13);group.add(lamp);}}
-  }else{
-    lines.forEach(line=>{
-      const a=new THREE.Vector3(line.from.x-hw,h,line.from.y-hl),b=new THREE.Vector3(line.to.x-hw,h,line.to.y-hl),pts=[];
-      for(let i=0;i<=24;i++){const f=i/24,p=a.clone().lerp(b,f);p.y-=Math.sin(f*Math.PI)*.45;pts.push(p);}
-      group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),24,.014,5,false),wire));
-      const count=Math.max(2,Math.ceil(a.distanceTo(b)/2.5));
-      for(let i=0;i<=count;i++){const f=i/count,p=a.clone().lerp(b,f);p.y-=Math.sin(f*Math.PI)*.45+.12;const socket=new THREE.Mesh(new THREE.CylinderGeometry(.043,.052,.12,8),wire);socket.position.copy(p);socket.position.y+=.07;group.add(socket);const q=new THREE.Mesh(new THREE.SphereGeometry(.085,10,8),bulb);q.scale.y=1.3;q.position.copy(p);q.position.y-=.035;group.add(q);}
-    });
-  }
-  mergeParts(group);
-  const lights=[];
-  const rows=Math.min(3,Math.max(1,Math.ceil(tent.lengthFt/20))),cols=tent.widthFt>16?2:1;
-  for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
-    const glow=new THREE.PointLight(0xffdfb0,0,Math.max(22,Math.max(tent.widthFt,tent.lengthFt)/rows*1.8),1.3);
-    glow.position.set((col+.5)/cols*tent.widthFt-hw,h-1,(row+.5)/rows*tent.lengthFt-hl);group.add(glow);lights.push(glow);
-  }
-  let nightActive=false;group.userData.update=t=>{if(nightActive)bulb.emissiveIntensity=7+Math.sin(t*.7)*.08;};
-  group.userData.setNight=value=>{nightActive=value;lights.forEach(glow=>{glow.intensity=value?165:12;});bulb.emissiveIntensity=value?7:.7;};
-  return group;
-}
+function lighting(tent,id){return makeReferenceLighting(tent,lightingForTent(id,tent));}
 
 export function init(container,callbacks={}) {
   const mobile=window.matchMedia?.('(max-width: 880px)').matches;
