@@ -28,15 +28,16 @@ export const STAGE_STAIR = { id: 'stage-stair', name: 'Stage Stair', pricePerDay
 export const STAGE_SKIRT = { id: 'stage-skirt', name: 'Stage Skirt', pricePerDay: null };
 
 function price(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)?n:null;}
-function reset(){[DANCE_SECTION,STAGE_SECTION,STAGE_RAMP,STAGE_STAIR,STAGE_SKIRT].forEach(x=>{x.pricePerDay=null;delete x.productId;});}
+function reset(){[DANCE_SECTION,STAGE_SECTION,STAGE_RAMP,STAGE_STAIR,STAGE_SKIRT].forEach(x=>{x.pricePerDay=null;delete x.productId;delete x.photoUrl;delete x.dimensionsConfirmed;});}
 function applyTenantDance(detail){
   reset();
   const tenant=detail&&detail.tenant||window.ACTIVE_TENANT||{};
   if(tenant.slug==='generic'||tenant.showPrices===false)return;
   const products=(detail&&detail.products)||[];
   const live=products.filter(p=>p&&p.active!==false&&String(p.category||'').toLowerCase()==='dance_floor');
-  const floor=live.find(p=>p.visual_model_id==='dance-floor'&&(/3\s*[x×]\s*3/i.test(p.name||'')||(Number(p.width_ft)===3&&Number(p.length_ft)===3)))||live.find(p=>p.visual_model_id==='dance-floor');
-  if(floor&&price(floor)!=null){DANCE_SECTION.pricePerDay=price(floor);DANCE_SECTION.productId=floor.id;if(floor.name)DANCE_SECTION.name=floor.name;}
+  const exactFloors=live.filter(p=>p.visual_model_id==='dance-floor'&&(/3\s*[x×]\s*3/i.test(p.name||'')||(Number(p.width_ft)===3&&Number(p.length_ft)===3)));
+  const floor=exactFloors.length===1?exactFloors[0]:null;
+  if(floor&&price(floor)!=null){DANCE_SECTION.pricePerDay=price(floor);DANCE_SECTION.productId=floor.id;DANCE_SECTION.photoUrl=floor.photo_url||floor.image_url||null;DANCE_SECTION.dimensionsConfirmed=true;if(floor.name)DANCE_SECTION.name=floor.name;}
   const stage=live.find(p=>p.visual_model_id==='stage-section');
   if(stage&&price(stage)!=null){STAGE_SECTION.pricePerDay=price(stage);STAGE_SECTION.productId=stage.id;if(stage.name)STAGE_SECTION.name=stage.name;}
   const ramp=live.find(p=>/stage\s*ramp/i.test(p.name||''));if(ramp&&price(ramp)!=null){STAGE_RAMP.pricePerDay=price(ramp);STAGE_RAMP.productId=ramp.id;STAGE_RAMP.name=ramp.name||STAGE_RAMP.name;}
