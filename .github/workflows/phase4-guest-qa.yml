@@ -1,0 +1,109 @@
+name: Phase 4 and guest realism QA
+on:
+  push:
+    branches: [qa/phase4-finish-20260929]
+    paths: [.github/workflows/phase4-guest-qa.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/qa/phase4-finish-20260929'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Reconcile only scoped Phase 4 files and exact guest delta
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,hashlib,base64,gzip,json
+          source='d7b4abf67ece2cf99939f2087af08c188fbeea59';base='6edbdbecc78c1c1553c82eab621fe84a8498595e'
+          names=subprocess.check_output(['git','diff','--name-only',base,source],text=True).splitlines()
+          skip={'designer/index.html','js/core/bookingHandoff.js','js/ui/booking-handoff.js'}
+          names=[n for n in names if not n.startswith('.github/') and n not in skip]
+          subprocess.run(['git','diff','--exit-code',base,'HEAD','--',*names],check=True)
+          for n in names:
+            p=Path(n);p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(subprocess.check_output(['git','show',source+':'+n]))
+          encoded=Path('.github/guest-realism-payload.b64').read_text().strip()
+          # Restore transcription artifacts; the hash below rejects any remaining change.
+          for a,b in [('JoCubJbORce/fUM','JoCubJbOcc/fUM'),('snBCTykEX','snBtykEX'),('ovlGhHC','ovlOhHC'),('C0WPdI6CyX5bb','C0WPdI6wX5bb')]:encoded=encoded.replace(a,b)
+          assert hashlib.sha256(encoded.encode()).hexdigest()=='b5dfa651734eb302ed3c70ecdce96523d3d8813e942b68749a3b9e9c742a44af','Encoded patch integrity mismatch'
+          changes=json.loads(gzip.decompress(base64.b64decode(encoded,validate=True)))
+          for row in changes:
+            p=Path(row['path']);assert '..' not in p.parts and not p.is_absolute()
+            old=p.read_text() if p.exists() else None
+            assert (hashlib.sha256(old.encode()).hexdigest() if old is not None else None)==row['before'],str(p)+' changed'
+            new=row.get('content',old)
+            for start,end,text in reversed(row.get('edits',[])):new=new[:start]+text+new[end:]
+            assert hashlib.sha256(new.encode()).hexdigest()==row['after']
+            p.parent.mkdir(parents=True,exist_ok=True);p.write_text(new)
+          print('Reconciled',len(names),'Phase 4 files and',len(changes),'guest source files; booking files preserved')
+          PY
+      - name: Build only the CC0 head/scalp graphical subset
+        run: |
+          curl --fail --location --silent --show-error https://raw.githubusercontent.com/makehumancommunity/makehuman/a8bc2d54ff0ac92e78ff71431b1023eda42bf482/makehuman/data/3dobjs/base.obj -o /tmp/mh-head-source.obj
+          python3 scripts/build-guest-anatomy.py /tmp/mh-head-source.obj
+          mkdir -p docs/licenses
+          curl --fail --location --silent --show-error https://raw.githubusercontent.com/makehumancommunity/makehuman/a8bc2d54ff0ac92e78ff71431b1023eda42bf482/LICENSE.ASSETS.md -o docs/licenses/makehuman-cc0.md
+          node --check js/ui/scene-guests.js
+      - name: Update imports and retain hidden payment controls
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,json
+          p=Path('designer/index.html');s=p.read_text();version='20260929-phase4-guests-1'
+          files=['js/ui/scene-guests.js','js/data/guest-anatomy.js','js/data/linens.js','js/data/linen-spec.js','js/data/tabletop.js','js/data/tabletop-reference.js','js/ui/tabletop3d.js','js/ui/tabletop-reference3d.js','js/ui/linen-fabric3d.js','js/ui/equipment3d.js','js/ui/tableStudio.js','js/ui/equipment-controls.js','js/core/contextual-products.js','js/ui/tabletop-symbols.js']
+          m=re.search(r'(<script type="importmap">)(.*?)(</script>)',s,re.S);assert m
+          mapping=json.loads(m.group(2))
+          for f in files:mapping['imports']['../'+f]='../'+f+'?v='+version
+          s=s[:m.start(2)]+json.dumps(mapping,separators=(',',':'))+s[m.end(2):]
+          s=re.sub(r'customer-experience\.css\?v=[^"\s]+','customer-experience.css?v='+version,s);p.write_text(s)
+          p=Path('customer-experience.css');s=p.read_text();s+='\n/* Hidden payment controls must not be revealed by premium flex rules. */\n#step-review [hidden]{display:none!important}\n';p.write_text(s)
+          p=Path('tests/guest-realism-harness.html');s=p.read_text().replace('camera.position.set(0,6.8,19)','camera.position.set(0,6.8,Math.max(19,12/(2*Math.tan(camera.fov*Math.PI/360)*camera.aspect)))');p.write_text(s)
+          PY
+          git diff --check
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase4-browser --no-save playwright@1.56.1
+      - run: /tmp/phase4-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Read real product references through the public image endpoint
+        run: |
+          node <<'JS'
+          const fs=require('node:fs');
+          (async()=>{fs.mkdirSync('qa-phase4/references',{recursive:true});const read=async url=>{const r=await fetch(url,{signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(url+' '+r.status);return r.json();};const catalog=await read('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products'),website=await read('https://www.friendlypartyrental.com/api/items');fs.writeFileSync('qa-phase4/catalog.json',JSON.stringify(catalog));fs.writeFileSync('qa-phase4/website.json',JSON.stringify(website));const items=[];for(const p of catalog.products){if(!String(p.external_id||'').startsWith('fpr:'))continue;const slug=p.external_id.slice(4);if(!(p.category==='linen'||/charger|\bplate\b|\bfork\b|\bspoon\b|\bknife\b|goblet|martini|wine glass|beer glass|rocks glass|coffee mug|carafe/i.test(p.name)))continue;const row={productId:p.id,slug,name:p.name,error:null};try{const r=await fetch('https://www.friendlypartyrental.com/api/item-image/'+encodeURIComponent(slug),{signal:AbortSignal.timeout(15000)});if(!r.ok||!r.headers.get('content-type')?.startsWith('image/'))throw Error('Image '+r.status);fs.writeFileSync('qa-phase4/references/'+slug+'.img',Buffer.from(await r.arrayBuffer()));}catch(e){row.error=e.message;}items.push(row);}fs.writeFileSync('qa-phase4/manifest.json',JSON.stringify({items,checkedAt:new Date().toISOString()},null,2));console.log('Images available:',items.filter(x=>!x.error).length,'of',items.length);})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - name: Geometry, catalog and checkout regression checks
+        run: |
+          set -o pipefail
+          node --test tests/phase4-linens.test.mjs tests/furniture-accuracy.test.mjs tests/furniture-catalog.test.mjs tests/furniture-seating.test.mjs tests/furniture-placement.test.mjs tests/contextual-products.test.mjs | tee qa-phase4/unit-tests.log
+          node --experimental-vm-modules tests/phase4-render.cjs | tee qa-phase4/geometry-tests.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs
+          node --experimental-vm-modules tests/furniture-plan-dom.cjs
+          node --test tests/book-now-contract.test.mjs
+      - name: Actual production mesh browser checks
+        env: {NODE_PATH: /tmp/phase4-browser/node_modules}
+        run: |
+          node tests/phase4-capture.cjs
+          node tests/guest-realism-browser.cjs
+      - name: Commit tested source only to QA branch
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js server/src tests/phase4* tests/guest-realism* catalog-preview dashboard designer customer-experience.css scripts/build-guest-anatomy.py docs
+          if ! git diff --cached --quiet; then git commit -m 'Reconcile linen accuracy with Book Now and upgrade guest anatomy for visual review'; git push origin HEAD:refs/heads/qa/phase4-finish-20260929; fi
+          git rev-parse HEAD > qa-phase4/tested-commit.txt
+      - name: Package reviewed source
+        if: always()
+        run: |
+          mkdir -p qa-phase4
+          tar -czf qa-phase4/runtime-source.tgz js server/src tests/phase4* tests/guest-realism* catalog-preview dashboard designer customer-experience.css scripts/build-guest-anatomy.py docs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase4-guests-review
+          path: |
+            qa-phase4
+            qa-guest-realism
+          retention-days: 7
