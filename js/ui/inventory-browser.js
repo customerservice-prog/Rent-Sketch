@@ -22,7 +22,7 @@ export function bindInventoryMedia(root=globalThis.document){
 if(typeof document!=='undefined')bindInventoryMedia(document);
 const symbol=(body,viewBox='0 0 120 90')=>`<svg viewBox="${viewBox}" aria-hidden="true" focusable="false">${body}</svg>`;
 const safePhoto=value=>/^(https?:\/\/|\/(?!\/))/i.test(String(value||'').trim())?String(value).trim():null;
-function planningSymbol(p,category){
+export function planningSymbol(p,category){
  const modelId=p.visualModelId||p.sourceId||String(p.id||'').split('--')[0];
  if(category==='tent'&&p.kind!=='sidewall'){
   const frame=p.type==='frame',canopy=p.type==='canopy';
@@ -45,11 +45,11 @@ function planningSymbol(p,category){
  if(p.kind==='lighting')return symbol('<path d="M10 25q50 30 100 0" fill="none" stroke="#667a6e" stroke-width="2"/><g fill="#ffeab4" stroke="#c4ae75" stroke-width="1.4">'+[22,41,60,79,98].map((x,i)=>`<path d="M${x} ${[33,41,43,41,33][i]}v10"/><circle cx="${x}" cy="${[48,56,58,56,48][i]}" r="5"/>`).join('')+'</g>');
  return accessoryIcon(p.accessoryType||p.type||'generic');
 }
-export function equipmentPhoto(p={}, {category=p.kind||p.category||''}={}){
+export function equipmentPhoto(p={}, {category=p.kind||p.category||'',showProductPhoto=true}={}){
  const modelId=p.visualModelId||p.sourceId||String(p.id||'').split('--')[0];
  // These are existing renderer previews, never substituted product photographs.
  const preview=modelId==='fill-chill-4ft'?'':equipmentPreview(modelId,'inventory-preview-image');
- const illustration=planningSymbol(p,category),photo=safePhoto(p.photoUrl);
+ const illustration=planningSymbol(showProductPhoto?p:{...p,photoUrl:null},category),photo=showProductPhoto?safePhoto(p.photoUrl):null;
  const illustrated=`<span class="inventory-symbol">${illustration}</span><small class="inventory-source-label">${p.type==='generic'?'No preview available':'Planning illustration'}</small>`;
  const fallback=`<span class="inventory-illustration"${photo?' hidden':''}>${preview?`<span data-inventory-layer>${preview.replace('<img ','<img data-inventory-image ')}<small class="inventory-source-label">Illustrative model</small></span><span hidden>${illustrated}</span>`:illustrated}</span>`;
  return `<span class="inventory-media">${photo?`<span class="inventory-photo-layer" data-inventory-layer><img class="inventory-photo" data-inventory-image src="${esc(photo)}" alt="${esc(p.name||'Rental item')}" loading="lazy" decoding="async"><small class="inventory-source-label">Product photo</small></span>`:''}${fallback}</span>`;
