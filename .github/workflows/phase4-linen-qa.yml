@@ -1,0 +1,61 @@
+name: Phase 4 linen and tabletop evidence
+on:
+  push:
+    branches: [qa/phase4-linens-20260929]
+permissions:
+  contents: read
+jobs:
+  phase4-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm --prefix tests ci
+      - name: Collect public product references
+        run: |
+          mkdir -p qa-phase4/references
+          node <<'JS'
+          const fs=require('node:fs');
+          const read=async u=>{const r=await fetch(u,{signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(r.status+' '+u);return r;};
+          (async()=>{
+            const origin='https://www.friendlypartyrental.com';
+            const catalog=await (await read('https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products')).json();
+            const website=await (await read(origin+'/api/items')).json();
+            fs.writeFileSync('qa-phase4/catalog.json',JSON.stringify(catalog,null,2));
+            fs.writeFileSync('qa-phase4/website.json',JSON.stringify(website,null,2));
+            const selected=catalog.products.filter(p=>p.category==='linen'||p.category==='tabletop'||/napkin|tablecloth|spandex|charger|plate|goblet|fork|spoon|knife|martini|wine glass|beer glass|rocks glass|carafe|coffee mug/i.test(p.name));
+            const rows=[];
+            for(const p of selected){
+              const slug=String(p.external_id||'').replace(/^fpr:/,'');
+              const matches=website.items.filter(i=>i.slug===slug);
+              const item=matches.length===1?matches[0]:null;
+              const row={productId:p.id,name:p.name,slug,websiteId:item?.id||null,reference:null,error:null};
+              if(item){
+                const url=item.picture?new URL(item.picture,origin).href:origin+'/api/item-image/'+encodeURIComponent(slug);
+                try{const r=await read(url);fs.writeFileSync('qa-phase4/references/'+slug+'.img',Buffer.from(await r.arrayBuffer()));row.reference=url;}catch(e){row.error=String(e);}
+              }
+              rows.push(row);
+            }
+            fs.writeFileSync('qa-phase4/manifest.json',JSON.stringify({commit:process.env.GITHUB_SHA,capturedAt:new Date().toISOString(),items:rows},null,2));
+            console.log('Captured '+rows.length+' product references; '+rows.filter(r=>r.error||!r.reference).length+' require reference review.');
+          })().catch(e=>{console.error(e);process.exit(1);});
+          JS
+      - name: Package current source and test dependencies
+        run: |
+          tar --exclude=node_modules -czf qa-phase4/source.tgz js tests script.js designer catalog-preview dashboard customer-experience.css style.css base-style.css mobile-fixes.css .github/workflows
+          tar -czf qa-phase4/dependencies.tgz tests/node_modules
+      - name: Run Phase 4 regression suite when present
+        run: |
+          if test -f tests/phase4-linens.test.mjs; then
+            node --test tests/phase4-linens.test.mjs
+            node --experimental-vm-modules tests/phase4-render.cjs
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase4-source-and-reference-evidence
+          retention-days: 7
+          path: qa-phase4/
