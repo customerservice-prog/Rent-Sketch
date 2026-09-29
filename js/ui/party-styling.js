@@ -12,8 +12,8 @@ export function createPartyStyling(tent,objects){
   Object.values(batches).forEach(b=>{b.transforms=[];});
   let tableTransform=null;
   function put(kind,x,y,z,sx=1,sy=1,sz=1,ry=0,rx=0,rz=0){
-    if(tableTransform){const {cx,cz,a}=tableTransform,dx=x-cx,dz=z-cz;x=cx+dx*Math.cos(a)-dz*Math.sin(a);z=cz+dx*Math.sin(a)+dz*Math.cos(a);ry-=a;}
-    batches[kind].transforms.push({x,y,z,sx,sy,sz,rx,ry,rz});
+    if(tableTransform){const {cx,cz,a}=tableTransform,dx=x-cx,dz=z-cz;x=cx+dx*Math.cos(a)-dz*Math.sin(a);z=cz+dx*Math.sin(a)+dz*Math.cos(a);}
+    batches[kind].transforms.push({x,y,z,sx,sy,sz,rx,ry,rz,tableYaw:-(tableTransform?.a||0)});
   }
   function glass(x,y,z){put('stem',x,y+.07,z,.014,.13,.014);put('stem',x,y+.01,z,.10,.018,.10);put('glass',x,y+.24,z,.105,.23,.105);}
   let styled=0;
@@ -48,11 +48,12 @@ export function createPartyStyling(tent,objects){
     }
     if(!item.seatCount)for(const a of [0,Math.PI*.7,Math.PI*1.4])glass(cx+Math.cos(a)*.68,y,cz+Math.sin(a)*.68);
   }
-  const dummy=new THREE.Object3D();
+  // Apply the table yaw outside each prop's local tilt; Euler addition tilts plate rims upright.
+  const dummy=new THREE.Object3D(),tableRotation=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0);
   for(const [name,batch] of Object.entries(batches)){
     if(!batch.transforms.length){batch.g.dispose();continue;}
     const mesh=new THREE.InstancedMesh(batch.g,batch.m,batch.transforms.length);mesh.name='Table styling · '+name;
-    batch.transforms.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.rotation.set(p.rx,p.ry,p.rz);dummy.scale.set(p.sx,p.sy,p.sz);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});
+    batch.transforms.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.rotation.set(p.rx,p.ry,p.rz);tableRotation.setFromAxisAngle(up,p.tableYaw);dummy.quaternion.premultiply(tableRotation);dummy.scale.set(p.sx,p.sy,p.sz);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});
     mesh.instanceMatrix.needsUpdate=true;mesh.castShadow=mesh.receiveShadow=true;group.add(mesh);
   }
   group.userData.tableCount=styled;return group;
