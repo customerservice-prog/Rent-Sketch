@@ -1,0 +1,27 @@
+name: Reconcile legacy booking assertion
+on:
+  push:
+    branches: [qa/phase4-finish-20260929]
+    paths: [.github/workflows/phase4-qa-fix.yml]
+permissions: {contents: write}
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: qa/phase4-finish-20260929}
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/contextual-products.test.mjs');s=p.read_text()
+          old="assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:removed.lines.filter(l=>l.category==='lighting'),products}),/staff confirmation/);"
+          new="const stillMapped=buildBookingHandoff({tenant:'friendly',lines:removed.lines.filter(l=>l.category==='lighting'),products});assert.equal(stillMapped.items[0].slug,'lighting-b');assert.equal(stillMapped.items[0].amount,undefined,'checkout re-prices; a missing local display price is never transferred');\n assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:removed.lines.filter(l=>l.category==='lighting'),products:products.filter(p=>p.id!=='lighting-b')}),/staff confirmation/);"
+          assert old in s;s=s.replace(old,new);p.write_text(s)
+          p=Path('.github/workflows/phase4-guest-qa.yml');p.write_text(p.read_text()+'\n# Recheck after aligning the legacy test with the live selection-only handoff.\n')
+          PY
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add tests/contextual-products.test.mjs .github/workflows/phase4-guest-qa.yml
+          git commit -m 'Test missing catalog identity separately from locally unavailable prices'
+          git push origin HEAD:refs/heads/qa/phase4-finish-20260929
