@@ -1,0 +1,72 @@
+name: Phase 6B final source and photo QA
+on:
+  push:
+    branches: [qa/phase6b-service-20260929]
+    paths: [.github/workflows/phase6b-final-review.yml]
+permissions: {contents: write, actions: read}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply the photo-reviewed changes and physical fixes
+        run: |
+          python3 .github/phase6b-photo-corrections.py
+          python3 .github/phase6b-visual-proofs.py
+          python3 .github/phase6b-final-boundary.py
+          git diff --check
+          git diff --exit-code e20f7131fbeb41e0961b9c3310287024ace6d4fc -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js js/core/eventSummary.js js/core/seating.js js/core/world-space.js js/ui/view3d.js js/ui/equipment3d.js js/ui/party-styling.js script.js
+          for f in js/data/phase6b* js/ui/phase6b* js/ui/catalog-phase6b.js js/data/equipment.js js/data/accessories.js js/data/tabletop.js js/ui/tabletop3d.js js/ui/tabletop-symbols.js js/ui/equipment-motion3d.js js/ui/accessory3d.js dashboard/app.js; do node --check "$f"; done
+      - name: Load canonical product photographs and reconciled reference states
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh run download 36642023680 -n phase6b-current-references -D /tmp/phase6b-public
+          mkdir -p qa-phase6b/references qa-phase6
+          cp /tmp/phase6b-public/catalog.json /tmp/phase6b-public/website.json /tmp/phase6b-public/references.json qa-phase6b/
+          cp /tmp/phase6b-public/references/* qa-phase6b/references/
+          cp qa-phase6b/catalog.json qa-phase6/catalog.json
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';import assert from 'node:assert/strict';import {phase6bReference} from './js/data/phase6b-reference.js';
+          const m=JSON.parse(fs.readFileSync('qa-phase6b/references.json')),p=JSON.parse(fs.readFileSync('qa-phase6b/catalog.json')).products,conflicts=['glass-water-pitcher-64-oz','round-gold-metal-display-dish','hexagon-wedding-arch'];for(const r of m.rows){r.reference=phase6bReference(p.find(i=>i.id===r.productId));assert.equal(r.reference.kind==='reference-only',conflicts.includes(r.slug),r.slug+' expected reference state');}assert.equal(m.rows.length,43);fs.writeFileSync('qa-phase6b/references.json',JSON.stringify(m,null,2));
+          JS
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/phase6b-browser --no-save playwright@1.56.1
+      - run: /tmp/phase6b-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Source mapping, physical models, seating and ordinary booking regression
+        run: |
+          set -o pipefail
+          node --test tests/phase6b.test.mjs tests/phase6-core.test.mjs tests/phase6-summary-handoff.test.mjs tests/book-now-contract.test.mjs tests/contextual-products.test.mjs tests/party-scene.test.mjs tests/seating-alignment.test.mjs tests/phase4-linens.test.mjs | tee qa-phase6b/tests.log
+          node --experimental-vm-modules tests/phase6b-mesh.cjs | tee qa-phase6b/mesh.log
+          node --experimental-vm-modules tests/seating-alignment-mesh.cjs | tee qa-phase6b/seating.log
+          node --experimental-vm-modules tests/phase6-core-mesh.cjs | tee qa-phase6b/phase6a-regression.log
+          node --experimental-vm-modules tests/phase4-render.cjs | tee qa-phase6b/tabletop-regression.log
+      - name: Actual desktop and mobile product comparisons
+        env: {NODE_PATH: /tmp/phase6b-browser/node_modules}
+        run: node tests/phase6b-browser.cjs
+      - name: Preserve the verified candidate only in QA
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js designer catalog-preview dashboard tests/phase6b.test.mjs tests/phase6b-mesh.cjs tests/phase6b-browser.cjs
+          git commit -m 'Finish inspected Phase 6B geometry and reference conflicts with rental quantities and seating preserved'
+          git push origin HEAD:refs/heads/qa/phase6b-service-20260929
+          python3 - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          base='e20f7131fbeb41e0961b9c3310287024ace6d4fc'
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()} for p in paths if not p.startswith('.github/')]
+          Path('qa-phase6b/release-tree.json').write_text(json.dumps({'base':base,'testedCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'entries':entries},indent=2))
+          PY
+      - name: Package final source and visual evidence
+        if: always()
+        run: |
+          mkdir -p qa-phase6b
+          tar -czf qa-phase6b/source.tgz js tests/phase6b* designer catalog-preview dashboard docs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: phase6b-final-reviewed, path: qa-phase6b, retention-days: 7}
