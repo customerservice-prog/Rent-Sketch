@@ -1,0 +1,83 @@
+name: Seating alignment regression and rendered review
+on:
+  push:
+    branches: [qa/seating-alignment-20260929]
+    paths: [.github/workflows/seating-alignment-qa.yml]
+permissions: {contents: write}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Apply exact scoped source correction
+        run: |
+          mkdir -p qa-seating
+          python3 - <<'PY'
+          import json,hashlib,re
+          from pathlib import Path
+          changes=json.loads(Path('.github/seating-patch.json').read_text())
+          assert len(changes)==8
+          for row in changes:
+            p=Path(row['path']);assert '..' not in p.parts and not p.is_absolute() and p.parts[0]=='js'
+            old=p.read_text();assert hashlib.sha256(old.encode()).hexdigest()==row['before'],str(p)+' baseline mismatch'
+            new=old
+            for start,end,text in reversed(row['edits']):new=new[:start]+text+new[end:]
+            assert hashlib.sha256(new.encode()).hexdigest()==row['after'],str(p)+' patch mismatch'
+            p.write_text(new)
+          for name in ['designer/index.html','catalog-preview/index.html']:
+            p=Path(name);s=p.read_text();m=re.search(r'(<script type="importmap">)(.*?)(</script>)',s,re.S);assert m,name
+            imports=json.loads(m.group(2))
+            for row in changes:imports['imports']['../'+row['path']]='../'+row['path']+'?v=20260929-seating-alignment-1'
+            s=s[:m.start(2)]+json.dumps(imports,separators=(',',':'))+s[m.end(2):];p.write_text(s)
+          PY
+          git diff --check
+          node --check tests/seating-alignment-browser.cjs
+          node --check tests/seating-alignment.test.mjs
+          git diff --exit-code a55f64fb2ce883fad078eb128194e38470176349 -- js/core/bookingHandoff.js js/ui/booking-handoff.js js/ui/review-actions.js js/ui/scene-guests.js
+      - run: npm --prefix tests ci
+      - run: npm install --prefix /tmp/seating-browser --no-save playwright@1.56.1
+      - run: /tmp/seating-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Shared geometry, persistence and booking regressions
+        run: |
+          set -o pipefail
+          node --test tests/seating-alignment.test.mjs tests/furniture-seating.test.mjs tests/furniture-placement.test.mjs tests/party-scene.test.mjs tests/photo-plan.test.mjs tests/premium-footprint.test.mjs tests/book-now-contract.test.mjs tests/phase4-linens.test.mjs tests/contextual-products.test.mjs tests/world-planning.test.mjs tests/furniture-accuracy.test.mjs | tee qa-seating/unit-tests.log
+          node --experimental-vm-modules tests/seating-alignment-mesh.cjs | tee qa-seating/alignment-mesh.log
+          node --experimental-vm-modules tests/furniture-mesh.cjs | tee qa-seating/furniture-mesh.log
+          node --experimental-vm-modules tests/furniture-plan-dom.cjs | tee qa-seating/furniture-plan.log
+          node --experimental-vm-modules tests/photo-mode-ui.cjs | tee qa-seating/photo-mode.log
+          node --experimental-vm-modules tests/photo-plan-dom.cjs | tee qa-seating/photo-plan.log
+          node --experimental-vm-modules tests/guest-anatomy-mesh.cjs | tee qa-seating/guest-anatomy.log
+      - name: Reproduce old scene and inspect corrected desktop and mobile seating
+        env: {NODE_PATH: /tmp/seating-browser/node_modules}
+        run: node tests/seating-alignment-browser.cjs
+      - name: Save tested source to isolated QA branch only
+        run: |
+          git config user.name 'RentSketch QA'
+          git config user.email 'rentsketch-qa@users.noreply.github.com'
+          git add js/core/geometry.js js/core/photo-geometry.js js/core/seating.js js/core/world-space.js js/ui/equipment3d.js js/ui/party-styling.js js/ui/plan2d.js js/ui/view3d.js designer/index.html catalog-preview/index.html
+          git commit -m 'Align rendered tables, chairs and guests through one shared rotation transform'
+          git push origin HEAD:refs/heads/qa/seating-alignment-20260929
+          python3 - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          base='a55f64fb2ce883fad078eb128194e38470176349'
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          paths=[p for p in paths if not p.startswith('.github/')]
+          entries=[{'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()} for p in paths]
+          Path('qa-seating/release-tree.json').write_text(json.dumps({'base':base,'testedCommit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'entries':entries},indent=2))
+          PY
+      - name: Package source with visual evidence
+        if: always()
+        run: |
+          mkdir -p qa-seating
+          tar -czf qa-seating/runtime-source.tgz js designer/index.html catalog-preview/index.html tests/seating-alignment* docs/seating-alignment-20260929.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: seating-alignment-review
+          path: qa-seating
+          retention-days: 7
