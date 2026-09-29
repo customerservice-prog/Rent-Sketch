@@ -21,6 +21,10 @@ jobs:
           import hashlib,base64,gzip,json
           raw=''.join(Path('.github/phase6-core/part-'+str(i)+'.b64').read_text().strip() for i in range(2))
           Path('qa-phase6/received-patch.txt').write_text(raw)
+          fixes=[('8Sm8vd01/bZ7vRyVW7Ea/bJJzLNuDFvXmCB6OdvQglo0Y','8Sm8vd01/bZ7vRyVW7Ea/bJzLNuDFvXmCB6OdvQglo0Y'),('RbkUE62DxsZcJyshV+haUjMUy5+aHwxnVNXYhu6gh8vA','RbkUE62DxsZcJyshV+haUjZMUy5+aHwxnVNXYhu6gh8vA'),('+8XP6a43cHEHS8fxUT+uhJJ3zYRQMJ12b7cRuCPBYhVr4','+8XP6a43cHEHS8fxUT+uhJ3zYRQMJ12b7cRuCPBYhVr4'),('F325gA/i1YCjDkr+4RwdBtJJ8Qu+h1EnCcekYWPHJ9bJO','F325gA/i1YCjDkr+4RwdBtJ8Qu+h1EnCcekYWPHJ9bJO')]
+          for old,new in fixes:
+            assert raw.count(old)==1
+            raw=raw.replace(old,new)
           assert hashlib.sha256(raw.encode()).hexdigest()=='f2511467755223c3e806fef2c289b9e94a6286196a60df393f1898397bede883','Patch transport mismatch'
           changes=json.loads(gzip.decompress(base64.b64decode(raw,validate=True)))
           assert len(changes)==14
