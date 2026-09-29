@@ -57,12 +57,20 @@ export function createPhase6Equipment(product,item={}){
   for(const [c,r,color] of [[1,0,red],[2,0,blue],[3,0,red],[4,0,blue],[5,0,blue],[2,1,red],[3,1,blue],[4,1,red],[3,2,red]])disc(.038,.095,color,(c-3)*.12,.58+(r-2.5)*.115,0);
   features={...features,columns:7,rows:6,holes:42,openHoleProbe:{x:-.36,y:.58+.2875,z:0},physicalCount:1};
  }else if(ref.type==='cornhole'){
-  // Two boards are one equipment set; the compact preview is NOT a play zone.
+  // Two boards are one equipment set. This is a compact hardware arrangement,
+  // not a regulation play zone. The hole and support belong to the high end.
+  const surface=z=>.09+.80*(.46-z)/.92;
   for(const x of [-.247,.247]){
-   const board=new THREE.Group();body.add(board);const t=shapes(board),shape=new THREE.Shape();shape.moveTo(-.22,-.46);shape.lineTo(.22,-.46);shape.lineTo(.22,.46);shape.lineTo(-.22,.46);shape.closePath();const hole=new THREE.Path();hole.absarc(0,-.29,.052,0,Math.PI*2,true);shape.holes.push(hole);const geo=new THREE.ExtrudeGeometry(shape,{depth:.04,bevelEnabled:false,curveSegments:20});geo.rotateX(-Math.PI/2);geo.translate(0,.02,0);t.mesh(geo,wood);for(const a of [-.198,.198])t.box(.025,.12,.92,darkWood,a,-.055,0);for(const z of [-.43,.43])t.box(.42,.12,.025,darkWood,0,-.055,z);board.position.set(x,.63,0);board.rotation.x=-.36;
-   for(const a of [-.185,.185])t.box(.03,.37,.04,darkWood,a,-.24,-.38);
+   const board=new THREE.Group();body.add(board);board.position.x=x;const t=shapes(board);
+   const slope=geo=>{const v=geo.attributes.position;for(let i=0;i<v.count;i++)v.setY(i,v.getY(i)+surface(v.getZ(i)));v.needsUpdate=true;geo.computeVertexNormals();return geo;};
+   const shape=new THREE.Shape();shape.moveTo(-.22,-.46);shape.lineTo(.22,-.46);shape.lineTo(.22,.46);shape.lineTo(-.22,.46);shape.closePath();
+   const hole=new THREE.Path();hole.absarc(0,.29,.052,0,Math.PI*2,true);shape.holes.push(hole);
+   const top=new THREE.ExtrudeGeometry(shape,{depth:.04,bevelEnabled:false,curveSegments:20});top.rotateX(-Math.PI/2);t.mesh(slope(top),wood);
+   for(const a of [-.198,.198]){const rail=new THREE.BoxGeometry(.025,.07,.92);rail.translate(a,-.035,0);t.mesh(slope(rail),darkWood);}
+   for(const z of [-.43,.43])t.box(.42,.07,.025,darkWood,0,surface(z)-.035,z,.003);
+   for(const a of [-.185,.185])for(const z of [-.38,.38]){const height=surface(z)-.025;t.box(.033,height,.045,darkWood,a,.0125+height/2,z,.003);}
   }
-  features={...features,physicalCount:2,holes:2,playingDistanceVerified:false};
+  features={...features,physicalCount:2,holes:2,holeAtHighEnd:true,groundedSupports:true,playingDistanceVerified:false};
  }else if(ref.type==='tumbling-timbers'){
   for(let r=0;r<18;r++)for(let i=0;i<3;i++){const along=r%2===0;box(along?.86:.275,.047,along?.275:.86,(r+i)%4?wood:material('#d5b790'),along?0:(i-1)*.292,.027+r*.053,along?(i-1)*.292:0,.005);}
   features={...features,layers:18,blocks:54,startingHeightVerified:false};
@@ -112,11 +120,13 @@ export function createPhase6Equipment(product,item={}){
   box(.57,.025,.42,white,0,.035,0,.012);for(const x of [-.22,.22])for(const z of [-.16,.16])sphere(.018,black,x,.018,z);
   box(.16,.68,.105,white,0,.395,0,.016);box(.118,.56,.008,material('#346cc0'),0,.40,.059,.008);
   const colors=['#ec3f48','#e99536','#cbdf44','#40ca66','#42bfc5','#586fda','#8a48c8','#d9479f'];
-  for(let i=0;i<8;i++){const q=mesh(new THREE.TorusGeometry(.29,.025,7,8,Math.PI/4+.01),material(colors[i],{emissive:colors[i],emissiveIntensity:.16}),0,.833,0);q.rotation.z=i*Math.PI/4;q.scale.y=.5;}
+  // Rotate in ring-local space before anisotropic normalization. Scaling each
+  // already-positioned arc instead left disconnected pieces around the tablet.
+  for(let i=0;i<8;i++){const geo=new THREE.TorusGeometry(.29,.025,7,8,Math.PI/4+.01);geo.rotateZ(i*Math.PI/4);geo.scale(1,.5,1);mesh(geo,material(colors[i],{emissive:colors[i],emissiveIntensity:.16}),0,.833,0);}
   const frame=disc(.274,.046,white,0,.833,0);frame.scale.z=.5;
   box(.21,.18,.022,black,0,.835,.04,.012);box(.181,.148,.004,material('#608393',{emissive:'#447389',emissiveIntensity:.12}),0,.837,.055,.004);disc(.012,.008,black,0,.939,.049);
   const screen=material('#376f91',{emissive:'#438eac',emissiveIntensity:.18});box(.174,.14,.004,screen,0,.837,.059,.004);motion=t=>{screen.emissiveIntensity=.18+Math.sin(t*.8)*.035;};reset=()=>{screen.emissiveIntensity=0;};
-  features={...features,ringLight:true,tablet:true,hours:ref.hours,attended:ref.attended,physicalBooths:1};
+  features={...features,ringLight:true,continuousRing:true,tablet:true,hours:ref.hours,attended:ref.attended,physicalBooths:1};
  }else if(ref.type==='speaker'){
   box(.77,.80,.70,black,0,.45,0,.06);box(.035,.17,.033,black,-.20,.902,0,.01);box(.035,.17,.033,black,.20,.902,0,.01);box(.43,.032,.054,rubber,0,.981,0,.012);
   box(.68,.73,.012,material('#2e3236'),0,.45,.36,.04);for(let i=0;i<26;i++)box(.0025,.67,.003,black,-.295+i*.0236,.43,.37,.001);

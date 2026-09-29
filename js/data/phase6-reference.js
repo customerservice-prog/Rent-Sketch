@@ -1,6 +1,6 @@
 // Exact Friendly source identities. These are appearance profiles, not measured
 // installation envelopes, safety clearances, bundle expansions, or approvals.
-export const PHASE6_VERSION='2026.09.29.core2';
+export const PHASE6_VERSION='2026.09.29.core3';
 const fixed={};
 function add(slug,type,category,dimensions,note,extras={}){
  fixed[slug]={kind:'equipment',type,category,dimensions,note,...extras};

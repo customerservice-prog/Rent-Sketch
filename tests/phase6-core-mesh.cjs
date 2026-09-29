@@ -23,6 +23,21 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
   check(meshes<=22,p.name+' merged geometry batches');check(vertices<200000,p.name+' bounded vertices');
   g.userData.setOperating(true);for(const time of [0,.016,.07,.25,1,3])g.userData.update?.(time);g.updateMatrixWorld(true);g.traverse(m=>check(m.matrixWorld.elements.every(Number.isFinite),'finite animated transform'));
   g.userData.setOperating(false);const stopped=g.children.map(o=>o.matrix.toArray());g.userData.update?.(5);g.updateMatrixWorld(true);check(JSON.stringify(stopped)===JSON.stringify(g.children.map(o=>o.matrix.toArray())),'stopped model stable');
+  if(ref.type==='photobooth'){
+   // Test rays hit the colored light ring at every sector/seam, not the white
+   // backing plate. This fails for the previous separated rotated ellipses.
+   const palette=new Set(['ec3f48','e99536','cbdf44','40ca66','42bfc5','586fda','8a48c8','d9479f']);const segments=[];
+   g.traverse(o=>{if(o.isMesh&&palette.has(o.material?.color?.getHexString()))segments.push(o);});check(segments.length===8,'eight ring sectors');
+   for(let i=0;i<72;i++){const a=i*Math.PI*2/72,origin=new THREE.Vector3(.29*Math.cos(a)*g.scale.x,(.833+.145*Math.sin(a))*g.scale.y,2*g.scale.z);const hits=new THREE.Raycaster(origin,new THREE.Vector3(0,0,-1)).intersectObjects(segments,false);check(hits.length>0,'continuous colored booth ring at angle '+i);}
+  }
+  if(ref.type==='cornhole'){
+   const down=(x,z)=>new THREE.Raycaster(new THREE.Vector3(x*g.scale.x,2*g.scale.y,z*g.scale.z),new THREE.Vector3(0,-1,0)).intersectObject(g,true);
+   for(const x of [-.247,.247]){
+    check(down(x,-.29).length===0,'cornhole opening passes through high rear');
+    const rear=down(x,-.10),front=down(x,.30);check(rear.length>0&&front.length>0,'sloped board has physical surface');check(rear[0].point.y>front[0].point.y,'hole end is raised not inverted');
+    for(const dx of [-.185,.185]){const hits=new THREE.Raycaster(new THREE.Vector3((x+dx)*g.scale.x,-.1,-.38*g.scale.z),new THREE.Vector3(0,1,0)).intersectObject(g,true);check(hits.length>0&&hits[0].point.y<.03*g.scale.y,'raised board has grounded rear supports');}
+   }
+  }
   if(ref.type==='connect-four'){check(g.userData.features.holes===42,'42 holes');const q=g.userData.features.openHoleProbe,point=new THREE.Vector3(q.x*wFor(ref),q.y*ref.dimensions[2],10);function wFor(r){return r.dimensions[0];}const hits=new THREE.Raycaster(point,new THREE.Vector3(0,0,-1)).intersectObject(g,true);check(hits.length===0,'empty connect four opening is a real through hole');}
   rows.push({slug:ref.slug,name:p.name,meshes,vertices,features:g.userData.features,bounds:{x:size.x,y:size.y,z:size.z},ground:b.min.y});
  }
