@@ -26,10 +26,13 @@
 	@dotSegments path_regexp dotSegments (^|/)\.{1,2}(/|$)
 	respond @dotSegments "Not found" 404
 	# Public GA4 config. The measurement ID is not a secret; an unset value leaves analytics disabled.
-	@analyticsConfig path /analytics-config.js
-	header @analyticsConfig Content-Type "application/javascript; charset=utf-8"
-	header @analyticsConfig Cache-Control "no-store"
-	respond @analyticsConfig "window.RENTSKETCH_GA4_MEASUREMENT_ID='{$GA4_MEASUREMENT_ID}';" 200
+	# Keep this in an explicit handle so the catch-all static handler cannot turn
+	# the virtual config endpoint into a 404.
+	handle /analytics-config.js {
+		header Content-Type "application/javascript; charset=utf-8"
+		header Cache-Control "no-store"
+		respond "window.RENTSKETCH_GA4_MEASUREMENT_ID='{$GA4_MEASUREMENT_ID}';" 200
+	}
 	# Staff requests stay on the website origin so the browser can use a
 	# host-only HttpOnly session cookie. The public customer API is unchanged.
 	handle /staff-api/api/* {
