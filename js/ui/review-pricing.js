@@ -1,69 +1,67 @@
-let rates=null,request=0,controller=null,zip='',host=null;
+let rates=null,request=0,controller=null,bindings=null,zip='',host=null,timer=null,acceptedKey='',acceptedAt=0;
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=n=>n==null||!Number.isFinite(Number(n))?'Pending':'$'+Number(n).toFixed(2);
+const currentLines=()=>window.FriendlyBridge?.computeLineItems?.()||[];
+const currentDate=()=>document.getElementById('customerDate')?.value||'';
+const details=()=>({zip,eventDate:currentDate(),lines:currentLines().map(({productId,qty,selectedColor,category,label})=>({productId,qty,selectedColor,category,label}))});
+const key=()=>JSON.stringify(details());
 export function reviewDeliveryZip(){return zip;}
-export function restoreReviewDeliveryZip(value){
- controller?.abort();request++;rates=null;host=null;
- zip=typeof value==='string'&&/^\d{0,5}$/.test(value.trim())?value.trim():'';
+function invalidate(){controller?.abort();request++;rates=null;acceptedKey='';acceptedAt=0;clearTimeout(timer);if(host?.isConnected){const button=host.querySelector('button');if(button)button.disabled=false;render();}}
+export function restoreReviewDeliveryZip(value){invalidate();bindings?.abort();host=null;zip=typeof value==='string'&&/^\d{0,5}$/.test(value.trim())?value.trim():'';}
+export function currentReviewPricing(){
+ const valid=rates&&acceptedKey===key()&&Date.now()-acceptedAt<60000;
+ return valid?{...rates,status:rates.complete?'exact':'incomplete'}:{status:'unavailable',complete:false,total:null,lineItems:[],zip,eventDate:currentDate()};
 }
-const money=n=>n==null?'Needs Friendly confirmation':'$'+Number(n).toFixed(2);
-function currentLines(){return window.FriendlyBridge?.computeLineItems?.()||[];}
-export function currentReviewPricing(){return rates?{...rates,status:rates.complete?'exact':'incomplete'}:{status:'unavailable',lineItems:[]};}
 function render(){
  if(!host?.isConnected)return;
- const value=rates||{};
- const lines=Array.isArray(value.lineItems)?value.lineItems:[];
- const lineHtml=lines.length?'<div class="review-live-lines">'+lines.map(line=>{
-   const availability=line.availableForDate===false?'<small style="display:block;color:#a23b2d">Not enough available for this date</small>':line.exactMatch===false?'<small style="display:block;color:#8a5d12">Could not match this item to Friendly live inventory</small>':'';
-   return '<div><span>'+String(line.qty)+' × '+String(line.label).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))+availability+'</span><strong>'+money(line.amount)+'</strong></div>';
- }).join('')+'</div>':'';
- host.querySelector('.review-cost-lines').innerHTML=lineHtml+
-   '<div><span>Rental subtotal</span><strong>'+money(value.baseRentalSubtotal??value.rentalSubtotal)+'</strong></div>'+
-   (value.durationFee?'<div><span>'+(value.durationTier?.label||'Rental duration adjustment')+'</span><strong>'+money(value.durationFee)+'</strong></div>':'')+
-   '<div><span>Delivery'+(value.zip?' · '+value.zip:'')+'</span><strong>'+money(value.deliveryFee)+'</strong></div>'+
-   '<div><span>Sales tax'+(value.taxRate==null?'':' ('+value.taxRate+'%)')+'</span><strong>'+money(value.taxAmount)+'</strong></div>'+
-   '<div class="review-grand-total"><span>'+(value.complete?'Exact total':'Total')+'</span><strong>'+money(value.total)+'</strong></div>';
- const note=host.querySelector('.review-cost-note');
- if(value.complete){
-   note.textContent='Exact quote from Friendly Party Rental live pricing for the selected rentals, event date, delivery ZIP, delivery charge and sales tax. Availability was checked for the selected date.';
- }else if(!value.eventDate){
-   note.textContent='Choose the event date above before an exact quote can be calculated.';
- }else if(!value.zip){
-   note.textContent='Enter the delivery ZIP to calculate the exact Friendly delivery charge and tax.';
- }else if(value.lastMinuteNeedsCheckout){
-   note.textContent='This event is within Friendly’s last-minute booking window. RentSketch will not guess the rush/booking fee, so the total stays unconfirmed until Friendly checkout validates it.';
- }else{
-   note.textContent='This is not being presented as an exact quote because one or more items, availability, delivery, tax, or checkout rule still needs Friendly confirmation.';
- }
+ const value=currentReviewPricing(),lines=value.lineItems||[];
+ const row=(label,amount,klass='')=>'<div'+(klass?' class="'+klass+'"':'')+'><span>'+esc(label)+'</span><strong>'+money(amount)+'</strong></div>';
+ let html=lines.length?'<div class="review-live-lines">'+lines.map(line=>'<div><span>'+esc(line.qty)+' × '+esc(line.label)+(line.unitPrice!=null?'<span class="review-unit-price">'+money(line.unitPrice)+' each</span>':'')+(line.error?'<small>'+esc(line.error)+'</small>':line.availableForDate===false?'<small>Quantity unavailable for these dates</small>':'')+'</span><strong>'+money(line.amount)+'</strong></div>').join('')+'</div>':'';
+ html+=row('Rental subtotal',value.baseRentalSubtotal);
+ if(value.durationFee)html+=row(value.durationTier?.label||'Rental duration',value.durationFee);
+ html+=row('Delivery'+(value.zip?' · '+value.zip:''),value.deliveryFee);
+ for(const [label,amount] of [['Damage waiver',value.damageWaiverFee],['Table & chair setup',value.furnitureServices?.setupFee],['Table & chair takedown',value.furnitureServices?.takedownFee],['Special services',value.specialRequestTotal],['Last-minute booking',value.lastMinuteFee],['Exact delivery',value.exactDeliveryFee],['Exact pickup',value.exactPickupFee]])if(amount)html+=row(label,amount);
+ html+=row('Sales tax'+(value.taxRate==null?'':' ('+value.taxRate+'%)'),value.taxAmount)+row(value.complete?'Friendly quote total':'Quote total',value.total,'review-grand-total');
+ if(value.complete&&value.depositAmount!=null)html+=row('Deposit at checkout',value.depositAmount);
+ host.querySelector('.review-cost-lines').innerHTML=html;
+ const needs=[...(value.missing||[]),...(value.issues||[])];
+ host.querySelector('.review-cost-note').textContent=needs.length?needs.join(' '):value.complete?'Calculated by Friendly Party Rental using its current catalog and standard delivery settings. Changing the duration, services or discount in checkout recalculates the total.':!currentDate()?'Choose the event date to check availability and total.':!/^\d{5}$/.test(zip)?'Enter the delivery ZIP to include delivery and tax.':'Waiting for Friendly to verify this quote.';
 }
+function schedule(){invalidate();timer=setTimeout(()=>calculate(),350);}
+export async function refreshReviewPricing(){return calculate();}
 async function calculate(){
- const input=host.querySelector('input'),value=input.value.trim(),status=host.querySelector('.review-pricing-status');
- if(value&&!/^\d{5}$/.test(value)){status.textContent='Enter a five-digit delivery ZIP code.';input.focus();return;}
- zip=value;const token=++request;controller?.abort();controller=new AbortController();rates=null;render();
- const date=document.getElementById('customerDate')?.value||'';
- status.textContent='Checking Friendly live prices, availability, delivery and tax…';
- const button=host.querySelector('button');button.disabled=true;
- const activeController=controller,timer=setTimeout(()=>activeController.abort(),12000);
+ if(!host?.isConnected)return null;
+ const target=host,input=target.querySelector('[name="deliveryZip"]'),status=target.querySelector('.review-pricing-status');
+ zip=input.value.trim();invalidate();
+ if(zip&&!/^\d{5}$/.test(zip)){status.textContent='Enter a five-digit delivery ZIP.';return null;}
+ const sent=details(),sentKey=JSON.stringify(sent),token=++request;
+ if(!sent.lines.length){status.textContent='Add rentals before checking the quote.';return null;}
+ controller=new AbortController();const localController=controller,timeout=setTimeout(()=>localController.abort(),25000);
+ const button=target.querySelector('button');button.disabled=true;status.textContent='Checking Friendly’s current item prices, availability, delivery and tax…';
  try{
   const slug=window.ACTIVE_TENANT?.slug||window.RENTSKETCH_TENANT_SLUG,api=window.RENTSKETCH_API_URL;
-  if(!api||!slug)throw new Error('unavailable');
-  const response=await fetch(api+'/api/tenants/'+encodeURIComponent(slug)+'/review-pricing',{
-    method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
-    body:JSON.stringify({zip,eventDate:date,lines:currentLines()})
-  });
-  const result=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(result.error||'unavailable');if(token!==request)return;
-  rates=result;render();
-  status.textContent=result.complete?'Exact Friendly quote loaded from live checkout data.':'Friendly live pricing checked. Complete the missing information shown below.';
+  if(!api||!slug)throw Error('Friendly pricing connection is unavailable.');
+  const response=await fetch(api+'/api/tenants/'+encodeURIComponent(slug)+'/review-pricing',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},signal:localController.signal,body:JSON.stringify(sent)});
+  const result=await response.json();if(!response.ok)throw Error(result.error||'Friendly could not verify the quote.');
+  if(token!==request||host!==target||sentKey!==key())return null;
+  rates=result;acceptedKey=sentKey;acceptedAt=Date.now();render();
+  status.textContent=result.complete?'Current Friendly quote verified.':'Current item prices loaded. Complete the details below for the total.';
+  window.dispatchEvent(new CustomEvent('rentsketch:quoteVerified',{detail:result}));return currentReviewPricing();
  }catch(error){
-  if(token!==request)return;rates=null;render();
-  status.textContent='Friendly live pricing could not be verified. No total will be guessed. Please retry or send the plan for manual confirmation.';
- }finally{clearTimeout(timer);if(token===request)button.disabled=false;}
+  if(token!==request)return null;rates=null;render();status.textContent=(error.name==='AbortError'?'The pricing check timed out.':error.message)+' No total has been guessed. Please retry.';return null;
+ }finally{clearTimeout(timeout);if(token===request)button.disabled=false;}
 }
 export function mountReviewPricing(container){
- controller?.abort();request++;host=container;rates=null;
- host.innerHTML='<section class="review-costs"><h3>Exact Friendly quote</h3><p>RentSketch re-checks every rental against Friendly Party Rental’s live inventory and prices. This total is for one-day standard delivery with no optional add-ons. Enter the delivery ZIP; the event date above is used for availability.</p><form class="review-location"><label>Delivery ZIP<input name="deliveryZip" autocomplete="postal-code" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" aria-label="Event delivery ZIP"></label><button type="submit" class="btn-secondary">Check exact total</button></form><p class="review-pricing-status" role="status"></p><div class="review-cost-lines" aria-live="polite"></div><p class="review-cost-note"></p></section>';
- const input=host.querySelector('input');input.value=zip;
- host.querySelector('form').addEventListener('submit',e=>{e.preventDefault();calculate();});
- input.addEventListener('input',()=>{controller?.abort();request++;rates=null;zip=input.value.trim();host.querySelector('button').disabled=false;render();host.querySelector('.review-pricing-status').textContent='Select Check exact total to refresh Friendly pricing.';window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});
- document.getElementById('customerDate')?.addEventListener('change',()=>{rates=null;render();});
+ invalidate();bindings?.abort();bindings=new AbortController();host=container;const options={signal:bindings.signal};
+ host.innerHTML='<section class="review-costs"><h3>Your Friendly quote</h3><p>These prices come from Friendly Party Rental—not a separate RentSketch price list. Add your event date and delivery ZIP to see the current standard-delivery quote.</p><form class="review-location review-location-parity"><label>Event date<input type="date" name="quoteEventDate" aria-label="Quote event date"></label><label>Delivery ZIP<input name="deliveryZip" autocomplete="postal-code" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" aria-label="Event delivery ZIP"></label><button type="submit" class="btn-secondary">Refresh quote</button></form><p class="review-pricing-status" role="status"></p><div class="review-cost-lines" aria-live="polite"></div><p class="review-cost-note"></p></section>';
+ const date=host.querySelector('[name="quoteEventDate"]'),input=host.querySelector('[name="deliveryZip"]');date.value=currentDate();input.value=zip;
+ host.querySelector('form').addEventListener('submit',e=>{e.preventDefault();calculate();},options);
+ date.addEventListener('change',()=>{const customer=document.getElementById('customerDate');if(customer&&customer.value!==date.value){customer.value=date.value;customer.dispatchEvent(new Event('change',{bubbles:true}));}schedule();},options);
+ input.addEventListener('input',()=>{zip=input.value.trim();schedule();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));},options);
+ document.getElementById('customerDate')?.addEventListener('change',()=>{date.value=currentDate();schedule();},options);
+ window.addEventListener('rentsketch:requestSave',()=>{if(rates&&acceptedKey!==key())schedule();},options);
+ window.addEventListener('focus',()=>{if(host?.isConnected&&document.getElementById('step-review')?.classList.contains('active'))calculate();},options);
  render();calculate();
 }
+// Expose a refresh for print/send without installing duplicate module instances.
+window.RentSketchQuotePricing={refresh:refreshReviewPricing,current:currentReviewPricing};
