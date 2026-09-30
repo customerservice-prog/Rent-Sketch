@@ -11,7 +11,7 @@
   document.head.appendChild(vitals);
   window.RentSketchAnalytics = window.RentSketchAnalytics || { pendingEvents: [] };
   var analytics = document.createElement('script');
-  analytics.src = '/analytics-loader.js?v=20260922-ga4-2';
+  analytics.src = '/analytics-loader.js?v=20260930-ga4-3';
   analytics.async = true;
   document.head.appendChild(analytics);
   function track(name, data) {
