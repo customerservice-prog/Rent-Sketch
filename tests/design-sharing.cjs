@@ -16,11 +16,11 @@ const auth={
   verifyToken:token=>jwt.verify(token,SECRET)
 };
 const authz={requireTenantAccess:(req,res,next)=>next()}, access={savePermission:async()=>null,permissionDesign:async d=>d};
-const projects=load('server/src/designProjects.js',{
+const projects=load('server/src/designProjects.js',{'./designIntelligence':{scheduleDesignIntelligenceRefresh:()=>{}},'./integrationEvents':{emitTenantEvent:async()=>({})},
   crypto:require('crypto'),'./db':db,'./auth':auth,'./middleware/requireAuth':authz,'./eventPassAccess':access,
   './dashboardHttpSession':{getDashboardToken:()=>null},'./dashboardSessions':{}
 });
-const routes=load('server/src/routes/designs.js',{express,'../db':db,'../middleware/requireAuth':authz,'../designProjects':projects});
+const routes=load('server/src/routes/designs.js',{'../designIntelligence':{getDesignIntelligence:async()=>({sample:{learning:0},patterns:{},conversion:{},friction:{},recommendations:[]}),getTenantDesignIntelligenceHistory:async()=>({points:[],periods:{}})},express,'../db':db,'../middleware/requireAuth':authz,'../designProjects':projects});
 
 const app=express();app.use(express.json());app.use('/api/tenants',routes);app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:err.message});});
 let server,base;
