@@ -13,14 +13,17 @@ function accessUrl(design, tenantSlug, email, expiresAt) {
   return 'https://rentsketch.com/designer/?tenant=' + encodeURIComponent(tenantSlug) + '#recoveryToken=' + encodeURIComponent(token);
 }
 
-function relayConfig() {
-  const checked = validateWebhookUrl(process.env.FRIENDLY_RENTSKETCH_WEBHOOK_URL);
-  if (!checked.ok || !checked.url || !process.env.FRIENDLY_RENTSKETCH_WEBHOOK_SECRET) return null;
-  return { url: checked.url, secret: process.env.FRIENDLY_RENTSKETCH_WEBHOOK_SECRET };
+function relayConfig(tenantSlug='friendly') {
+  const nyc=tenantSlug==='friendly-nyc';
+  const rawUrl=nyc?process.env.FRIENDLY_NYC_RENTSKETCH_WEBHOOK_URL:process.env.FRIENDLY_RENTSKETCH_WEBHOOK_URL;
+  const secret=nyc?process.env.FRIENDLY_NYC_RENTSKETCH_WEBHOOK_SECRET:process.env.FRIENDLY_RENTSKETCH_WEBHOOK_SECRET;
+  const checked = validateWebhookUrl(rawUrl);
+  if (!checked.ok || !checked.url || !secret) return null;
+  return { url: checked.url, secret };
 }
 
-async function relay(type, data) {
-  const config = relayConfig();
+async function relay(type, data, tenantSlug='friendly') {
+  const config = relayConfig(tenantSlug);
   if (!config) throw new Error('access_email_not_configured');
   const body = JSON.stringify({ id: crypto.randomUUID(), type, createdAt: new Date().toISOString(), data });
   const signature = crypto.createHmac('sha256', config.secret).update(body).digest('hex');
@@ -36,7 +39,7 @@ async function emailReadiness() {
   if (checking) return checking;
   checking = (async () => {
     let ready = false;
-    try { ready = relayConfig() ? (await relay('event_pass.email_check', {})).emailReady === true : !!getMailer(); } catch (_) {}
+    try { ready = relayConfig('friendly') ? (await relay('event_pass.email_check', {}, 'friendly')).emailReady === true : !!getMailer(); } catch (_) {}
     readiness = { ready, until: Date.now() + (ready ? 120000 : 15000) };
     return ready;
   })();
@@ -65,7 +68,7 @@ async function eventsForEmail(message) {
     WHERE d.id=ANY($1::uuid[]) AND (EXISTS(SELECT 1 FROM consumer_payments p WHERE p.design_id=d.id AND p.status='paid' AND lower(p.customer_email)=$2)
       OR EXISTS(SELECT 1 FROM entitlements e WHERE e.design_id=d.id AND e.source='friendly_order' AND e.status='active' AND e.expires_at>now() AND lower(e.customer_email)=$2))
     ORDER BY d.created_at DESC LIMIT 10`, [message.design_ids, message.customer_email])).rows;
-  return rows.filter(d => ['friendly', 'generic'].includes(d.tenant_slug)).map(design => ({
+  return rows.filter(d => ['friendly', 'friendly-nyc', 'generic'].includes(d.tenant_slug)).map(design => ({
     designId: design.id, tenant: design.tenant_slug,
     title: String((design.scene && design.scene.eventName) || ((design.event_type || 'Your') + ' event')).slice(0, 160),
     expiresAt: design.access_expires_at ? new Date(design.access_expires_at).toISOString() : null,
@@ -89,8 +92,8 @@ async function processEmails() {
       try {
         const events = await eventsForEmail(message);
         if (!events.length) throw new Error('paid_event_unavailable');
-        if (relayConfig()) {
-          const result = await relay('event_pass.access_email', { messageId: message.id, to: message.customer_email, kind: message.kind, events });
+        if (relayConfig(message.tenant_slug)) {
+          const result = await relay('event_pass.access_email', { messageId: message.id, to: message.customer_email, kind: message.kind, events }, message.tenant_slug);
           if (result.emailAccepted !== true) throw new Error('access_email_not_accepted');
         } else {
           const mailer = getMailer();
