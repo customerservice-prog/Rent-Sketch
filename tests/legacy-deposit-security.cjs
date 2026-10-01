@@ -37,9 +37,9 @@ function load(file, dependencies) {
 const provider = load('server/src/orderProviders/quoteRequestOrderProvider.js', { '../db': db });
 const webhook = load('server/src/routes/stripeWebhook.js', {
   express, '../db': db, '../eventPass': { PASS_KINDS: ['consumer_event_pass'], fulfillEventPass: async () => { eventPassCalls++; } },
-  '../orderProviders/quoteRequestOrderProvider': provider, stripe: Stripe,
+  '../orderProviders/quoteRequestOrderProvider': provider, '../integrationEvents':{emitTenantEvent:async()=>({})}, '../designIntelligence':{scheduleDesignIntelligenceRefresh:()=>{}}, stripe: Stripe,
 });
-const payments = load('server/src/routes/payments.js', { express });
+const payments = load('server/src/routes/payments.js', { express, '../db':db, '../auth':{verifyToken:()=>({})}, '../pricing':{PLATFORM_FEE_PERCENT:0}, stripe:Stripe });
 const app = express();
 app.use('/webhook', express.raw({ type: 'application/json' }), webhook);
 app.use(express.json());
@@ -54,7 +54,8 @@ async function post(route, body, signature = 'fixture-valid') {
   await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),slug text,active_order_grace_days int);
     CREATE TABLE quote_requests(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,design_id uuid,
       customer_email text,event_date timestamptz,status text,payment_status text,deposit_amount_cents int,
-      amount_paid_cents int,stripe_checkout_session_id text,stripe_payment_intent_id text);
+      amount_paid_cents int,stripe_checkout_session_id text,stripe_payment_intent_id text,
+      approved_total_cents int,approved_line_items jsonb default '[]'::jsonb,booked_total_cents int,booked_line_items jsonb default '[]'::jsonb,booked_at timestamptz,attribution_updated_at timestamptz);
     CREATE TABLE entitlements(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,design_id uuid,
       customer_email text,source text,status text,expires_at timestamptz,source_reference uuid,revoked_at timestamptz);
     CREATE TABLE processed_stripe_events(id text PRIMARY KEY,event_type text);`);
@@ -70,7 +71,7 @@ async function post(route, body, signature = 'fixture-valid') {
   base = 'http://127.0.0.1:' + server.address().port;
   const retired = await post('/api/tenants/fixture/quote-requests/' + quote.id + '/checkout-session', { estimateTotal: 0.01, origin: 'https://attacker.invalid' });
   assert.equal(retired.status, 410);
-  assert.equal(retired.body.code, 'rental_deposit_checkout_unavailable');
+  assert.equal(retired.body.code, 'approved_quote_required');
   assert.equal(retired.body.url, undefined);
   assert.equal((await post('/webhook', event, 'invalid')).status, 400);
   for (const [index, change] of [
@@ -111,5 +112,5 @@ async function post(route, body, signature = 'fixture-valid') {
   assert.equal((await post('/webhook', { ...event, id: 'evt_after_refund' })).body.ignored, true, 'late success cannot overwrite a refund');
   await post('/webhook', { ...event, id: 'evt_pass', data: { object: { ...session, metadata: { kind: 'consumer_event_pass' } } } });
   assert.equal(eventPassCalls, 1, 'separate Event Pass fulfillment remains available');
-  console.log('PASS legacy deposit security: creation closed; signed settlement requires exact session, tenant, paid status, USD and amount; declined/refunded rejection; payment+entitlement+marker rollback, retry and concurrent deduplication; Event Pass unaffected. Isolated SQL and fake Stripe only.');
+  console.log('PASS legacy deposit security: browser-supplied checkout creation closed; signed settlement requires exact session, tenant, paid status, USD and amount; declined/refunded rejection; payment+entitlement+marker rollback, retry and concurrent deduplication; Event Pass unaffected. Isolated SQL and fake Stripe only.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { server?.close(); await pg.close(); });
