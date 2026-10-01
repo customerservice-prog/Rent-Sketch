@@ -87,7 +87,9 @@ function esc(s) {
          (canTenant('admin') ? navLink('products', 'Products', '▦') + navLink('catalog-audit', 'Catalog Accuracy', '◎') + navLink('branding', 'Branding & payouts', '◇') : '') +
          navLink('analytics', 'Sales Insights', '▥') +
          '<div class="tw-nav-label tw-nav-label-secondary">Account</div>' +
-         (canTenant('owner') || platformAdmin ? navLink('billing', 'Billing', '
+         (canTenant('owner') || platformAdmin ? navLink('billing', 'Billing', '$') : '') +
+         (canTenant('admin') || platformAdmin ? navLink('install', 'Install & share', '↗') : '') +
+         (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link"><span class="tw-nav-icon">★</span><span>Platform Console</span></a>' : '') +
        '</nav>' +
        '<div class="dash-account">' +
          '<div class="tw-tenant-card"><span class="tw-tenant-avatar">' + esc((tenantLabel||'R').split(/\s+/).slice(0,2).map(function(v){return v[0]||'';}).join('').toUpperCase()) + '</span><div><strong>' + esc(tenantLabel) + '</strong><small>' + (platformAdmin ? 'Platform admin view' : 'Business workspace') + '</small></div></div>' +
