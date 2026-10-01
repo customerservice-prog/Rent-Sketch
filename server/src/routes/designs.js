@@ -3,7 +3,7 @@ const db = require('../db');
 const { clientIp } = require('../clientIp');
 const { requireTenantAccess } = require('../middleware/requireAuth');
 const projects = require('../designProjects');
-const { getDesignIntelligence } = require('../designIntelligence');
+const { getDesignIntelligence, getTenantDesignIntelligenceHistory } = require('../designIntelligence');
 const router = express.Router();
 const buckets = new Map();
 function limit(req, res, next) {
@@ -20,9 +20,30 @@ router.post('/:slug/shared-design/restore', projects.handler(projects.restoreSha
 projects.register(router, '/:slug/designs');
 router.get('/:slug/design-intelligence', requireTenantAccess, async (req,res,next)=>{
   try{
-    const intelligence=await getDesignIntelligence({tenantId:req.tenant.id});
+    const [intelligence,history]=await Promise.all([
+      getDesignIntelligence({tenantId:req.tenant.id}),
+      getTenantDesignIntelligenceHistory(req.tenant.id,2160)
+    ]);
     res.setHeader('Cache-Control','no-store');
-    res.json(intelligence);
+    res.json({...intelligence,history});
+  }catch(error){next(error);}
+});
+router.get('/:slug/design-suggestions', async (req,res,next)=>{
+  try{
+    const tenant=(await db.query('SELECT id,slug FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
+    if(!tenant)return res.status(404).json({error:'Tenant not found'});
+    const intelligence=await getDesignIntelligence({tenantId:tenant.id});
+    const enough=Number(intelligence.sample?.learning||0)>=10;
+    const pairs=enough?(intelligence.patterns?.pairs||[]).filter(x=>Number(x.count)>=3).slice(0,4):[];
+    const features=enough?(intelligence.patterns?.features||[]).filter(x=>Number(x.count)>=3).slice(0,6):[];
+    res.setHeader('Cache-Control','public, max-age=300');
+    res.json({
+      enabled:enough&&(pairs.length>0||features.length>0),
+      sampleSize:Number(intelligence.sample?.learning||0),
+      confidence:intelligence.sample?.confidence||'low',
+      pairs,features,
+      note:enough?'Based on aggregate saved layouts from this rental company.':'More real layouts are needed before customer suggestions are shown.'
+    });
   }catch(error){next(error);}
 });
 router.get('/:slug/designs', requireTenantAccess, async (req, res, next) => {
