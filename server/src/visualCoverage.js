@@ -76,6 +76,12 @@ function visualCoverage(product,tenantSlug){
   if(CONFIGURATION_NAMES.test(name)){
     return {level:'configuration',renderable:false,native:false,label:'Configuration / add-on'};
   }
+  if(INFERRED_FURNITURE_NAMES.test(name)){
+    return {level:'inferred',renderable:true,native:true,label:'Inferred shared visual'};
+  }
+  if(ILLUSTRATIVE_EQUIPMENT_NAMES.test(name)){
+    return {level:'illustrative',renderable:true,native:false,label:'Dedicated illustrative equipment visual'};
+  }
   if(INFLATABLE_NAMES.test(name)){
     return {level:'illustrative',renderable:true,native:false,label:'Illustrative inflatable visual'};
   }
