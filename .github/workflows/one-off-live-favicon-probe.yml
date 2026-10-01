@@ -1,0 +1,29 @@
+name: One-off live favicon probe
+
+on:
+  push:
+    branches:
+      - fix/root-favicon-20261001
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify live root favicon
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -L -D /tmp/headers.txt -o /tmp/favicon.ico -w '%{http_code}' https://rentsketch.com/favicon.ico)"
+          echo "HTTP $code"
+          cat /tmp/headers.txt
+          test "$code" = "200"
+          test -s /tmp/favicon.ico
+          python3 - <<'PY'
+          from pathlib import Path
+          b=Path('/tmp/favicon.ico').read_bytes()
+          assert b[:4] == b'\x00\x00\x01\x00', b[:8]
+          print('valid ICO bytes', len(b))
+          PY
