@@ -99,6 +99,9 @@ function esc(s) {
  function errorHtml(err) { return '<div class="dash-error">' + esc(err && err.message ? err.message : String(err)) + (err && err.status === 402 ? ' <a href="#/billing">Open Billing to continue →</a>' : '') + '</div>'; }
 
  function bindShellEvents() {
+   var shell = document.getElementById('tenantShell');
+   if(shell) shell.classList.remove('menu-open');
+   function closeWorkspaceMenu(){ if(shell) shell.classList.remove('menu-open'); }
    var logout = document.getElementById('btnLogout');
    if (logout) logout.addEventListener('click', async function () {
      var signingOut=session.clear('signed-out');
@@ -114,11 +117,17 @@ function esc(s) {
      render();
    });
    var mobile = document.getElementById('tenantMobileMenu');
-   var shell = document.getElementById('tenantShell');
-   if (mobile && shell) mobile.addEventListener('click', function () { shell.classList.toggle('menu-open'); });
+   if (mobile && shell) mobile.addEventListener('click', function (event) { event.stopPropagation(); shell.classList.toggle('menu-open'); });
    document.querySelectorAll('.dash-nav a').forEach(function (link) {
-     link.addEventListener('click', function () { if (shell) shell.classList.remove('menu-open'); });
+     link.addEventListener('click', closeWorkspaceMenu);
    });
+   document.addEventListener('keydown', function(event){ if(event.key==='Escape') closeWorkspaceMenu(); }, {once:true});
+   document.addEventListener('click', function(event){
+     if(!shell || !shell.classList.contains('menu-open')) return;
+     if(event.target.closest('.dash-header,#tenantMobileMenu')) return;
+     closeWorkspaceMenu();
+   }, {once:true});
+   window.addEventListener('resize', function(){ if(window.innerWidth>800) closeWorkspaceMenu(); }, {once:true});
  }
 
  function viewLogin() {
