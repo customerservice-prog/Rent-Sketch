@@ -224,7 +224,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
       // close-up. Go inside before guests appear, then pull back and keep the
       // complete tent + waterslide framed for the final hero shot.
       if(view&&next===steps.length-3){
-        if(view.transitionCamera)view.transitionCamera('reception',900);
+        if(view.transitionCamera)view.transitionCamera('receptionWide',1050);
         else view.reception?.();
       }else if(view&&next===steps.length-2){
         if(view.transitionCamera)view.transitionCamera('outsideWide',1050);
