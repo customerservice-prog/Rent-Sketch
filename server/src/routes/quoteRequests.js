@@ -8,6 +8,7 @@ const {syncOrderEntitlement}=require('../orderProviders/quoteRequestOrderProvide
 const {validateWebhookUrl,postWebhook}=require('../outboundWebhook');
 const {isPassEnabled}=require('../eventPass');
 const {activePass}=require('../eventPassAccess');
+const {scheduleDesignIntelligenceRefresh}=require('../designIntelligence');
 const router=express.Router();
 const wrap=fn=>(req,res,next)=>Promise.resolve(fn(req,res)).catch(next);
 const buckets=new Map();
@@ -32,6 +33,7 @@ router.post('/:slug/quote-requests',wrap(async(req,res)=>{
  }
  if(designId){const d=(await db.query('SELECT tenant_id FROM designs WHERE id=$1',[designId])).rows[0];if(!d||d.tenant_id!==tenant.id)return res.status(400).json({error:'designId does not belong to this tenant'});}
  const r=await db.query(`INSERT INTO quote_requests (tenant_id,design_id,customer_name,customer_email,customer_phone,event_date,guest_count,event_type,line_items,estimate_total,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,created_at`,[tenant.id,designId,customerName,customerEmail,customerPhone||null,eventDate||null,guestCount,eventType||null,JSON.stringify(lineItems),estimateTotal,notes||null]);
+ scheduleDesignIntelligenceRefresh();
  const data={id:r.rows[0].id,createdAt:r.rows[0].created_at,designId,customerName,customerEmail,customerPhone:customerPhone||null,eventDate:eventDate||null,eventType:eventType||null,guestCount,estimateTotal,lineItems,notes:notes||null,plannerSource,property};
  const itemText=lineItems.length?'\nItems:\n'+lineItems.map(i=>`- ${i.qty||1} x ${i.label}${i.amount==null?'':` — $${Number(i.amount).toFixed(2)}`}`).join('\n'):'';
  const [webhook,email]=await Promise.all([
@@ -42,5 +44,5 @@ router.post('/:slug/quote-requests',wrap(async(req,res)=>{
  res.status(201).json({id:r.rows[0].id,createdAt:r.rows[0].created_at,received:true,notificationSent,notificationAttempted});
 }));
 router.get('/:slug/quote-requests',requireTenantRole('viewer'),async(req,res)=>{const r=await db.query(`SELECT qr.*,d.scene FROM quote_requests qr LEFT JOIN designs d ON d.id=qr.design_id WHERE qr.tenant_id=$1 ORDER BY qr.created_at DESC`,[req.tenant.id]);res.json({quoteRequests:r.rows});});
-router.patch('/:slug/quote-requests/:id',requireTenantRole('staff'),async(req,res)=>{const body=req.body||{},status=body.status==null?null:text(body.status,40),notes=body.notes==null?null:text(body.notes,8000);if(status&&!VALID_STATUSES.has(status))return res.status(400).json({error:'Invalid quote request status'});if(body.notes!=null&&typeof body.notes!=='string')return res.status(400).json({error:'notes must be text'});const r=await db.query(`UPDATE quote_requests SET status=COALESCE($1,status),notes=COALESCE($2,notes) WHERE id=$3 AND tenant_id=$4 RETURNING *`,[status,notes,req.params.id,req.tenant.id]);if(!r.rows[0])return res.status(404).json({error:'Quote request not found'});if(status)await syncOrderEntitlement(r.rows[0],req.tenant);res.json({quoteRequest:r.rows[0]});});
+router.patch('/:slug/quote-requests/:id',requireTenantRole('staff'),async(req,res)=>{const body=req.body||{},status=body.status==null?null:text(body.status,40),notes=body.notes==null?null:text(body.notes,8000);if(status&&!VALID_STATUSES.has(status))return res.status(400).json({error:'Invalid quote request status'});if(body.notes!=null&&typeof body.notes!=='string')return res.status(400).json({error:'notes must be text'});const r=await db.query(`UPDATE quote_requests SET status=COALESCE($1,status),notes=COALESCE($2,notes) WHERE id=$3 AND tenant_id=$4 RETURNING *`,[status,notes,req.params.id,req.tenant.id]);if(!r.rows[0])return res.status(404).json({error:'Quote request not found'});if(status)await syncOrderEntitlement(r.rows[0],req.tenant);scheduleDesignIntelligenceRefresh();res.json({quoteRequest:r.rows[0]});});
 module.exports=router;
