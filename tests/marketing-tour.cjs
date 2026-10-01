@@ -74,6 +74,7 @@ async function fixture({fail=false,page='business/index.html',reduced=true}={}){
    assert.ok(scene.objects.some(o=>o.id===id),id+' exists in final wedding');
  }
  assert.equal(scene.objects.filter(o=>o.kind==='dance').length,16);
+ assert.ok(scene.objects.some(o=>o.kind==='inflatable'&&o.id==='wedding-waterslide'),'final wedding includes the waterslide');
  assert.equal(scene.lightingId,'lighting-bistro');
  assert.equal(f.metrics().timelapses,0,'reduced-motion never animates build');
  assert.equal(f.d.querySelector('.tour-poster').hidden,true);
@@ -92,7 +93,7 @@ async function fixture({fail=false,page='business/index.html',reduced=true}={}){
 
  const autoplay=await fixture({reduced:false});
  assert.equal(autoplay.metrics().imports,0,'supporting page avoids renderer before explicit interaction');
- assert.deepEqual(Array.from(autoplay.stages,x=>String(x.key)),['space','tent','tables','chairs','sweetheart','dance','style','lighting','reception','evening']);
+ assert.deepEqual(Array.from(autoplay.stages,x=>String(x.key)),['space','tent','tables','chairs','sweetheart','dance','style','lighting','waterslide','reception','evening']);
  const tableStage=autoplay.stages.find(x=>x.key==='tables').scene.objects.filter(o=>o.id.startsWith('wedding-table-'));
  const chairStage=autoplay.stages.find(x=>x.key==='chairs').scene.objects.filter(o=>o.id.startsWith('wedding-table-'));
  assert.ok(tableStage.every(o=>o.hideChairs===true&&o.seatCount===8),'table stage keeps chair count but hides chair meshes');
