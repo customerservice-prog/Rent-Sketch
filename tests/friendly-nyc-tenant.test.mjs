@@ -10,6 +10,8 @@ test('Friendly NYC is a real isolated tenant with the approved 198-item seed',()
   assert.equal((migration.match(/\('fpr:/g)||[]).length,198);
   assert.match(migration,/customer_access='free'|'free',NULL,30,7,false/);
   assert.match(migration,/friendlypartyrentalnyc\.com/);
+  assert.match(migration,/www\.friendlypartyrentalnyc\.com/);
+  assert.doesNotMatch(migration,/nyc\.friendlypartyrental\.com/);
   assert.doesNotMatch(migration,/FRIENDLY_NYC_RENTSKETCH_WEBHOOK_SECRET/);
 });
 
