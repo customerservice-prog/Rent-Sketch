@@ -30,6 +30,6 @@ test('NYC order recovery stays tenant-scoped end to end',()=>{
   assert.match(order,/tenant\.slug\+'-order:'/);
   assert.match(email,/FRIENDLY_NYC_RENTSKETCH_WEBHOOK_SECRET/);
   assert.match(paywall,/\['friendly', 'friendly-nyc', 'generic'\]/);
-  assert.match(access,/tenant: tenant/);
+  assert.match(access,/tenant === 'friendly-nyc'/);
   assert.match(access,/destination\.searchParams\.get\('tenant'\) !== tenant/);
 });
