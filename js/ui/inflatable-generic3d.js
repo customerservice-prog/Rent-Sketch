@@ -59,6 +59,30 @@ export function createInflatable(item,definition=byId(item.inflatableId)){
  // Product-specific silhouette/details for Friendly inflatables. These do not
  // change the planning footprint; they make each live rental visually distinct
  // instead of recoloring one generic castle/slide shell.
+ if(p.style==='basketball'){
+   // Dedicated two-lane shootout silhouette. This is an illustrative planning
+   // model only; dimensions and operating clearances are not manufacturer specs.
+   const floor=cushion(0,.72,0,w*.94,.82,d*.90,mats[1],.32);
+   floor.name='Basketball inflatable floor';
+   for(const side of [-1,1]){
+     cushion(side*w*.44,1.45,0,w*.10,2.2,d*.88,mats[0],.32).name='Inflatable side rail';
+   }
+   cushion(0,h*.50,-d*.38,w*.90,h*.70,d*.10,mats[0],.42).name='Basketball back wall';
+   cushion(0,1.28,0,w*.08,1.55,d*.74,mats[2],.20).name='Center lane divider';
+   const laneXs=[-w*.23,w*.23];
+   laneXs.forEach((x,i)=>{
+     const board=cushion(x,h*.58,-d*.325,w*.25,h*.16,.22,white,.05);
+     board.name='Backboard '+(i+1);
+     const rim=new THREE.Mesh(new THREE.TorusGeometry(w*.075,.045,10,24),vinyl('#ef762b'));
+     rim.rotation.x=Math.PI/2;add(rim,x,h*.49,-d*.255);rim.name='Basketball rim '+(i+1);
+     const net=new THREE.Mesh(new THREE.CylinderGeometry(w*.065,w*.045,h*.12,12,1,true),netMaterial());
+     add(net,x,h*.43,-d*.255);net.name='Basketball net '+(i+1);
+   });
+   for(const x of [-w*.30,0,w*.30]){
+     const ball=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.16,w*.025),14,10),vinyl('#e57a24'));
+     add(ball,x,1.18,d*.28);ball.name='Illustrative basketball';
+   }
+  }
  if(p.variant==='rainbow-castle'){
    for(let i=0;i<4;i++){const a=Math.PI*(i/3),pts=[];for(let j=0;j<=18;j++){const t=j/18*Math.PI;pts.push([Math.cos(t)*(2.1+i*.20),1.35+Math.sin(t)*(2.6+i*.20),d/2-.55+i*.03]);}group.add(tube(pts,.16,mats[i%mats.length]));}
  }
