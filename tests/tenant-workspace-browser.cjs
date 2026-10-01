@@ -4,7 +4,7 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'qa-tenant-workspace');fs.mkdirSync(out,{recursive:true});
 const tenant='friendly';
 const session={id:'tenant-browser-session',csrfToken:'tenant-browser-csrf',expiresAt:new Date(Date.now()+3600000).toISOString(),idleTimeoutSeconds:1800};
-const fixture='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/tenant-v2.css"></head><body><div id="app"></div><script src="/js/ui/dashboard-session.js"></script><script src="/dashboard/app.js"></script></body></html>';
+const fixture='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/tenant-v2.css"></head><body><div id="app"></div><script src="/js/ui/dashboard-session.js"></script><script src="/dashboard/app.js"></script><script src="/dashboard/account-link.js"></script></body></html>';
 const requests=[
  {id:'q1',customer_name:'Jamie Wedding',customer_email:'jamie@example.invalid',customer_phone:'3155550101',event_date:'2026-10-20',guest_count:120,event_type:'Wedding',estimate_total:1750,status:'new',payment_status:'unpaid',created_at:'2026-09-23T20:00:00Z'},
  {id:'q2',customer_name:'Alex Party',customer_email:'alex@example.invalid',customer_phone:'3155550102',event_date:'2026-10-05',guest_count:60,event_type:'Birthday',estimate_total:620,status:'booked',payment_status:'paid',amount_paid_cents:12400,created_at:'2026-09-22T18:00:00Z'}
@@ -24,7 +24,7 @@ const server=http.createServer((req,res)=>{
  if(u.pathname==='/fixture'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(fixture);}
  if(u.pathname.startsWith('/api/')){
   res.setHeader('Content-Type','application/json');
-  if(u.pathname==='/api/auth/me')return res.end(JSON.stringify({session,user:{id:'u1',email:'owner@example.invalid',displayName:'Owner',isPlatformAdmin:false},tenants:[{slug:tenant,name:'Friendly Party Rental',role:'owner'}]}));
+  if(u.pathname==='/api/auth/me')return res.end(JSON.stringify({session,user:{id:'u1',email:'owner@example.invalid',displayName:'Owner',isPlatformAdmin:true},tenants:[{slug:tenant,name:'Friendly Party Rental',role:'platform_admin'},{slug:'second-tenant',name:'Second Rental Company',role:'platform_admin'}]}));
   if(u.pathname===`/api/tenants/${tenant}/admin`)return res.end(JSON.stringify(admin));
   if(u.pathname===`/api/tenants/${tenant}/designs`)return res.end(JSON.stringify({designs}));
   if(u.pathname===`/api/tenants/${tenant}/quote-requests`)return res.end(JSON.stringify({quoteRequests:requests}));
@@ -49,14 +49,38 @@ const server=http.createServer((req,res)=>{
    await ctx.addCookies([{name:'rs_fixture_session',value:'opaque-fixture',url:base,httpOnly:true,sameSite:'Strict'}]);
    await ctx.addInitScript(url=>{localStorage.setItem('rentsketch_dashboard_tenant','friendly');window.RENTSKETCH_API_URL=url;},base);
    const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
-   await page.goto(base+'/fixture#/overview');
+   await page.goto(base+'/fixture?tenantView=1#/overview');
    await page.getByRole('heading',{name:'Friendly Party Rental'}).waitFor();
    assert.equal(await page.getByText('Finish your customer designer',{exact:false}).count()+await page.getByText('Your designer is launch-ready',{exact:false}).count()>0,true);
    assert.equal(await page.getByText('Business health',{exact:true}).count(),1);
    assert.equal(await page.getByRole('link',{name:/Open RentSketch/}).count()>=1,true);
    assert.equal(await page.getByText('Install & share',{exact:true}).count(),1);
+   assert.equal(await page.getByText('Platform Admin · complimentary',{exact:true}).count(),1);
+   assert.equal(await page.locator('#tenantSwitch').count(),1);
+   await page.locator('#accountSecurityLink').waitFor();
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'workspace no page overflow '+v.width);
-   if(v.name==='mobile'){await page.locator('#tenantMobileMenu').click();assert.equal(await page.locator('#tenantShell').evaluate(el=>el.classList.contains('menu-open')),true);}
+   if(v.name==='desktop'){
+     const bounds=await page.evaluate(()=>{
+       const box=el=>{const r=el.getBoundingClientRect();return{x:r.x,right:r.right,width:r.width};};
+       const header=box(document.querySelector('.dash-header'));
+       return {header,account:box(document.querySelector('.dash-account')),switcher:box(document.querySelector('#tenantSwitch')),role:box(document.querySelector('.role-pill')),security:box(document.querySelector('#accountSecurityLink'))};
+     });
+     for(const [name,b] of Object.entries(bounds)){
+       if(name==='header')continue;
+       assert.ok(b.x>=bounds.header.x-.5,name+' begins outside sidebar');
+       assert.ok(b.right<=bounds.header.right+.5,name+' escapes sidebar');
+       assert.ok(b.width>0,name+' has visible width');
+     }
+   }
+   if(v.name==='mobile'){
+     await page.locator('#tenantMobileMenu').click();
+     assert.equal(await page.locator('#tenantShell').evaluate(el=>el.classList.contains('menu-open')),true);
+     await page.keyboard.press('Escape');
+     assert.equal(await page.locator('#tenantShell').evaluate(el=>el.classList.contains('menu-open')),false);
+     await page.locator('#tenantMobileMenu').click();
+     await page.locator('.tw-topbar').click({position:{x:300,y:30}});
+     assert.equal(await page.locator('#tenantShell').evaluate(el=>el.classList.contains('menu-open')),false);
+   }
    await page.screenshot({path:path.join(out,'tenant-'+v.name+'.png'),fullPage:true});
    await page.evaluate(()=>location.hash='#/analytics');await page.getByRole('heading',{name:'Customer planning activity'}).waitFor();
    assert.equal(await page.getByText('Request → booked',{exact:true}).count(),1);
