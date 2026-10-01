@@ -48,7 +48,7 @@ function safeOrigin(req) {
 const FRIENDLY_CHECKOUT_LOGO = 'https://www.friendlypartyrental.com/images/logo.png';
 const RENTSKETCH_CHECKOUT_LOGO = 'https://rentsketch.com/assets/brand-mark.svg';
 function eventPassBranding(slug) {
-    const friendly = slug === 'friendly';
+    const friendly = ['friendly','friendly-nyc'].includes(slug);
     return {
         branding_settings: {
             background_color: '#ffffff',
@@ -69,7 +69,7 @@ function eventPassBranding(slug) {
 }
 function eventPassProductName(renewal, slug) {
     const base = renewal ? 'RentSketch Event Pass Renewal' : 'RentSketch Event Pass';
-    return slug === 'friendly' ? base + ' — Friendly Party Rental' : base;
+    return ['friendly','friendly-nyc'].includes(slug) ? base + ' — Friendly Party Rental' : base;
 }
 
 function analyticsPurchase(session) {
@@ -144,7 +144,8 @@ router.get('/event-pass/email-status', wrap(async (req, res) => {
 
 router.get('/order-access/status', wrap(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ available: await orderAccessReady() });
+    const tenantSlug = ['friendly','friendly-nyc'].includes(req.query?.tenant) ? req.query.tenant : 'friendly';
+    res.json({ available: await orderAccessReady(tenantSlug), tenant: tenantSlug });
 }));
 
 const orderBuckets = new Map();
@@ -162,18 +163,19 @@ router.post('/order-access/request', wrap(async (req, res) => {
         bucket.count++; orderBuckets.set(key, bucket);
         if (bucket.count > (key.startsWith('ip:') ? 20 : 5)) return res.status(429).json({ error: 'Too many booking checks. Please wait a few minutes and try again.' });
     }
+    const tenantSlug = ['friendly','friendly-nyc'].includes(req.body?.tenant) ? req.body.tenant : 'friendly';
     let order;
-    try { order = await lookupOrder({ orderNumber, firstName }); }
+    try { order = await lookupOrder({ orderNumber, firstName }, tenantSlug); }
     catch (_) { return res.status(503).json({ error: 'Friendly order verification is temporarily unavailable. Please try again shortly.' }); }
     const declined = 'No active confirmed Friendly booking matched those details. Check your first name and order number, or call 315-884-1498.';
     if (!order?.eligible || Date.parse(order.expiresAt) <= Date.now()) return res.status(403).json({ error: declined });
-    const tenant = (await query("SELECT * FROM tenants WHERE slug='friendly'")).rows[0];
+    const tenant = (await query('SELECT * FROM tenants WHERE slug=$1', [tenantSlug])).rows[0];
     if (!tenant) return res.status(503).json({ error: 'Friendly order verification is temporarily unavailable. Please try again shortly.' });
     const design = await claimOrder(order, tenant);
     if (!design) return res.status(403).json({ error: declined });
     // The first-name/order match authorizes this booking's designer directly.
     // Reuse the signed restore path without checking SMTP or sending an email.
-    res.json({ ok: true, accessUrl: accessUrl(design, 'friendly', order.customerEmail, order.expiresAt) });
+    res.json({ ok: true, accessUrl: accessUrl(design, tenantSlug, order.customerEmail, order.expiresAt) });
 }));
 
 // Resume an owned draft without depending on email delivery or browser flags.
