@@ -23,8 +23,16 @@ const db={query:async(sql,args=[])=>{
     ]};
   }
   if(sql.includes('FROM quote_requests')){
-    if(args[0]==='tenant-a')return{rows:[{design_id:'a1',status:'booked',created_at:new Date()}]};
+    if(args[0]==='tenant-a')return{rows:[{design_id:'a1',status:'booked',created_at:new Date(),booked_total_cents:245000,booked_line_items:[{label:'Bistro Lights',qty:1},{label:'Red Linen',qty:8}],booked_at:new Date(),external_order_id:'ERS-9001',external_order_source:'ers'}]};
     return{rows:[{design_id:'a1',status:'booked',created_at:new Date()},{design_id:'b1',status:'new',created_at:new Date()}]};
+  }
+  if(sql.includes('FROM tenant_design_intelligence_snapshots')){
+    return{rows:[
+      {bucket_at:'2026-07-01T00:00:00Z',payload:{sample:{learning:2,confidence:'low'},conversion:{requestRate:20,bookedRate:0},attribution:{bookedRevenueCents:0,bookedOrders:0},averages:{objectsPerDesign:4,revisions:3},friction:{missingGuest:{pct:50},missingTent:{pct:25},sparse:{pct:50},highRevision:{pct:50}}}},
+      {bucket_at:'2026-09-01T00:00:00Z',payload:{sample:{learning:5,confidence:'low'},conversion:{requestRate:40,bookedRate:20},attribution:{bookedRevenueCents:100000,bookedOrders:1},averages:{objectsPerDesign:6,revisions:2.5},friction:{missingGuest:{pct:20},missingTent:{pct:20},sparse:{pct:20},highRevision:{pct:40}}}},
+      {bucket_at:'2026-09-24T00:00:00Z',payload:{sample:{learning:7,confidence:'low'},conversion:{requestRate:50,bookedRate:28},attribution:{bookedRevenueCents:180000,bookedOrders:2},averages:{objectsPerDesign:7,revisions:2.2},friction:{missingGuest:{pct:14},missingTent:{pct:14},sparse:{pct:14},highRevision:{pct:28}}}},
+      {bucket_at:'2026-10-01T00:00:00Z',payload:{sample:{learning:9,confidence:'low'},conversion:{requestRate:55,bookedRate:33},attribution:{bookedRevenueCents:245000,bookedOrders:2},averages:{objectsPerDesign:7.5,revisions:2},friction:{missingGuest:{pct:11},missingTent:{pct:11},sparse:{pct:11},highRevision:{pct:22}}}}
+    ]};
   }
   throw Error('Unexpected SQL '+sql);
 }};
@@ -37,10 +45,19 @@ const db={query:async(sql,args=[])=>{
   assert.equal(scoped.sample.tenants,1);
   assert.equal(scoped.conversion.requestRate,100);
   assert.equal(scoped.conversion.bookedRate,100);
+  assert.equal(scoped.attribution.bookedRevenueCents,245000);
+  assert.equal(scoped.attribution.bookedOrders,1);
+  assert.equal(scoped.attribution.bookedItems.find(x=>x.name==='Red Linen').count,8);
   assert.equal(JSON.stringify(scoped).includes('secret-beta-slide'),false,'tenant A intelligence must not include tenant B features');
   const scopedCalls=calls.slice(0,2);
   assert.ok(scopedCalls.every(c=>c.args[0]==='tenant-a'),'both design and request queries are tenant-scoped');
   assert.ok(scopedCalls[0].sql.includes('d.tenant_id=$1'),'design query is tenant-scoped');
   assert.ok(scopedCalls[1].sql.includes('tenant_id=$1'),'request query is tenant-scoped');
-  console.log('PASS tenant Design Intelligence: scoped metrics and patterns cannot cross tenant boundaries.');
+  const history=await mod.getTenantDesignIntelligenceHistory('tenant-a',2160);
+  assert.equal(history.points.length,4);
+  assert.equal(history.periods.days7.bookedRevenueCents,65000);
+  assert.equal(history.periods.days30.bookedRevenueCents,145000);
+  assert.equal(history.periods.days90.bookedRevenueCents,245000);
+  assert.equal(history.periods.days7.requestRate,5);
+  console.log('PASS tenant Design Intelligence: scoped revenue, booked lines, 7/30/90 trends and patterns cannot cross tenant boundaries.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
