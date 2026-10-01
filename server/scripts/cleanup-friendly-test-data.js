@@ -42,22 +42,47 @@ const designSceneTestSql = `
     await client.query('BEGIN');
     const already=(await client.query('SELECT id FROM platform_admin_audit WHERE action=$1 LIMIT 1',[MARKER])).rows[0];
     if(already){
+      const markerV2='friendly_prelaunch_design_cleanup_20261001_v2';
+      const second=(await client.query('SELECT id FROM platform_admin_audit WHERE action=$1 LIMIT 1',[markerV2])).rows[0];
+      if(second){
+        await client.query('ROLLBACK');
+        console.log('FRIENDLY_PRELAUNCH_CLEANUP '+JSON.stringify({alreadyApplied:true}));
+        return;
+      }
       const tenant=(await client.query("SELECT id FROM tenants WHERE slug='friendly' LIMIT 1")).rows[0];
-      const remaining=tenant?(await client.query(`
-        SELECT d.id,d.event_type,d.guest_count,d.estimate_total,d.created_at,d.updated_at,
-          CASE WHEN d.owner_user_id IS NOT NULL THEN 'staff'
-               WHEN d.anonymous_session_id LIKE 'direct_%' THEN 'direct_checkout'
-               WHEN d.anonymous_session_id IS NULL OR d.anonymous_session_id='' THEN 'none'
-               ELSE 'anonymous' END AS session_kind,
-          CASE WHEN jsonb_typeof(d.scene->'objects')='array' THEN jsonb_array_length(d.scene->'objects') ELSE 0 END AS object_count,
-          nullif(d.scene->>'tentId','') AS tent_id,
-          (nullif(d.scene->'customer'->>'name','') IS NOT NULL) AS has_customer_name,
-          (nullif(d.scene->'customer'->>'email','') IS NOT NULL) AS has_customer_email,
-          (nullif(d.scene->>'propertyAddress','') IS NOT NULL) AS has_property_address
-        FROM designs d WHERE d.tenant_id=$1 ORDER BY d.created_at ASC
-      `,[tenant.id])).rows:[];
-      await client.query('ROLLBACK');
-      console.log('FRIENDLY_REMAINING_DESIGNS '+JSON.stringify({alreadyApplied:true,count:remaining.length,designs:remaining}));
+      if(!tenant) throw new Error('friendly tenant not found');
+      const cutoff='2026-09-23T00:00:00Z';
+      const before=Number((await client.query('SELECT count(*) AS n FROM designs WHERE tenant_id=$1',[tenant.id])).rows[0].n);
+      const deleted=await client.query(`
+        DELETE FROM designs d
+        WHERE d.tenant_id=$1
+          AND d.created_at < $2::timestamptz
+          AND d.owner_user_id IS NULL
+          AND d.project_root_id IS NULL
+          AND coalesce(d.project_name,'')=''
+          AND coalesce(d.site_notes,'')=''
+          AND coalesce(d.crew_notes,'')=''
+          AND (d.event_type IS NULL OR lower(d.event_type) IN ('wedding','qa'))
+          AND nullif(d.scene->'customer'->>'name','') IS NULL
+          AND nullif(d.scene->'customer'->>'email','') IS NULL
+          AND nullif(d.scene->>'propertyAddress','') IS NULL
+          AND NOT EXISTS (SELECT 1 FROM quote_requests qr WHERE qr.design_id=d.id)
+          AND NOT EXISTS (SELECT 1 FROM consumer_payments cp WHERE cp.design_id=d.id AND cp.status='paid')
+          AND NOT EXISTS (SELECT 1 FROM entitlements e WHERE e.design_id=d.id AND e.status='active')
+          AND NOT EXISTS (SELECT 1 FROM design_share_links sl WHERE sl.design_id=d.id)
+          AND NOT EXISTS (SELECT 1 FROM design_revisions dr WHERE dr.design_id=d.id)
+          AND NOT EXISTS (SELECT 1 FROM design_background_photos bp WHERE bp.design_id=d.id)
+          AND NOT EXISTS (SELECT 1 FROM designs child WHERE child.project_root_id=d.id)
+        RETURNING d.id
+      `,[tenant.id,cutoff]);
+      const after=Number((await client.query('SELECT count(*) AS n FROM designs WHERE tenant_id=$1',[tenant.id])).rows[0].n);
+      const metadata={tenant:'friendly',cutoff,before,deleted:deleted.rowCount,after};
+      await client.query(`
+        INSERT INTO platform_admin_audit(action,target_type,target_label,metadata)
+        VALUES($1,'tenant','friendly',$2::jsonb)
+      `,[markerV2,JSON.stringify(metadata)]);
+      await client.query('COMMIT');
+      console.log('FRIENDLY_PRELAUNCH_CLEANUP '+JSON.stringify(metadata));
       return;
     }
     const tenant=(await client.query("SELECT id FROM tenants WHERE slug='friendly' LIMIT 1")).rows[0];
