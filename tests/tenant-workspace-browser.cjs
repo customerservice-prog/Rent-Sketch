@@ -29,6 +29,19 @@ const server=http.createServer((req,res)=>{
   if(u.pathname===`/api/tenants/${tenant}/designs`)return res.end(JSON.stringify({designs}));
   if(u.pathname===`/api/tenants/${tenant}/quote-requests`)return res.end(JSON.stringify({quoteRequests:requests}));
   if(u.pathname===`/api/tenants/${tenant}/products`)return res.end(JSON.stringify({products}));
+  if(u.pathname===`/api/tenants/${tenant}/design-intelligence`)return res.end(JSON.stringify({
+    generatedAt:'2026-10-01T12:00:00Z',mode:'tenant_live_aggregate',privacy:'Aggregate only',
+    sample:{learning:6,ignoredSynthetic:1,ignoredEmpty:2,confidence:'medium',tenants:1,tenantScoped:true},
+    averages:{objectsPerDesign:7.5,guestCount:72,revisions:2.2},
+    conversion:{withRequest:3,booked:1,requestRate:50,bookedRate:17},
+    friction:{missingGuest:{count:1,pct:17},missingTent:{count:1,pct:17},sparse:{count:1,pct:17},highRevision:{count:2,pct:33}},
+    patterns:{
+      pairs:[{name:'Linen · Red + Lighting · Bistro',count:3}],
+      features:[{name:'Tent · Pole 20x40',count:5},{name:'Linen · Red',count:4}],
+      objectKinds:[{name:'Table',count:6},{name:'Linen',count:4}]
+    },
+    recommendations:[{id:'bundle',title:'Offer a common add-on bundle',detail:'Red linens and bistro lights repeat together.',signal:'3 layouts',priority:'medium'}]
+  }));
   if(u.pathname===`/api/tenants/${tenant}/connect/status`)return res.end(JSON.stringify({status:'active',hasAccount:true}));
   if(u.pathname===`/api/business/${tenant}/billing/status`)return res.end(JSON.stringify({friendlyFree:false,plan:'pro',status:'active',trialEndsAt:null,subscription:{status:'active',current_period_start:'2026-09-01T00:00:00Z',current_period_end:'2026-10-01T00:00:00Z'}}));
   if(u.pathname==='/api/business/plans')return res.end(JSON.stringify({plans:[{id:'starter',name:'Starter',monthlyCents:4900,annualCents:49000},{id:'pro',name:'Pro',monthlyCents:9900,annualCents:99000},{id:'commerce',name:'Business',monthlyCents:19900,annualCents:199000}]}));
@@ -82,8 +95,11 @@ const server=http.createServer((req,res)=>{
      assert.equal(await page.locator('#tenantShell').evaluate(el=>el.classList.contains('menu-open')),false);
    }
    await page.screenshot({path:path.join(out,'tenant-'+v.name+'.png'),fullPage:true});
-   await page.evaluate(()=>location.hash='#/analytics');await page.getByRole('heading',{name:'Customer planning activity'}).waitFor();
+   await page.evaluate(()=>location.hash='#/analytics');await page.getByRole('heading',{name:'Sales Insights',exact:true}).waitFor();
    assert.equal(await page.getByText('Request → booked',{exact:true}).count(),1);
+   assert.equal(await page.getByText('Design → quote request',{exact:true}).count(),1);
+   assert.equal(await page.getByText('Linen · Red + Lighting · Bistro',{exact:true}).count(),1);
+   assert.equal(await page.getByRole('heading',{name:'Customer planning activity',exact:true}).count(),1);
    await page.evaluate(()=>location.hash='#/billing');await page.getByRole('heading',{name:'Billing',exact:true}).waitFor();assert.equal(await page.getByText('Complimentary platform access is permanent.',{exact:false}).count(),1);
    await page.evaluate(()=>location.hash='#/install');await page.getByRole('heading',{name:'Install RentSketch'}).waitFor();assert.equal(await page.getByText('Iframe embed',{exact:true}).count(),1);
    await page.evaluate(()=>location.hash='#/requests');await page.getByRole('heading',{name:'Quote requests'}).waitFor();
@@ -91,6 +107,6 @@ const server=http.createServer((req,res)=>{
    assert.deepEqual(errors,[]);
    await ctx.close();
   }
-  console.log('PASS tenant workspace browser: premium overview, health, onboarding, analytics, billing, install/share, request search and mobile navigation.');
+  console.log('PASS tenant workspace browser: premium overview, health, onboarding, owner Sales Insights, billing, install/share, request search and mobile navigation.');
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
