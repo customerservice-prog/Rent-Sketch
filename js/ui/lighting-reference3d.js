@@ -53,6 +53,7 @@ export function makeReferenceLighting(tent,option){
  const ref=lightingReference(option),type=ref?.type||(option.visual==='chandelier'?'chandelier':option.visual?.startsWith('uplight')?'uplight':option.visual==='bistro-cross-runs'?'bistro':'c7');
  const profile=structuralProfile(tent.type||'frame',tent.widthFt,tent.lengthFt),m=lampMaterials(),s=shapes(group),eaveMountHeight=profile.eaveHeightFt-.35,hw=tent.widthFt/2,hl=tent.lengthFt/2;
  group.name=option.name||'Event lighting';group.userData.reference=ref;group.userData.installationVerified=false;
+ const bistroEdgeInset=Math.min(1.1,Math.max(.75,tent.widthFt*.035)),bistroMountHeight=profile.eaveHeightFt-.30,poleClearance=1.35;
  const lights=[];
  if(type==='chandelier'){
   const q=createChandelier(m),x=tent.type==='pole'?2.4:0;q.position.set(x,eaveMountHeight-2.25,0);group.add(q);s.rod([x,eaveMountHeight+.30,0],[x,profile.peakHeightFt-.4,0],.018,m.silver);group.userData.fixtureCount=1;
@@ -62,9 +63,6 @@ export function makeReferenceLighting(tent,option){
  }else{
   const lines=type==='bistro'?profile.lighting.bistro:profile.lighting.perimeter;group.userData.fixtureType=type;let routeLength=0,bulbs=0;
   const centerPoles=type==='bistro'?(Array.isArray(tent.centerPoles)&&tent.centerPoles.length?tent.centerPoles:computeCenterPoles(tent.type||'frame',tent.widthFt,tent.lengthFt)):[];
-  const bistroEdgeInset=Math.min(1.1,Math.max(.75,tent.widthFt*.035));
-  const bistroMountHeight=profile.eaveHeightFt-.30;
-  const poleClearance=1.35;
   for(const sourceLine of lines){
    const line={from:{...sourceLine.from},to:{...sourceLine.to}};
    if(type==='bistro'&&Math.abs(line.from.y-line.to.y)<.001&&centerPoles.length){
