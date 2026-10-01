@@ -43,7 +43,11 @@ function recommendation(id,title,detail,signal,priority='medium'){
   return { id,title,detail,signal,priority };
 }
 
-async function getDesignIntelligence(){
+async function getDesignIntelligence(options={}){
+  const tenantId=options&&options.tenantId?String(options.tenantId):null;
+  const designWhere=tenantId?'WHERE d.tenant_id=$1':'';
+  const requestWhere=tenantId?'WHERE tenant_id=$1 AND design_id IS NOT NULL':'WHERE design_id IS NOT NULL';
+  const args=tenantId?[tenantId]:[];
   const [designResult, requestResult] = await Promise.all([
     db.query(`
       SELECT d.id::text,d.tenant_id::text,COALESCE(t.slug,'generic') AS tenant_slug,
@@ -51,15 +55,16 @@ async function getDesignIntelligence(){
              d.estimate_total,d.scene,d.project_name,d.revision,d.created_at,d.updated_at
       FROM designs d
       LEFT JOIN tenants t ON t.id=d.tenant_id
+      ${designWhere}
       ORDER BY d.updated_at DESC
       LIMIT 5000
-    `),
+    `,args),
     db.query(`
       SELECT design_id::text,status,created_at
       FROM quote_requests
-      WHERE design_id IS NOT NULL
+      ${requestWhere}
       ORDER BY created_at DESC
-    `)
+    `,args)
   ]);
 
   const reqByDesign = new Map();
@@ -151,7 +156,7 @@ async function getDesignIntelligence(){
 
   return {
     generatedAt:new Date().toISOString(),
-    mode:'live_aggregate',
+    mode:tenantId?'tenant_live_aggregate':'live_aggregate',
     privacy:'Aggregate layout features only; customer contact fields are not read.',
     sample:{
       scanned:designResult.rows.length,
@@ -159,7 +164,8 @@ async function getDesignIntelligence(){
       ignoredSynthetic,
       ignoredEmpty,
       confidence:learning>=50?'high':learning>=15?'medium':'low',
-      tenants:tenantCounts.size
+      tenants:tenantCounts.size,
+      tenantScoped:!!tenantId
     },
     averages:{
       objectsPerDesign:learning ? Number((totalObjects/learning).toFixed(1)) : 0,
