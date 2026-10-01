@@ -5,7 +5,7 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
  const three=new vm.SyntheticModule(Object.keys(THREE),function(){for(const k of Object.keys(THREE))this.setExport(k,THREE[k]);},{context});
  function mod(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);return m;}
  async function load(file){const m=mod(path.join(root,file));if(m.status==='unlinked')await m.link((s,r)=>s==='three'?three:mod(s.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',s.slice(13)):path.resolve(path.dirname(r.identifier),s)));if(m.status!=='evaluated')await m.evaluate();return m.namespace;}
- const api=await load('js/ui/catalog-phase5.js'),factory=await load('js/ui/phase5-equipment3d.js'),reference=await load('js/data/phase5-reference.js'),products=JSON.parse(fs.readFileSync(root+'/qa-phase5/catalog.json')).products;let checks=0;const rows=[];
+ const api=await load('js/ui/catalog-phase5.js'),factory=await load('js/ui/phase5-equipment3d.js'),reference=await load('js/data/phase5-reference.js'),lighting=await load('js/ui/lighting-reference3d.js'),products=JSON.parse(fs.readFileSync(root+'/qa-phase5/catalog.json')).products;let checks=0;const rows=[];
  const check=(v,n)=>{assert.ok(v,n);checks++;};
  for(const p of products.filter(p=>reference.phase5Reference(p))){const before=JSON.stringify(p),result=api.phase5Model(p,products);if(p.external_id==='fpr:stage-ramp'){check(result===null,'ramp photo conflict cannot become a made-up model');continue;}
   check(!!result,p.name);const g=result.model,b=new THREE.Box3().setFromObject(g),size=b.getSize(new THREE.Vector3());check([size.x,size.y,size.z].every(n=>Number.isFinite(n)&&n>0),'finite bounds');check(before===JSON.stringify(p),'catalog unchanged');let vertices=0,meshes=0;
@@ -17,6 +17,16 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
   if(p.external_id==='fpr:battery-operated-crystal-chandelier')check(g.userData.fixtureCount===1,'one chandelier');
   if(result.reference.kind==='lighting'){const installed=api.phase5Model(p,products,{installed:true});check(!!installed,'installed lighting render');installed.model.userData.setNight?.(true);installed.model.traverse(m=>{if(m.isLight)check(Number.isFinite(m.intensity),'finite night intensity');});}
  }
+ const bistro=lighting.makeReferenceLighting(
+  {type:'pole',widthFt:20,lengthFt:30,centerPoles:[{x:10,y:15}]},
+  {visual:'bistro-cross-runs',name:'Bistro regression'}
+ );
+ check(bistro.userData.edgeInsetFt>=.75,'bistro cords start inside the tent edge instead of through the valance');
+ check(bistro.userData.mountHeightFt<7,'bistro cords mount below the eave');
+ check(bistro.userData.bistroRunsFt.every(y=>Math.abs(y-15)>=bistro.userData.centerPoleClearanceFt-.001),'bistro runs clear the pole-tent center pole');
+ const bistroBounds=new THREE.Box3().setFromObject(bistro);
+ check(bistroBounds.min.x>-10&&bistroBounds.max.x<10,'bistro geometry stays inside the 20 ft tent width');
+
  const original={id:'saved',name:'Generator',productId:'unmodified',externalId:'fpr:4375-watt-generator',modelWidthFt:3,modelDepthFt:2.3,heightFt:2.5,widthFt:2.3,depthFt:3,x:17,y:8,rotationDeg:90},before=JSON.stringify(original),g=factory.createPhase5Equipment({externalId:original.externalId,widthFt:9,depthFt:9,heightFt:9},original);check(JSON.stringify(original)===before,'saved state unchanged');const s=new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3());check(s.x<=3.01&&s.z<=2.4&&s.y<=2.51,'saved physical envelope retained');g.userData.setOperating(false);const stopped=g.children[1]?.position.y;g.userData.update?.(20);check(g.children[1]?.position.y===stopped,'stopped engine stays still');
  fs.mkdirSync(root+'/qa-phase5',{recursive:true});fs.writeFileSync(root+'/qa-phase5/geometry.json',JSON.stringify({checks,rows},null,2));console.log('PASS Phase 5: '+checks+' source identity, geometry, animation, footprint and lighting checks across '+rows.length+' models.');
 })().catch(e=>{console.error(e);process.exitCode=1});
