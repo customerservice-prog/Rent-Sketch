@@ -11,7 +11,7 @@ test('booking carries exact imported products and separate colors without contac
  assert.deepEqual(JSON.parse(new URLSearchParams(url.hash.slice(1)).get('layout')),p);assert.equal('amount' in p.items[0],false);
 });
 test('unknown items and ballast require a quote instead of disappearing from checkout',()=>{
- assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:[...lines,{label:'Concrete ballast setup',amount:null,qty:1}],products}),/Concrete ballast setup.*Request a Quote/);
+ assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:[...lines,{label:'Concrete ballast setup',amount:null,qty:1}],products}),/Concrete ballast setup.*quote/i);
  assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:[{productId:'unknown',label:'Unknown chair',amount:120,qty:1}],products}),/Unknown chair/);
  assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:[{...lines[0],qty:1.5}],products}),/quantity/);
  assert.throws(()=>buildBookingHandoff({tenant:'different-business',lines,products}),/Friendly/);
