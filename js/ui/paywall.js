@@ -4,7 +4,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   var slug = params.get('tenant') || 'generic';
-  if (!['friendly', 'generic'].includes(slug)) return;
+  if (!['friendly', 'friendly-nyc', 'generic'].includes(slug)) return;
   var fragment = new URLSearchParams(location.hash.slice(1));
   var checkoutId = params.get('checkout_session_id') || fragment.get('eventPass');
   var draftToken = fragment.get('draft');
@@ -254,9 +254,23 @@
     var email = verified && verified.customerEmail;
     var delivery = verified && verified.emailDelivery;
     var included = verified && verified.includedWithOrder;
-    view.querySelector('[data-email-status]').textContent = included ? 'This saved Friendly event is ready to reopen with its private access link.' : email ? (delivery === 'sent' ? 'Your access email was sent to ' : delivery === 'failed' ? 'Email delivery needs another try for ' : 'Your access email is queued for ') + email + '.' : 'Keep your private access link to return later.';
+    var resend = view.querySelector('[data-resend]'), fine = view.querySelector('.pass-fine');
+    if (included) {
+      view.querySelector('[data-email-status]').textContent = 'Reopen it with your first name and order number. No email or code needed.';
+      resend.textContent = 'Use my name and order number';
+      resend.onclick = function () {
+        var reopen = new URL('/my-event/', location.origin);
+        reopen.searchParams.set('tenant', slug);
+        reopen.searchParams.set('mode', 'order');
+        if (verified.orderNumber) reopen.searchParams.set('order', verified.orderNumber);
+        location.assign(reopen.href);
+      };
+      if (fine) fine.textContent = 'Keep this private link if you want. You can also reopen the active booking with the first name on the order and its order number.';
+    } else {
+      view.querySelector('[data-email-status]').textContent = email ? (delivery === 'sent' ? 'Your access email was sent to ' : delivery === 'failed' ? 'Email delivery needs another try for ' : 'Your access email is queued for ') + email + '.' : 'Keep your private access link to return later.';
+      resend.onclick = showRecovery;
+    }
     view.querySelector('[data-access-expiry]').textContent = verified.expiresAt ? 'Editing access until ' + new Date(verified.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + '.' : '';
-    view.querySelector('[data-resend]').onclick = showRecovery;
 
     if (!link) { view.querySelector('textarea').hidden = true; view.querySelector('[data-copy-link]').hidden = true; return; }
     view.querySelector('textarea').value = link;

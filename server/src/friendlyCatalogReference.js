@@ -1,6 +1,9 @@
 // Read-only enrichment. No product price, name, stock, image or dimension is
-// written or replaced. Exact fpr: source slugs join to public website records.
-const SOURCE='https://www.friendlypartyrental.com/api/items';
+// written or replaced. Exact fpr: source slugs join to the tenant's public website records.
+const SOURCES={
+ friendly:'https://www.friendlypartyrental.com/api/items',
+ 'friendly-nyc':'https://friendlypartyrentalnyc.com/api/items'
+};
 function joinReferences(products,items,checkedAt){
  const bySlug=new Map();
  for(const item of items){const key=String(item.slug||'');if(!key)continue;const rows=bySlug.get(key)||[];rows.push(item);bySlug.set(key,rows);}
@@ -13,17 +16,19 @@ function joinReferences(products,items,checkedAt){
 }
 function unavailable(products){return products.map(p=>String(p.external_id||'').startsWith('fpr:')?{...p,metadata:{...(p.metadata||{}),colors:[],referenceColorsVerified:false,referenceStatus:'unavailable'}}:p);}
 function createReferenceReader(fetcher=fetch,now=Date.now){
- let cache=null,until=0,inflight=null;
- async function load(){
-  if(now()<until)return cache;
-  if(inflight)return inflight;
-  inflight=(async()=>{try{
-   const r=await fetcher(SOURCE,{redirect:'error',headers:{Accept:'application/json'},signal:AbortSignal.timeout(4000)});
+ const caches=new Map(),until=new Map(),inflight=new Map();
+ async function load(slug){
+  const source=SOURCES[slug];if(!source)return null;
+  if(now()<(until.get(slug)||0))return caches.get(slug)||null;
+  if(inflight.get(slug))return inflight.get(slug);
+  const promise=(async()=>{try{
+   const r=await fetcher(source,{redirect:'error',headers:{Accept:'application/json'},signal:AbortSignal.timeout(4000)});
    if(!r.ok)throw Error('Reference source unavailable');const body=await r.json();if(!Array.isArray(body.items))throw Error('Reference catalog is invalid');
-   // Retain only public identity and color fields in the short-lived cache.
-   cache={items:body.items.map(i=>({id:i.id,slug:i.slug,colorOptions:i.colorOptions})),checkedAt:new Date(now()).toISOString()};until=now()+60000;
-  }catch(_){cache=null;until=now()+10000;}finally{inflight=null;}return cache;})();return inflight;
+   const value={items:body.items.map(i=>({id:i.id,slug:i.slug,colorOptions:i.colorOptions})),checkedAt:new Date(now()).toISOString()};
+   caches.set(slug,value);until.set(slug,now()+60000);return value;
+  }catch(_){caches.delete(slug);until.set(slug,now()+10000);return null;}finally{inflight.delete(slug);}})();
+  inflight.set(slug,promise);return promise;
  }
- return async(slug,products)=>{if(slug!=='friendly')return products;const result=await load();return result?joinReferences(products,result.items,result.checkedAt):unavailable(products);};
+ return async(slug,products)=>{if(!SOURCES[slug])return products;const result=await load(slug);return result?joinReferences(products,result.items,result.checkedAt):unavailable(products);};
 }
-module.exports={joinReferences,createReferenceReader,enrichFriendlyReferences:createReferenceReader()};
+module.exports={SOURCES,joinReferences,createReferenceReader,enrichFriendlyReferences:createReferenceReader()};
