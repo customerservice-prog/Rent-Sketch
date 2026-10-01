@@ -1,0 +1,28 @@
+name: PR169 Targeted NYC Tenant Check
+
+on:
+  push:
+    branches:
+      - diagnostic/pr169-targeted-20261001
+    paths:
+      - '.github/pr169-targeted-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  targeted:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check modified JavaScript
+        run: |
+          node --check js/ui/intake.js
+          node --check js/ui/paywall.js
+          node --check my-event/access.js
+          node --check server/src/eventPassEmail.js
+          node --check server/src/friendlyOrderAccess.js
+          node --check server/src/routes/consumerEventPass.js
+          node --check server/src/routes/quoteRequests.js
+      - name: Run Friendly NYC tenant regression
+        run: node tests/friendly-nyc-tenant.cjs
