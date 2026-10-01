@@ -30,6 +30,17 @@ test('known drawable families report illustrative coverage and unknown physical 
  assert.equal(generic.level,'generic');assert.equal(generic.renderable,true);assert.equal(generic.native,false);
 });
 
+test('runtime-inferred Friendly furniture is counted as native and known equipment is not mislabeled generic',()=>{
+ for(const name of ['Cross-Back Farmhouse Chair','Sweetheart Table (60in Half-Round)']){
+  const result=visualCoverage({active:true,name,category:'wedding'},'friendly');
+  assert.equal(result.level,'inferred');assert.equal(result.native,true);assert.equal(result.renderable,true);
+ }
+ for(const name of ['170K BTU Tent Heater','White Aisle Runner (100ft)']){
+  const result=visualCoverage({active:true,name,category:'other'},'friendly');
+  assert.equal(result.level,'illustrative');assert.equal(result.native,false);assert.equal(result.renderable,true);
+ }
+});
+
 test('configuration-only rows are not counted as customer-placeable visuals',()=>{
  const c=visualCoverage({active:true,name:'Snow Cone Syrup - Cherry',category:'concession'},'friendly');
  assert.equal(c.level,'configuration');assert.equal(c.renderable,false);
