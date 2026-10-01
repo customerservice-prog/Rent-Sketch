@@ -1,29 +1,36 @@
-# Webhooks
+# Webhooks and rental-system integration
 
-Webhooks let a rental company's own backend react to events in real time, instead of only relying on the business dashboard or the notification email. This is optional per tenant - if webhookUrl is not set, nothing is sent.
+RentSketch can notify a tenant backend about customer/design activity and can accept final booked-order attribution from an external rental system.
 
-## Setup
+## Outbound webhook setup
 
-Set webhookUrl (the endpoint that should receive events) and webhookSecret (used to sign payloads) via PATCH /api/tenants/:slug from the business dashboard's Branding page or the API directly. Both fields are staff-only to read or write.
+Configure `webhookUrl` and `webhookSecret` on the tenant (admin role or higher). RentSketch signs the exact JSON request body with HMAC-SHA256 and sends the hex digest in `X-RentSketch-Signature`.
 
-## Events
+Live outbound event types:
 
-quote_request.created fires after a customer's quote request is successfully persisted to the database. This is the only event implemented today. design.created is planned but not implemented yet - do not build against it until docs/api.md lists it as live.
+- `design.created`
+- `design.updated`
+- `quote_request.created`
+- `quote_request.approved`
+- `quote_request.updated`
+- `quote_request.booked`
 
-## Payload shape
+Verify the signature using the configured webhook secret and a constant-time comparison.
 
-```
-POST to your webhookUrl
-Content-Type: application/json
-X-RentSketch-Signature: hex-encoded HMAC-SHA256 of the raw body
+## Inbound booked-order attribution
 
-{ "id": "uuid", "type": "quote_request.created", "createdAt": "2026-09-11T12:00:00.000Z", "data": { "id": "...", "customerName": "...", "customerEmail": "...", "eventDate": "...", "guestCount": 10, "estimateTotal": 450.00 } }
-```
+The tenant owner can create a dedicated integration key in Dashboard → Install & share. The raw key is shown once; RentSketch stores only its SHA-256 hash.
 
-## Verifying the signature
+Endpoint:
 
-Compute an HMAC-SHA256 of the exact raw request body using your webhookSecret as the key, hex-encode it, and compare (constant-time) to the X-RentSketch-Signature header. If they do not match, reject the request.
+`POST /api/tenants/:slug/integrations/order-attribution`
 
-## Delivery guarantees
+Header: `X-RentSketch-Integration-Key: rsi_...`
 
-Delivery is best-effort and fire-and-forget: a slow or failing webhook endpoint never delays or fails the customer's quote request. There is currently no retry queue or delivery log - a failed delivery is only logged server-side. Treat this as at-most-once, no guaranteed delivery, until a retry system is documented here as live. Build your integration to tolerate an occasional missed event, for example by periodically polling GET /api/tenants/:slug/quote-requests as a backstop.
+The JSON body accepts `quoteRequestId` or `designId`, required `externalOrderId`, `source`, `status` (`booked`, `updated`, or `canceled`), `orderTotalCents`, and `lineItems[]`.
+
+This lets Sales Insights attribute real booked revenue and real booked line items without sharing a dashboard password.
+
+## Delivery visibility
+
+Outbound and inbound integration activity is recorded in `integration_events` and surfaced in the tenant integration panel. Outbound webhook delivery is still best-effort; there is no guaranteed retry queue. External systems should remain idempotent and can use quote/design IDs as reconciliation keys.
