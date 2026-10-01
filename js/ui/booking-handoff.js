@@ -3,7 +3,7 @@ let products=[],busy=false;
 const params=new URLSearchParams(location.search),section=document.getElementById('friendlyBooking'),button=document.getElementById('btnBookRentals'),status=document.getElementById('bookingStatus');
 const tenant=()=>window.ACTIVE_TENANT?.slug||window.RENTSKETCH_TENANT_SLUG;
 function show(){
- const friendlyTenant=['friendly','friendly-nyc'].includes(tenant());
+ const friendlyTenant=['friendly','friendly-nyc','friendly-sc'].includes(tenant());
  if(section)section.hidden=!friendlyTenant;
  if(button&&friendlyTenant)button.textContent='Book Now — Finish Checkout';
  if(section&&friendlyTenant){
@@ -13,7 +13,7 @@ function show(){
 window.addEventListener('rentsketch:catalogReady',e=>{products=e.detail?.products||[];show();});
 window.addEventListener('rentsketch:tenantReady',show);show();
 button?.addEventListener('click',async()=>{
- if(busy||!['friendly','friendly-nyc'].includes(tenant()))return;
+ if(busy||!['friendly','friendly-nyc','friendly-sc'].includes(tenant()))return;
  busy=true;button.disabled=true;if(status)status.textContent='Saving your plan and checking the item transfer…';
  try{
   if(!products.length){
@@ -29,7 +29,7 @@ button?.addEventListener('click',async()=>{
   if(typeof savedId!=='string'||!/^[a-z0-9-]{8,100}$/i.test(savedId))throw new Error('Your plan could not be saved yet. Please retry; your cart has not changed.');
   if(JSON.stringify(build())!==before)throw new Error('Your selections changed while saving. Click Book Now again to transfer the updated plan.');
   payload.designId=savedId;const url=friendlyBookingUrl(payload),parent=params.get('parentOrigin');
-  const allowedParents=tenant()==='friendly-nyc'?['https://friendlypartyrentalnyc.com','https://www.friendlypartyrentalnyc.com']:['https://www.friendlypartyrental.com','https://friendlypartyrental.com'];
+  const allowedParents=tenant()==='friendly-nyc'?['https://friendlypartyrentalnyc.com','https://www.friendlypartyrentalnyc.com']:tenant()==='friendly-sc'?['https://friendlypartyrentalsc.com','https://www.friendlypartyrentalsc.com']:['https://www.friendlypartyrental.com','https://friendlypartyrental.com'];
   if(window.parent!==window&&allowedParents.includes(parent)){
    window.parent.postMessage({type:'rentsketch.bookingRequested',tenant:tenant(),booking:payload},parent);
    if(status){status.replaceChildren(document.createTextNode('Opening your Friendly checkout. '));const link=document.createElement('a');link.href=url;link.target='_top';link.textContent='Continue to Friendly checkout';status.appendChild(link);}
