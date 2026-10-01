@@ -1,0 +1,189 @@
+'use strict';
+const db = require('./db');
+
+const syntheticWord = /(^|[^a-z0-9])(qa|test|fake|fixture|regression|claude|demo)([^a-z0-9]|$)/i;
+function text(v){ return String(v == null ? '' : v).trim(); }
+function key(v){ return text(v).toLowerCase(); }
+function inc(map,k,n=1){ if(!k)return; map.set(k,(map.get(k)||0)+n); }
+function top(map,limit=8){ return [...map.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,limit).map(([name,count])=>({name,count})); }
+function label(v){ return text(v).replace(/[_-]+/g,' ').replace(/s+/g,' ').replace(/w/g,m=>m.toUpperCase()); }
+
+function sceneObjects(scene){ return Array.isArray(scene?.objects) ? scene.objects.filter(Boolean) : []; }
+function tentId(scene,objects){
+  const direct = text(scene?.tentId || scene?.tent?.id || scene?.tent?.tentId);
+  if(direct) return direct;
+  const obj = objects.find(o => key(o?.kind)==='tent' || key(o?.type)==='tent');
+  return text(obj?.productId || obj?.externalId || obj?.sku || obj?.tentId || obj?.id || obj?.name);
+}
+function eventName(scene){ return text(scene?.eventName || scene?.event?.name || scene?.customer?.eventName); }
+
+function syntheticDesign(row,scene){
+  if(syntheticWord.test(text(row.event_type)) || syntheticWord.test(text(row.project_name)) || syntheticWord.test(eventName(scene))) return true;
+  if(scene?.qaProof || scene?.qaSavedProof || scene?.testProof || scene?.fixtureProof) return true;
+  return false;
+}
+
+function featuresFor(objects,scene){
+  const out = new Set();
+  const tent = tentId(scene,objects);
+  if(tent) out.add('Tent · '+label(tent));
+  for(const o of objects){
+    const kind = text(o?.kind || o?.type);
+    const main = text(o?.productId || o?.externalId || o?.sku || o?.itemId || o?.visualModelId || o?.name);
+    if(main) out.add(label(kind || 'Item')+' · '+label(main));
+    else if(kind) out.add(label(kind));
+    for(const [prefix,value] of [['Table',o?.tableId],['Chair',o?.chairId],['Linen',o?.linenId],['Tent',o?.tentId],['Inflatable',o?.inflatableId]]){
+      if(text(value)) out.add(prefix+' · '+label(value));
+    }
+  }
+  return [...out].slice(0,30);
+}
+
+function recommendation(id,title,detail,signal,priority='medium'){
+  return { id,title,detail,signal,priority };
+}
+
+async function getDesignIntelligence(){
+  const [designResult, requestResult] = await Promise.all([
+    db.query(`
+      SELECT d.id::text,d.tenant_id::text,COALESCE(t.slug,'generic') AS tenant_slug,
+             d.owner_user_id IS NOT NULL AS staff_owned,d.event_type,d.guest_count,
+             d.estimate_total,d.scene,d.project_name,d.revision,d.created_at,d.updated_at
+      FROM designs d
+      LEFT JOIN tenants t ON t.id=d.tenant_id
+      ORDER BY d.updated_at DESC
+      LIMIT 5000
+    `),
+    db.query(`
+      SELECT design_id::text,status,created_at
+      FROM quote_requests
+      WHERE design_id IS NOT NULL
+      ORDER BY created_at DESC
+    `)
+  ]);
+
+  const reqByDesign = new Map();
+  for(const r of requestResult.rows){
+    const list=reqByDesign.get(r.design_id)||[];
+    list.push(r);
+    reqByDesign.set(r.design_id,list);
+  }
+
+  const eventTypes=new Map(), tents=new Map(), objectKinds=new Map(), features=new Map(), pairs=new Map();
+  let ignoredSynthetic=0, ignoredEmpty=0, learning=0, totalObjects=0, guestSum=0, guestN=0, revisionSum=0;
+  let missingGuest=0, missingTent=0, sparse=0, highRevision=0, missingEstimate=0, missingEventType=0;
+  let withRequest=0, booked=0;
+  const tenantCounts=new Map();
+
+  for(const row of designResult.rows){
+    const scene = row.scene && typeof row.scene==='object' ? row.scene : {};
+    const objects = sceneObjects(scene);
+    const tent = tentId(scene,objects);
+    const requests = reqByDesign.get(row.id)||[];
+    const meaningful = objects.length>0 || !!tent || Number(row.guest_count)>0 || !!text(row.event_type) ||
+      row.estimate_total != null || !!text(row.project_name) || requests.length>0 || row.staff_owned;
+    if(syntheticDesign(row,scene)){ ignoredSynthetic++; continue; }
+    if(!meaningful){ ignoredEmpty++; continue; }
+
+    learning++;
+    inc(tenantCounts,row.tenant_slug);
+    totalObjects += objects.length;
+    revisionSum += Number(row.revision||1);
+    if(Number(row.guest_count)>0){ guestSum += Number(row.guest_count); guestN++; } else missingGuest++;
+    if(!tent) missingTent++; else inc(tents,label(tent));
+    if(objects.length<=1) sparse++;
+    if(Number(row.revision||1)>=5) highRevision++;
+    if(row.estimate_total==null) missingEstimate++;
+    if(!text(row.event_type)) missingEventType++; else inc(eventTypes,label(row.event_type));
+
+    for(const o of objects) inc(objectKinds,label(o?.kind || o?.type || 'Item'));
+    const f = featuresFor(objects,scene);
+    f.forEach(v=>inc(features,v));
+    for(let i=0;i<f.length;i++) for(let j=i+1;j<f.length;j++){
+      const pair=[f[i],f[j]].sort().join(' + ');
+      inc(pairs,pair);
+    }
+
+    if(requests.length){ withRequest++; if(requests.some(r=>r.status==='booked')) booked++; }
+  }
+
+  const pct = n => learning ? Math.round(n/learning*100) : 0;
+  const requestRate = learning ? Math.round(withRequest/learning*100) : 0;
+  const bookedRate = learning ? Math.round(booked/learning*100) : 0;
+  const recommendations=[];
+
+  const topTent=top(tents,1)[0], topPair=top(pairs,1)[0];
+  if(topTent && topTent.count>=3) recommendations.push(recommendation(
+    'template-top-tent','Turn the most-used tent into a faster starting template',
+    topTent.name+' appears in '+topTent.count+' learning layouts. Prebuilding its common seating/spacing choices can reduce setup time.',
+    topTent.count+' layouts','medium'
+  ));
+  if(topPair && topPair.count>=3) recommendations.push(recommendation(
+    'quick-add-pair','Offer a quick-add bundle for a repeated combination',
+    topPair.name+' appears together in '+topPair.count+' layouts. A bundle or smart suggestion can reduce repetitive placement.',
+    topPair.count+' layouts','medium'
+  ));
+  if(learning>=5 && pct(missingGuest)>=25) recommendations.push(recommendation(
+    'guest-count','Capture guest count earlier',
+    pct(missingGuest)+'% of learning layouts do not have a guest count. Earlier capture would improve sizing and seating guidance.',
+    pct(missingGuest)+'% missing','high'
+  ));
+  if(learning>=5 && pct(missingTent)>=35) recommendations.push(recommendation(
+    'starting-space','Make the starting-space choice clearer',
+    pct(missingTent)+'% of learning layouts have no recognized tent/starting structure. Consider a clearer first-step choice between tent, room, yard, and open space.',
+    pct(missingTent)+'% without tent','medium'
+  ));
+  if(learning>=5 && pct(highRevision)>=25) recommendations.push(recommendation(
+    'rework','Reduce repeated rework',
+    pct(highRevision)+'% of learning layouts reached 5+ saved revisions. That is a signal to improve templates, sizing guidance, or multi-select editing.',
+    pct(highRevision)+'% high revision','medium'
+  ));
+  if(learning>=10 && requestRate<20) recommendations.push(recommendation(
+    'quote-conversion','Improve the handoff from layout to quote',
+    'Only '+requestRate+'% of learning layouts have a linked quote request. Review the final Review/Request Quote step and make the next action more obvious.',
+    requestRate+'% request rate','high'
+  ));
+  if(learning<10) recommendations.push(recommendation(
+    'sample-size','Keep collecting real layouts before automating defaults',
+    'Only '+learning+' saved layouts currently qualify for learning after QA and empty placeholders are excluded. Insights will become stronger automatically as real designs accumulate.',
+    learning+' learning layouts','low'
+  ));
+
+  return {
+    generatedAt:new Date().toISOString(),
+    mode:'live_aggregate',
+    privacy:'Aggregate layout features only; customer contact fields are not read.',
+    sample:{
+      scanned:designResult.rows.length,
+      learning,
+      ignoredSynthetic,
+      ignoredEmpty,
+      confidence:learning>=50?'high':learning>=15?'medium':'low',
+      tenants:tenantCounts.size
+    },
+    averages:{
+      objectsPerDesign:learning ? Number((totalObjects/learning).toFixed(1)) : 0,
+      guestCount:guestN ? Number((guestSum/guestN).toFixed(1)) : null,
+      revisions:learning ? Number((revisionSum/learning).toFixed(1)) : 0
+    },
+    conversion:{ withRequest, booked, requestRate, bookedRate },
+    friction:{
+      missingGuest:{count:missingGuest,pct:pct(missingGuest)},
+      missingTent:{count:missingTent,pct:pct(missingTent)},
+      sparse:{count:sparse,pct:pct(sparse)},
+      highRevision:{count:highRevision,pct:pct(highRevision)},
+      missingEstimate:{count:missingEstimate,pct:pct(missingEstimate)},
+      missingEventType:{count:missingEventType,pct:pct(missingEventType)}
+    },
+    patterns:{
+      eventTypes:top(eventTypes,6),
+      tents:top(tents,6),
+      objectKinds:top(objectKinds,8),
+      features:top(features,10),
+      pairs:top(pairs,8)
+    },
+    recommendations:recommendations.slice(0,8)
+  };
+}
+
+module.exports = { getDesignIntelligence };
