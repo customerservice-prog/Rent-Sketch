@@ -21,6 +21,14 @@ export const FRIENDLY_NYC_TENANT = {
   colors: { primary: '#0B1F3A', primaryDark: '#07182d', primaryTint: '#eef2f7', secondary: '#E07B00' },
 };
 
+export const FRIENDLY_SC_TENANT = {
+  ...FRIENDLY_TENANT,
+  id: 'friendly-sc', slug: 'friendly-sc', name: 'Friendly Party Rental SC',
+  phone: '864-610-5324',
+  tagline: 'Plan your Greenville and Upstate South Carolina event with Friendly Party Rental SC',
+  colors: { primary: '#0B1F3A', primaryDark: '#07182d', primaryTint: '#eef2f7', secondary: '#E07B00' },
+};
+
 export const GENERIC_TENANT = {
   id: 'generic', slug: 'generic', name: 'RentSketch', shortName: 'RentSketch', logo: 'logo.png', contactEmail: '', phone: '',
   tagline: 'Plan tents, tables, chairs, dance floors and more in a real-scale event layout.', showPackages: false,
@@ -37,7 +45,7 @@ function stripPricing(list) {
 }
 
 export function getTenant(slug) {
-  return slug === 'friendly' ? FRIENDLY_TENANT : slug === 'friendly-nyc' ? FRIENDLY_NYC_TENANT : GENERIC_TENANT;
+  return slug === 'friendly' ? FRIENDLY_TENANT : slug === 'friendly-nyc' ? FRIENDLY_NYC_TENANT : slug === 'friendly-sc' ? FRIENDLY_SC_TENANT : GENERIC_TENANT;
 }
 
 // IMPORTANT: tenant.js is intentionally limited to tenant bootstrap data.
