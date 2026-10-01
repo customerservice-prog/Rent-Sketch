@@ -13,14 +13,17 @@ function accessUrl(design, tenantSlug, email, expiresAt) {
   return 'https://rentsketch.com/designer/?tenant=' + encodeURIComponent(tenantSlug) + '#recoveryToken=' + encodeURIComponent(token);
 }
 
-function relayConfig() {
-  const checked = validateWebhookUrl(process.env.FRIENDLY_RENTSKETCH_WEBHOOK_URL);
-  if (!checked.ok || !checked.url || !process.env.FRIENDLY_RENTSKETCH_WEBHOOK_SECRET) return null;
-  return { url: checked.url, secret: process.env.FRIENDLY_RENTSKETCH_WEBHOOK_SECRET };
+function relayConfig(tenantSlug = 'friendly') {
+  const isNyc = tenantSlug === 'friendly-nyc';
+  const url = isNyc ? process.env.FRIENDLY_NYC_RENTSKETCH_WEBHOOK_URL : process.env.FRIENDLY_RENTSKETCH_WEBHOOK_URL;
+  const secret = isNyc ? process.env.FRIENDLY_NYC_RENTSKETCH_WEBHOOK_SECRET : process.env.FRIENDLY_RENTSKETCH_WEBHOOK_SECRET;
+  const checked = validateWebhookUrl(url);
+  if (!checked.ok || !checked.url || !secret) return null;
+  return { url: checked.url, secret };
 }
 
-async function relay(type, data) {
-  const config = relayConfig();
+async function relay(type, data, tenantSlug = 'friendly') {
+  const config = relayConfig(tenantSlug);
   if (!config) throw new Error('access_email_not_configured');
   const body = JSON.stringify({ id: crypto.randomUUID(), type, createdAt: new Date().toISOString(), data });
   const signature = crypto.createHmac('sha256', config.secret).update(body).digest('hex');
