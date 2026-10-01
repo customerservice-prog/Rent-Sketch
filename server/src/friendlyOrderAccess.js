@@ -2,8 +2,8 @@ const crypto = require('crypto');
 const db = require('./db');
 const { relay } = require('./eventPassEmail');
 
-async function lookupOrder(input) {
-  const result = await relay('event_pass.order_lookup', input);
+async function lookupOrder(input, tenantSlug = 'friendly') {
+  const result = await relay('event_pass.order_lookup', input, tenantSlug);
   if (result.orderAccessVersion !== 1) throw new Error('Order verification is temporarily unavailable. Please try again.');
   const order = result.order;
   if (!order) return null;
@@ -12,17 +12,17 @@ async function lookupOrder(input) {
   return order;
 }
 
-async function orderAccessReady() {
-  try { return (await relay('event_pass.order_check', {})).orderAccessVersion === 1; } catch (_) { return false; }
+async function orderAccessReady(tenantSlug = 'friendly') {
+  try { return (await relay('event_pass.order_check', {}, tenantSlug)).orderAccessVersion === 1; } catch (_) { return false; }
 }
 
 async function claimOrder(order, tenant) {
-  if (!order?.eligible || tenant?.slug !== 'friendly' || Date.parse(order.expiresAt) <= Date.now()) return null;
+  if (!order?.eligible || !['friendly','friendly-nyc'].includes(tenant?.slug) || Date.parse(order.expiresAt) <= Date.now()) return null;
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
     // Lock this booking while finding/creating its single design.
-    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', ['friendly-order:' + order.id]);
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [tenant.slug + '-order:' + order.id]);
     const existing = (await client.query("SELECT design_id,customer_email FROM entitlements WHERE tenant_id=$1 AND source='friendly_order' AND source_reference=$2", [tenant.id, order.id])).rows[0];
     let id = existing?.design_id;
     if (!id) {
@@ -55,7 +55,8 @@ async function refreshOrderAccess(designId, force = false) {
   if (!access) return null;
   const cached = checks.get(designId);
   if (!force && cached && cached.until > Date.now()) return cached.order;
-  const order = await lookupOrder({ orderId: access.source_reference, email: access.customer_email });
+  const tenant = (await db.query('SELECT slug FROM tenants WHERE id=$1', [access.tenant_id])).rows[0];
+  const order = await lookupOrder({ orderId: access.source_reference, email: access.customer_email }, tenant?.slug || 'friendly');
   const eligible = order?.eligible && Date.parse(order.expiresAt) > Date.now();
   await db.query("UPDATE entitlements SET status=$2,expires_at=COALESCE($3,expires_at),revoked_at=CASE WHEN $2='active' THEN NULL ELSE now() END WHERE id=$1", [access.id,eligible?'active':'revoked',order?.expiresAt||null]);
   if (checks.size > 1000) checks.clear();
