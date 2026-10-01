@@ -92,7 +92,7 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   assert.equal(home.metrics().imports,0,'initial homepage must not import Three.js');
   assert.ok(home.d.querySelector('[data-story-explore]'),'homepage exposes explicit 3D handoff');
   home.intersect();
-  assert.equal(await waitFor(()=>home.d.querySelector('[data-story-count]').textContent==='17 / 17'),true,'homepage build reaches the final stage');
+  assert.equal(await waitFor(()=>home.d.querySelector('[data-story-count]').textContent==='18 / 18'),true,'homepage build reaches the final stage');
   assert.equal(home.metrics().imports,0,'homepage autoplay must remain WebGL-free');
   assert.equal(home.metrics().created,0,'homepage autoplay creates no renderer');
   const plan=home.d.querySelector('.story-build-plan');
@@ -106,9 +106,10 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   assert.ok(plan.querySelectorAll('[data-story-layer="cocktail"] > *').length>=2,'cocktail tables are represented');
   assert.ok(plan.querySelectorAll('[data-story-layer="centerpieces"] > *').length>=16,'centerpiece details are represented');
   assert.ok(plan.querySelectorAll('[data-story-layer="lighting"] > *').length>20,'bistro lighting is represented');
-  assert.equal(home.d.querySelector('[data-story-count]').textContent,'17 / 17');
-  assert.match(home.d.querySelector('[data-story-label]').textContent,/Step inside the reception/);
-  assert.ok(plan.classList.contains('is-finished'),'finished build crossfades to the rendered 3D poster');
+  assert.ok(plan.querySelectorAll('[data-story-layer="waterslide"] > *').length>=1,'waterslide is represented beside the wedding');
+  assert.equal(home.d.querySelector('[data-story-count]').textContent,'18 / 18');
+  assert.match(home.d.querySelector('[data-story-label]').textContent,/Wedding \+ waterslide ready/);
+  assert.ok(plan.classList.contains('is-finished'),'finished build keeps the complete wedding and waterslide plan visible');
 
   home.d.querySelector('[data-story-replay]').click();
   await settle(20);
@@ -124,7 +125,8 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   assert.equal(home.metrics().created,1);
   assert.equal(home.metrics().rebuilds.length,1);
   assert.ok(home.metrics().rebuilds[0].objects.length>20,'interactive 3D uses the complete wedding scene');
-  assert.ok(home.metrics().cameras.includes('reception'));
+  assert.ok(home.metrics().rebuilds[0].objects.some(o=>o.kind==='inflatable'&&o.id==='wedding-waterslide'),'interactive 3D includes the waterslide');
+  assert.ok(home.metrics().cameras.includes('outside'));
   home.w.dispatchEvent(new home.w.PageTransitionEvent('pagehide'));
   assert.equal(home.metrics().destroyed,1);
   home.dom.window.close();
@@ -133,7 +135,7 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   reduced.intersect();
   await settle(30);
   assert.equal(reduced.metrics().imports,0,'reduced-motion homepage stays static and WebGL-free');
-  assert.equal(reduced.d.querySelector('[data-story-count]').textContent,'17 / 17');
+  assert.equal(reduced.d.querySelector('[data-story-count]').textContent,'18 / 18');
   assert.ok(reduced.d.querySelector('.story-build-plan').classList.contains('is-finished'));
   reduced.dom.window.close();
 
@@ -141,21 +143,21 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   fallback.d.querySelector('[data-story-explore]').click();
   await settle(40);
   assert.equal(fallback.metrics().imports,1);
-  assert.equal(fallback.d.querySelector('.tour-poster').classList.contains('story-final'),true,'poster remains as fallback when WebGL is unavailable');
+  assert.equal(fallback.d.querySelector('.story-build-plan').classList.contains('show-plan'),true,'complete plan remains as fallback when WebGL is unavailable');
   fallback.dom.window.close();
 
   const demo=await fixture({page:'demo/index.html'});
   demo.intersect();
-  assert.equal(await waitFor(()=>demo.d.querySelector('[data-story-count]').textContent==='17 / 17',{timeout:1100}),true,'demo build reaches the final stage');
+  assert.equal(await waitFor(()=>demo.d.querySelector('[data-story-count]').textContent==='18 / 18',{timeout:1100}),true,'demo build reaches the final stage');
   assert.equal(demo.metrics().imports,0,'dedicated demo must keep Three.js off the critical path');
   assert.equal(demo.metrics().created,0,'dedicated demo starts with the lightweight staged plan');
-  assert.equal(demo.d.querySelector('[data-story-count]').textContent,'17 / 17');
+  assert.equal(demo.d.querySelector('[data-story-count]').textContent,'18 / 18');
   demo.d.querySelector('[data-view="3d"]').click();
   await settle(50);
   assert.equal(demo.metrics().imports,1,'demo imports Three.js only after an explicit 3D request');
   assert.equal(demo.metrics().created,1);
   assert.equal(demo.metrics().rebuilds.length,1);
-  assert.ok(demo.metrics().cameras.includes('reception'));
+  assert.ok(demo.metrics().cameras.includes('outside'));
   demo.dom.window.close();
 
   console.log('PASS wedding story: complete staged wedding, zero autoplay WebGL, explicit 3D handoff, reduced-motion fallback, and on-demand interactive demo.');
