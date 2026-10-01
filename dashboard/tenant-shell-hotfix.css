@@ -1,0 +1,7 @@
+/* Tenant workspace shell hotfix — keep sidebar navigation in one column. */
+.dash-header{flex-wrap:nowrap!important;overflow:hidden}
+.dash-nav{width:100%;min-width:0;flex-wrap:nowrap!important;align-content:stretch!important;overflow-y:auto!important;overflow-x:hidden!important}
+.tw-nav-label{flex:0 0 auto;width:100%;min-width:0}
+.nav-link{flex:0 0 auto;width:100%;min-width:0;overflow:hidden}
+.nav-link>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-account{min-width:0;max-width:100%;overflow:hidden}
