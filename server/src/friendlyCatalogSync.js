@@ -131,9 +131,10 @@ async function syncNycCatalog(){
    await upsert(tenant.id,p);imported++;
   }catch(error){failed++;console.warn('[catalog-sync] NYC item failed',item?.slug,error.message);}
  }
- if(seen.length){
-  await db.query("UPDATE products SET active=false,updated_at=now() WHERE tenant_id=$1 AND external_id LIKE 'fpr:%' AND NOT (external_id=ANY($2::text[]))",[tenant.id,seen]);
- }
+ // The NYC storefront can intentionally hide an approved item while stock is
+ // being entered. Never deactivate RentSketch's deterministic 198-item seed
+ // merely because a product is temporarily absent from the public /api/items
+ // response. Public rows still refresh name/price/photo here when available.
  console.log(`[catalog-sync] friendly-nyc: discovered=${items.length} imported=${imported} mapped=${mapped} failed=${failed}`);
  return{tenant:'friendly-nyc',discovered:items.length,imported,mapped,failed};
 }
