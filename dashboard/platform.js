@@ -210,9 +210,10 @@ async function platformAnalytics(){
   api('/api/admin/tenants'),
   api('/api/admin/payments?limit=250'),
   api('/api/admin/designs?limit=250'),
-  api('/api/admin/subscriptions?limit=250')
+  api('/api/admin/subscriptions?limit=250'),
+  api('/api/admin/design-intelligence')
  ]);
- var o=d[0],tenants=d[1].tenants||[],payments=d[2].payments||[],designs=d[3].designs||[],subs=d[4].subscriptions||[];
+ var o=d[0],tenants=d[1].tenants||[],payments=d[2].payments||[],designs=d[3].designs||[],subs=d[4].subscriptions||[],intel=d[5]||{};
  var now=Date.now(),monthAgo=now-30*86400000,weekAgo=now-7*86400000;
  var active30=tenants.filter(function(t){var ts=[t.latest_design_at,t.latest_request_at].filter(Boolean).map(function(v){return new Date(v).getTime()});return ts.length&&Math.max.apply(Math,ts)>=monthAgo;}).length;
  var active7=tenants.filter(function(t){var ts=[t.latest_design_at,t.latest_request_at].filter(Boolean).map(function(v){return new Date(v).getTime()});return ts.length&&Math.max.apply(Math,ts)>=weekAgo;}).length;
@@ -225,15 +226,44 @@ async function platformAnalytics(){
  var top=tenants.slice().sort(function(a,b){return (Number(b.design_count||0)+Number(b.quote_request_count||0))-(Number(a.design_count||0)+Number(a.quote_request_count||0));}).slice(0,8);
  var byPlan={};tenants.forEach(function(t){var k=t.subscription_plan||'trial';byPlan[k]=(byPlan[k]||0)+1;});
  var maxTop=Math.max(1,...top.map(function(t){return Number(t.design_count||0)+Number(t.quote_request_count||0);}));
- document.getElementById('pcContent').innerHTML=head('Platform intelligence','Analytics & adoption','See which businesses are set up, active, installed, and using RentSketch—not just how many accounts exist.',
+ var sample=intel.sample||{},avg=intel.averages||{},conversion=intel.conversion||{},friction=intel.friction||{},patterns=intel.patterns||{},recs=intel.recommendations||[];
+ function patternRows(rows,emptyText){
+   rows=rows||[];if(!rows.length)return empty(emptyText);
+   var max=Math.max(1,...rows.map(function(x){return Number(x.count||0)}));
+   return rows.map(function(x){return '<div class="pc-list-row"><div style="min-width:0;flex:1"><strong>'+esc(x.name)+'</strong><div style="height:6px;background:#edf1f6;border-radius:999px;margin-top:7px;overflow:hidden"><span style="display:block;height:100%;width:'+Math.round(Number(x.count||0)/max*100)+'%;background:#2f6fed"></span></div></div><span class="pc-status active">'+Number(x.count||0)+'</span></div>';}).join('');
+ }
+ function frictionLine(title,obj){
+   obj=obj||{count:0,pct:0};return '<div class="pc-list-row"><div><strong>'+esc(title)+'</strong><p>'+Number(obj.count||0)+' learning layouts</p></div><span class="pc-status '+(Number(obj.pct||0)>=35?'trialing':'')+'">'+Number(obj.pct||0)+'%</span></div>';
+ }
+ document.getElementById('pcContent').innerHTML=head('Platform intelligence','Analytics & design learning','RentSketch continuously learns from real saved layouts. QA records and empty checkout placeholders are excluded automatically.', 
   '<a class="pc-btn" href="#businesses">Review businesses</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">Open RentSketch</a>')+
   '<section class="pc-grid metrics">'+
     metric('Active businesses · 30d',active30,active7+' active in the last 7 days')+
     metric('Launch-ready',ready,installed+' installed · '+connected+' Stripe-connected')+
-    metric('Design activity',designs.length,'Recent saved designs in platform history')+
-    metric('Revenue · 30d',money(monthPass+monthDeposits),money(monthPass)+' Event Pass · '+money(monthDeposits)+' deposits','positive')+
+    metric('Learning layouts',Number(sample.learning||0),Number(sample.ignoredSynthetic||0)+' QA/test + '+Number(sample.ignoredEmpty||0)+' empty ignored')+
+    metric('Learning confidence',String(sample.confidence||'low').toUpperCase(),Number(sample.tenants||0)+' businesses represented')+
   '</section>'+
-  '<div class="pc-split"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Most active businesses</h2><p>Saved designs plus quote requests.</p></div></div><div class="pc-panel-body">'+
+  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>Design Intelligence · live</h2><p>Every Analytics load recomputes from the latest saved layouts. No external AI API is required.</p></div><span class="pc-status active">LIVE LEARNING</span></div>'+
+    '<div class="pc-panel-body"><section class="pc-grid metrics">'+
+      metric('Avg objects / layout',avg.objectsPerDesign||0,'How much customers place before saving')+
+      metric('Avg guest count',avg.guestCount==null?'—':avg.guestCount,'Across layouts that include a guest count')+
+      metric('Request rate',(conversion.requestRate||0)+'%',Number(conversion.withRequest||0)+' learning layouts reached a quote request')+
+      metric('Booked rate',(conversion.bookedRate||0)+'%',Number(conversion.booked||0)+' learning layouts linked to booked requests')+
+    '</section><div class="pc-callout" style="margin-top:14px"><strong>Privacy-safe learning</strong><p>'+esc(intel.privacy||'Only aggregate layout features are analyzed; customer contact fields are not used.')+'</p></div></div></section>'+
+  '<div class="pc-split" style="margin-top:16px"><section class="pc-panel"><div class="pc-panel-head"><div><h2>What RentSketch is learning</h2><p>Improvement opportunities generated from repeated layout behavior.</p></div></div><div class="pc-panel-body">'+
+    (recs.length?recs.map(function(r){return '<div class="pc-list-row"><div style="min-width:0"><strong>'+esc(r.title)+'</strong><p>'+esc(r.detail)+'</p></div><span class="pc-status '+(r.priority==='high'?'trialing':r.priority==='low'?'':'active')+'">'+esc(r.signal||r.priority)+'</span></div>';}).join(''):empty('No recommendations yet. More real saved layouts will strengthen the learning set.'))+
+  '</div></section><aside class="pc-panel"><div class="pc-panel-head"><div><h2>Friction signals</h2><p>Repeated missing or high-effort behaviors worth improving.</p></div></div><div class="pc-panel-body">'+
+    frictionLine('Missing guest count',friction.missingGuest)+
+    frictionLine('No recognized tent / starting structure',friction.missingTent)+
+    frictionLine('Sparse layout (0–1 objects)',friction.sparse)+
+    frictionLine('5+ saved revisions',friction.highRevision)+
+    frictionLine('Missing estimate',friction.missingEstimate)+
+  '</div></aside></div>'+
+  '<div class="pc-split" style="margin-top:16px"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Common starting choices</h2><p>Most repeated tent and structure choices in real saved layouts.</p></div></div><div class="pc-panel-body">'+patternRows(patterns.tents,'No repeated tent pattern yet.')+'</div></section>'+
+  '<aside class="pc-panel"><div class="pc-panel-head"><div><h2>Repeated combinations</h2><p>Items that customers repeatedly use together—candidates for bundles and smart suggestions.</p></div></div><div class="pc-panel-body">'+patternRows(patterns.pairs,'No repeated combination has enough signal yet.')+'</div></aside></div>'+
+  '<div class="pc-split" style="margin-top:16px"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Most-used equipment types</h2><p>What customers place most often in saved layouts.</p></div></div><div class="pc-panel-body">'+patternRows(patterns.objectKinds,'No equipment pattern yet.')+'</div></section>'+
+  '<aside class="pc-panel"><div class="pc-panel-head"><div><h2>Event mix</h2><p>Event types represented in the learning set.</p></div></div><div class="pc-panel-body">'+patternRows(patterns.eventTypes,'No event-type pattern yet.')+'</div></aside></div>'+
+  '<div class="pc-split" style="margin-top:16px"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Most active businesses</h2><p>Saved designs plus quote requests.</p></div></div><div class="pc-panel-body">'+
     (top.length?top.map(function(t){var total=Number(t.design_count||0)+Number(t.quote_request_count||0);return '<div class="pc-list-row"><div style="min-width:0;flex:1"><strong>'+esc(t.name)+'</strong><p>'+Number(t.design_count||0)+' designs · '+Number(t.quote_request_count||0)+' requests</p><div style="height:6px;background:#edf1f6;border-radius:999px;margin-top:7px;overflow:hidden"><span style="display:block;height:100%;width:'+Math.round(total/maxTop*100)+'%;background:#2f6fed"></span></div></div><span class="pc-status '+(total?'active':'')+'">'+total+'</span></div>';}).join(''):empty('No tenant usage yet.'))+
   '</div></section><aside class="pc-panel"><div class="pc-panel-head"><div><h2>Plan mix</h2><p>Current tenant plan labels.</p></div></div><div class="pc-panel-body">'+Object.keys(byPlan).sort().map(function(k){return '<div class="pc-list-row"><div><strong>'+esc(k)+'</strong><p>Tenant accounts</p></div><span class="pc-status">'+byPlan[k]+'</span></div>';}).join('')+'</div></aside></div>'+
   '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>Accounts needing setup attention</h2><p>Businesses missing products, branding, installation, or recent usage.</p></div></div><div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Catalog</th><th>Branding</th><th>Installed</th><th>Stripe</th><th>Last activity</th><th>Open</th></tr></thead><tbody>'+
