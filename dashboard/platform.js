@@ -226,7 +226,7 @@ async function platformAnalytics(){
  var top=tenants.slice().sort(function(a,b){return (Number(b.design_count||0)+Number(b.quote_request_count||0))-(Number(a.design_count||0)+Number(a.quote_request_count||0));}).slice(0,8);
  var byPlan={};tenants.forEach(function(t){var k=t.subscription_plan||'trial';byPlan[k]=(byPlan[k]||0)+1;});
  var maxTop=Math.max(1,...top.map(function(t){return Number(t.design_count||0)+Number(t.quote_request_count||0);}));
- var sample=intel.sample||{},avg=intel.averages||{},conversion=intel.conversion||{},friction=intel.friction||{},patterns=intel.patterns||{},recs=intel.recommendations||[];
+ var sample=intel.sample||{},avg=intel.averages||{},conversion=intel.conversion||{},friction=intel.friction||{},patterns=intel.patterns||{},recs=intel.recommendations||[],history=intel.history||{},trend=history.trend||{},historyPoints=history.points||[];
  function patternRows(rows,emptyText){
    rows=rows||[];if(!rows.length)return empty(emptyText);
    var max=Math.max(1,...rows.map(function(x){return Number(x.count||0)}));
@@ -234,6 +234,9 @@ async function platformAnalytics(){
  }
  function frictionLine(title,obj){
    obj=obj||{count:0,pct:0};return '<div class="pc-list-row"><div><strong>'+esc(title)+'</strong><p>'+Number(obj.count||0)+' learning layouts</p></div><span class="pc-status '+(Number(obj.pct||0)>=35?'trialing':'')+'">'+Number(obj.pct||0)+'%</span></div>';
+ }
+ function trendDetail(value,suffix){
+   var n=Number(value||0);return (n>0?'+':'')+n+(suffix||'')+' vs previous saved snapshot';
  }
  document.getElementById('pcContent').innerHTML=head('Platform intelligence','Analytics & design learning','RentSketch continuously learns from real saved layouts. QA records and empty checkout placeholders are excluded automatically.', 
   '<a class="pc-btn" href="#businesses">Review businesses</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">Open RentSketch</a>')+
@@ -249,7 +252,12 @@ async function platformAnalytics(){
       metric('Avg guest count',avg.guestCount==null?'—':avg.guestCount,'Across layouts that include a guest count')+
       metric('Request rate',(conversion.requestRate||0)+'%',Number(conversion.withRequest||0)+' learning layouts reached a quote request')+
       metric('Booked rate',(conversion.bookedRate||0)+'%',Number(conversion.booked||0)+' learning layouts linked to booked requests')+
-    '</section><div class="pc-callout" style="margin-top:14px"><strong>Privacy-safe learning</strong><p>'+esc(intel.privacy||'Only aggregate layout features are analyzed; customer contact fields are not used.')+'</p></div></div></section>'+
+    '</section><div class="pc-callout" style="margin-top:14px"><strong>Privacy-safe learning</strong><p>'+esc(intel.privacy||'Only aggregate layout features are analyzed; customer contact fields are not used.')+'</p></div></div></section>'+  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>Learning trend</h2><p>Durable hourly snapshots show whether product changes are improving customer behavior over time.</p></div><span class="pc-status">'+historyPoints.length+' snapshots</span></div><div class="pc-panel-body"><section class="pc-grid metrics">'+
+    metric('Learning-set growth',trendDetail(trend.learning,''),Number(sample.learning||0)+' real layouts currently learning')+
+    metric('Quote request change',trendDetail(trend.requestRate,'%'),(conversion.requestRate||0)+'% current request rate')+
+    metric('Booked-rate change',trendDetail(trend.bookedRate,'%'),(conversion.bookedRate||0)+'% current booked rate')+
+    metric('Rework change',trendDetail(trend.highRevisionPct,'%'),Number(friction.highRevision&&friction.highRevision.pct||0)+'% currently need 5+ revisions')+
+  '</section></div></section>'+
   '<div class="pc-split" style="margin-top:16px"><section class="pc-panel"><div class="pc-panel-head"><div><h2>What RentSketch is learning</h2><p>Improvement opportunities generated from repeated layout behavior.</p></div></div><div class="pc-panel-body">'+
     (recs.length?recs.map(function(r){return '<div class="pc-list-row"><div style="min-width:0"><strong>'+esc(r.title)+'</strong><p>'+esc(r.detail)+'</p></div><span class="pc-status '+(r.priority==='high'?'trialing':r.priority==='low'?'':'active')+'">'+esc(r.signal||r.priority)+'</span></div>';}).join(''):empty('No recommendations yet. More real saved layouts will strengthen the learning set.'))+
   '</div></section><aside class="pc-panel"><div class="pc-panel-head"><div><h2>Friction signals</h2><p>Repeated missing or high-effort behaviors worth improving.</p></div></div><div class="pc-panel-body">'+
