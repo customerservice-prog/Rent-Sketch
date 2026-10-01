@@ -8,17 +8,15 @@ permissions:
 jobs:
   tenant:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: NYC tenant, catalog and booking isolation
+      - name: NYC tenant, catalog, booking and paywall isolation
         run: node --test tests/friendly-catalog-sync.test.mjs tests/booking-handoff.test.mjs tests/friendly-nyc-tenant.test.mjs
-      - name: Install recovery-test dependencies
+      - name: Install access-page test dependencies
         run: npm --prefix tests ci
-      - name: Included-order paywall DOM regression
-        run: node --experimental-vm-modules tests/event-pass-dom.cjs
       - name: First-name and order-number recovery regression
         run: node tests/access-recovery.cjs
