@@ -39,7 +39,7 @@ vm.runInNewContext(fs.readFileSync(path.join(root,'server/src/routes/quoteReques
   assert.match(customer.text,/Bistro Lights/);
   assert.match(customer.text,/Submitted estimate: \$1234\.50/);
   assert.match(customer.text,/Nothing is booked or charged/);
-  assert.doesNotMatch(customer.text,/is booked|has been booked/i);
+  assert.doesNotMatch(customer.text,/has been booked|your (?:event|rental|order) is booked|booking confirmed/i);
   assert.equal(body.staffNotificationSent,true);
   assert.equal(body.customerConfirmationSent,true);
   console.log('PASS quote notifications: staff and customer emails are separate, itemized, currency-formatted, and never imply a booking.');
