@@ -53,7 +53,7 @@ export function makeReferenceLighting(tent,option){
  const ref=lightingReference(option),type=ref?.type||(option.visual==='chandelier'?'chandelier':option.visual?.startsWith('uplight')?'uplight':option.visual==='bistro-cross-runs'?'bistro':'c7');
  const profile=structuralProfile(tent.type||'frame',tent.widthFt,tent.lengthFt),m=lampMaterials(),s=shapes(group),eaveMountHeight=profile.eaveHeightFt-.35,hw=tent.widthFt/2,hl=tent.lengthFt/2;
  group.name=option.name||'Event lighting';group.userData.reference=ref;group.userData.installationVerified=false;
- const bistroEdgeInset=Math.min(1.1,Math.max(.75,tent.widthFt*.035)),bistroMountHeight=profile.eaveHeightFt-.30,poleClearance=1.35;
+ const bistroEdgeInset=Math.min(1.1,Math.max(.75,tent.widthFt*.035)),bistroMountHeight=profile.eaveHeightFt-.30,poleClearance=1.35,bistroRuns=[];
  const lights=[];
  if(type==='chandelier'){
   const q=createChandelier(m),x=tent.type==='pole'?2.4:0;q.position.set(x,eaveMountHeight-2.25,0);group.add(q);s.rod([x,eaveMountHeight+.30,0],[x,profile.peakHeightFt-.4,0],.018,m.silver);group.userData.fixtureCount=1;
@@ -74,6 +74,7 @@ export function makeReferenceLighting(tent,option){
     }
     line.from.y=line.to.y=runY;
    }
+   if(type==='bistro')bistroRuns.push((line.from.y+line.to.y)/2);
    const mountHeight=type==='bistro'?bistroMountHeight:eaveMountHeight;
    const a=new THREE.Vector3(line.from.x-hw,mountHeight,line.from.y-hl),b=new THREE.Vector3(line.to.x-hw,mountHeight,line.to.y-hl),axis=b.clone().sub(a),span=axis.length(),points=[];
    if(type==='bistro'&&span>bistroEdgeInset*2+.5){const dir=axis.clone().normalize();a.addScaledVector(dir,bistroEdgeInset);b.addScaledVector(dir,-bistroEdgeInset);}
@@ -87,7 +88,7 @@ export function makeReferenceLighting(tent,option){
     const count=Math.max(1,Math.ceil(length/(type==='c7'?1:2.5)));for(let i=0;i<count;i++){const q=createStringFixture(type,m);q.position.copy(point((i+.5)/count));group.add(q);}bulbs+=count;
    }
   }
-  group.userData.lightSources=bulbs;group.userData.routeLengthFt=routeLength;group.userData.fullRunInstalled=type==='rope'?false:null;if(type==='bistro'){group.userData.edgeInsetFt=bistroEdgeInset;group.userData.mountHeightFt=bistroMountHeight;group.userData.valanceBottomFt=profile.eaveHeightFt-profile.valanceDropFt;group.userData.centerPoleClearanceFt=poleClearance;}
+  group.userData.lightSources=bulbs;group.userData.routeLengthFt=routeLength;group.userData.fullRunInstalled=type==='rope'?false:null;if(type==='bistro'){group.userData.edgeInsetFt=bistroEdgeInset;group.userData.mountHeightFt=bistroMountHeight;group.userData.valanceBottomFt=profile.eaveHeightFt-profile.valanceDropFt;group.userData.centerPoleClearanceFt=poleClearance;group.userData.bistroRunsFt=bistroRuns;}
  }
  mergeStatic(group);
  if(type!=='uplight'){
