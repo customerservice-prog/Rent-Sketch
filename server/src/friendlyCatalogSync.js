@@ -44,5 +44,106 @@ async function discover(){const found=new Set(),maps=[BASE+'/sitemap.xml',BASE+'
 async function upsert(tenantId,p){const existing=await db.query('SELECT id,visual_model_id FROM products WHERE tenant_id=$1 AND external_id=$2 LIMIT 1',[tenantId,p.externalId]);if(existing.rows[0]){await db.query(`UPDATE products SET category=$1,name=$2,price_per_day=$3,width_ft=$4,length_ft=$5,capacity=$6,photo_url=$7,visual_model_id=COALESCE(visual_model_id,$8),active=true,updated_at=now() WHERE id=$9`,[p.category,p.name,p.price,p.widthFt,p.lengthFt,p.capacity,p.photoUrl,p.visualModelId,existing.rows[0].id]);return'updated';}await db.query(`INSERT INTO products (tenant_id,category,external_id,name,price_per_day,price_type,width_ft,length_ft,capacity,photo_url,visual_model_id,sort_order,active) VALUES ($1,$2,$3,$4,$5,'per_day',$6,$7,$8,$9,$10,0,true)`,[tenantId,p.category,p.externalId,p.name,p.price,p.widthFt,p.lengthFt,p.capacity,p.photoUrl,p.visualModelId]);return'inserted';}
 async function configureFriendlyWebhook(tenantId){const url=String(process.env.FRIENDLY_RENTSKETCH_WEBHOOK_URL||'').trim(),secret=String(process.env.FRIENDLY_RENTSKETCH_WEBHOOK_SECRET||'').trim();if(!url)return false;if(!secret)throw new Error('FRIENDLY_RENTSKETCH_WEBHOOK_SECRET is required when webhook URL is configured');let parsed;try{parsed=new URL(url);}catch(_){throw new Error('FRIENDLY_RENTSKETCH_WEBHOOK_URL is invalid');}if(parsed.protocol!=='https:')throw new Error('Friendly RentSketch webhook must use HTTPS');await db.query('UPDATE tenants SET webhook_url=$1,webhook_secret=$2,updated_at=now() WHERE id=$3',[url,secret,tenantId]);console.log('[catalog-sync] Friendly quote webhook configured');return true;}
 async function syncFriendlyCatalog(){const tr=await db.query(`SELECT id,slug,name,contact_email FROM tenants WHERE lower(contact_email)=lower($1) OR lower(name) LIKE '%friendly party rental%' ORDER BY CASE WHEN lower(contact_email)=lower($1) THEN 0 ELSE 1 END LIMIT 1`,[TARGET_EMAIL]),tenant=tr.rows[0];if(!tenant){console.log('[catalog-sync] Friendly Party Rental tenant not found; skipped');return{skipped:true};}await configureFriendlyWebhook(tenant.id);const urls=await discover();if(!urls.length)throw new Error('No Friendly Party Rental item URLs discovered');let imported=0,failed=0,mapped=0;for(let i=0;i<urls.length;i+=6)await Promise.all(urls.slice(i,i+6).map(async url=>{try{const p=parse(url,await getText(url));if(!p){failed++;return;}if(p.visualModelId)mapped++;await upsert(tenant.id,p);imported++;}catch(e){failed++;console.warn('[catalog-sync] item failed',url,e.message);}}));console.log(`[catalog-sync] ${tenant.slug}: discovered=${urls.length} imported=${imported} mapped=${mapped} failed=${failed}`);return{tenant:tenant.slug,discovered:urls.length,imported,mapped,failed};}
-module.exports=syncFriendlyCatalog;
-module.exports._test={visualModel,refineCategory,parse};
+
+const NYC_BASE='https://friendlypartyrentalnyc.com';
+
+function nycBaseCategory(item){
+ const slug=String(item?.category?.slug||'').toLowerCase();
+ if(slug==='tent-rentals')return'tent';
+ if(slug==='table-chair-rentals')return refineCategory(item.name,'table');
+ if(slug==='bounce-house-rentals')return'inflatable';
+ if(slug==='linen-rentals')return'linen';
+ if(slug==='event-lighting-rentals')return'lighting';
+ if(slug==='dance-floor-stage-rentals')return'dance_floor';
+ if(slug==='photobooth-rentals')return'photobooth';
+ if(slug==='concession-machine-rentals'||slug==='beverage-food-service')return'concession';
+ if(slug==='generator-rentals')return'generator';
+ if(slug==='yard-game-rentals')return'game';
+ if(slug==='party-rental-packages'||slug==='weddings')return'package';
+ return refineCategory(item.name,slug.replace(/-rentals$/,'').replace(/-/g,'_')||'other');
+}
+
+function nycProduct(item){
+ const name=String(item?.name||'').trim(),slugValue=String(item?.slug||'').trim(),price=Number(item?.cost);
+ if(!name||!/^[-a-z0-9]{1,180}$/i.test(slugValue)||!Number.isFinite(price))return null;
+ const p={
+  externalId:'fpr:'+slugValue,
+  name,
+  category:nycBaseCategory(item),
+  price,
+  photoUrl:NYC_BASE+'/api/item-image/'+encodeURIComponent(slugValue),
+  widthFt:null,lengthFt:null,capacity:null
+ };
+ const size=name.match(/(\d{1,3})\s*[x×]\s*(\d{1,3})/i);
+ if(size){p.widthFt=Number(size[1]);p.lengthFt=Number(size[2]);}
+ p.visualModelId=visualModel(p);
+ return p;
+}
+
+async function ensureNycTenant(){
+ let tenant=(await db.query("SELECT * FROM tenants WHERE slug='friendly-nyc' LIMIT 1")).rows[0];
+ if(!tenant){
+  const r=await db.query(`INSERT INTO tenants
+    (slug,name,legal_name,contact_email,phone,website,primary_color,secondary_color,tagline,show_prices,
+     subscription_plan,subscription_status,trial_ends_at,embed_key,allowed_origins,powered_by_enabled,
+     customer_access,pass_price_cents,pass_duration_days,active_order_grace_days,credit_pass_to_order)
+    VALUES
+    ('friendly-nyc','Friendly Party Rental NYC','Friendly Party Rental L.L.C.','customerservice@friendlypartyrental.com','315-884-1498',
+     'https://friendlypartyrentalnyc.com','#0B1F3A','#E07B00','Plan your Riverdale and Downstate New York event with Friendly Party Rental NYC',true,
+     'commerce','active',NULL,encode(gen_random_bytes(16),'hex'),
+     '["https://friendlypartyrentalnyc.com","https://www.friendlypartyrentalnyc.com"]'::jsonb,true,
+     'free',NULL,30,7,false)
+    RETURNING *`);
+  tenant=r.rows[0];
+ }else{
+  const r=await db.query(`UPDATE tenants SET
+    name='Friendly Party Rental NYC',legal_name='Friendly Party Rental L.L.C.',
+    contact_email='customerservice@friendlypartyrental.com',phone='315-884-1498',
+    website='https://friendlypartyrentalnyc.com',primary_color='#0B1F3A',secondary_color='#E07B00',
+    tagline='Plan your Riverdale and Downstate New York event with Friendly Party Rental NYC',
+    show_prices=true,customer_access='free',powered_by_enabled=true,
+    allowed_origins='["https://friendlypartyrentalnyc.com","https://www.friendlypartyrentalnyc.com"]'::jsonb,
+    updated_at=now() WHERE id=$1 RETURNING *`,[tenant.id]);
+  tenant=r.rows[0];
+ }
+ const url=String(process.env.FRIENDLY_NYC_RENTSKETCH_WEBHOOK_URL||'').trim();
+ const secret=String(process.env.FRIENDLY_NYC_RENTSKETCH_WEBHOOK_SECRET||'').trim();
+ if(url&&secret){
+  const parsed=new URL(url);
+  if(parsed.protocol!=='https:')throw new Error('NYC Friendly RentSketch webhook must use HTTPS');
+  await db.query('UPDATE tenants SET webhook_url=$1,webhook_secret=$2,updated_at=now() WHERE id=$3',[url,secret,tenant.id]);
+ }
+ return tenant;
+}
+
+async function syncNycCatalog(){
+ const tenant=await ensureNycTenant();
+ const response=await fetch(NYC_BASE+'/api/items',{cache:'no-store',headers:{Accept:'application/json','user-agent':'RentSketchCatalogSync/1.0 (+https://rentsketch.com)'},signal:AbortSignal.timeout(15000)});
+ if(!response.ok)throw new Error('NYC catalog HTTP '+response.status);
+ const body=await response.json(),items=Array.isArray(body?.items)?body.items:[];
+ if(!items.length)throw new Error('NYC catalog returned no public items');
+ let imported=0,mapped=0,failed=0;
+ const seen=[];
+ for(const item of items){
+  try{
+   const p=nycProduct(item);if(!p){failed++;continue;}
+   seen.push(p.externalId);if(p.visualModelId)mapped++;
+   await upsert(tenant.id,p);imported++;
+  }catch(error){failed++;console.warn('[catalog-sync] NYC item failed',item?.slug,error.message);}
+ }
+ if(seen.length){
+  await db.query("UPDATE products SET active=false,updated_at=now() WHERE tenant_id=$1 AND external_id LIKE 'fpr:%' AND NOT (external_id=ANY($2::text[]))",[tenant.id,seen]);
+ }
+ console.log(`[catalog-sync] friendly-nyc: discovered=${items.length} imported=${imported} mapped=${mapped} failed=${failed}`);
+ return{tenant:'friendly-nyc',discovered:items.length,imported,mapped,failed};
+}
+
+async function syncAllFriendlyCatalogs(){
+ const syracuse=await syncFriendlyCatalog();
+ let nyc;
+ try{nyc=await syncNycCatalog();}catch(error){console.error('[catalog-sync] friendly-nyc failed:',error.message);nyc={error:error.message};}
+ return{syracuse,nyc};
+}
+
+module.exports=syncAllFriendlyCatalogs;
+module.exports._test={visualModel,refineCategory,parse,nycBaseCategory,nycProduct};
