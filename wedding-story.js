@@ -252,7 +252,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
         target.classList.add('active');
         pending=renderer.init(target,{marketingOnly:true,registerActive:false});
         pending.rebuild(scene);
-        pending.setScene({motion:false,guests:false,styling:true,night:false});
+        pending.setScene({motion:true,guests:false,styling:true,night:false});
         pending.setMarketingProgress(progress);
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
         if(disposed){pending.destroy();pending=null;return null;}
