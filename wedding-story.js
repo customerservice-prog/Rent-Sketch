@@ -254,7 +254,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     if(view||loading||disposed)return view;
     loading=(async()=>{
       try{
-        const renderer=await import('/js/ui/view3d.js?v=20261001-wedding-3d-4');
+        const renderer=await import('/js/ui/view3d.js?v=20261001-tent-light-clearance-1');
         if(disposed)return null;
         target.style.visibility='hidden';
         target.classList.add('active');
