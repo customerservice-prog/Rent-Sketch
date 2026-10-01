@@ -51,6 +51,7 @@ const server=http.createServer((req,res)=>{
       const floor=await page.locator('.story-build-plan [data-story-layer="dance"] rect').count();
       assert.equal(chairs,64,'homepage plan contains 64 chairs');
       assert.equal(floor,16,'homepage plan contains 16 dance-floor sections');
+      assert.ok(await page.locator('.story-build-plan [data-story-layer="waterslide"] > *').count()>=1,'homepage plan contains the waterslide');
       await page.locator('[data-story-pause]').click();
       const before=await page.locator('[data-story-label]').innerText();
       await page.waitForTimeout(700);
@@ -60,7 +61,7 @@ const server=http.createServer((req,res)=>{
       assert.match(await page.locator('[data-story-label]').innerText(),/empty venue|Measure|tent footprint/i);
       await page.locator('[data-view="2d"]').click();
       assert.equal(await page.locator('.story-build-plan.show-plan').count(),1);
-      assert.match(await page.locator('[data-story-label]').innerText(),/Complete reception floor plan/);
+      assert.match(await page.locator('[data-story-label]').innerText(),/Complete wedding \+ waterslide plan/);
       await page.waitForTimeout(750);
       const visiblePlanLayer=await page.locator('.story-build-plan [data-story-layer="tables"]').evaluate(el=>Number(getComputedStyle(el).opacity));
       assert(visiblePlanLayer>.9,'2D plan layers must finish visibly rendering before visual QA capture');
@@ -133,7 +134,7 @@ const server=http.createServer((req,res)=>{
       assert.equal(await page.locator('.story-timeline-actions').isVisible(),false);
       assert.equal(await page.locator('.tour-poster').isVisible(),true);
       assert.equal(await page.locator('.tour-3d canvas').count(),0);
-      assert.equal(await page.locator('[data-story-count]').innerText(),'17 / 17');
+      assert.equal(await page.locator('[data-story-count]').innerText(),'18 / 18');
       await page.screenshot({path:path.join(out,'home-reduced-motion.png')});
       results.push({reducedMotion:true,staticFinal:true,noAutoplayWebGL:true});
       await ctx.close();
