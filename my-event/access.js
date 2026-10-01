@@ -24,9 +24,11 @@
     if (intro) intro.textContent = tenant === 'friendly-nyc'
       ? 'Your eligible Friendly Party Rental NYC booking includes RentSketch. Enter the first name on the booking and your order number.'
       : 'Your eligible Friendly Party Rental booking includes RentSketch. Enter the first name on the booking and your order number.';
-    ['paidAccess','emailDetails','emailHelp','privateNote'].forEach(function (id) {
+    ['paidAccess','emailHelp','privateNote'].forEach(function (id) {
       var el = document.getElementById(id); if (el) el.hidden = true;
     });
+    var details = document.getElementById('emailDetails');
+    if (details) details.innerHTML = '<strong>No email or code needed.</strong><p>Use the first name on the booking and the order number any time you need to reopen this active event.</p>';
   }
 
   var orderForm = document.getElementById('orderAccessForm');
@@ -41,11 +43,14 @@
     try {
       var response = await fetch('https://rentsketch-api-production.up.railway.app/api/consumer/order-access/request', {
         method: 'POST', headers: { 'Content-Type':'application/json' }, signal: controller.signal,
-        body: JSON.stringify({
-          tenant: tenant,
-          orderNumber: document.getElementById('orderNumber').value.trim(),
-          firstName: document.getElementById('orderFirstName').value.trim()
-        }),
+        body: JSON.stringify((function () {
+          var payload = {
+            orderNumber: document.getElementById('orderNumber').value.trim(),
+            firstName: document.getElementById('orderFirstName').value.trim()
+          };
+          if (tenant === 'friendly-nyc') payload.tenant = tenant;
+          return payload;
+        })()),
       });
       var result = await response.json(); if (!response.ok) throw new Error(result.error || 'Please try again shortly.');
       var destination; try { destination = new URL(result.accessUrl); } catch (_) {}
