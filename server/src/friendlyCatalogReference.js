@@ -2,7 +2,8 @@
 // written or replaced. Exact fpr: source slugs join to the tenant's public website records.
 const SOURCES={
  friendly:'https://www.friendlypartyrental.com/api/items',
- 'friendly-nyc':'https://friendlypartyrentalnyc.com/api/items'
+ 'friendly-nyc':'https://friendlypartyrentalnyc.com/api/items',
+ 'friendly-sc':'https://friendlypartyrentalsc.com/api/items'
 };
 function joinReferences(products,items,checkedAt){
  const bySlug=new Map();
