@@ -1,35 +1,40 @@
 # Tenant Setup
 
-A "tenant" is one rental company. Every tenant is a real row in the tenants table, created the same way regardless of who the company is. Friendly Party Rental is tenant #1, but nothing in the application code special-cases it.
+A tenant is one rental company. Every tenant is a real database row with its own products, designs, requests, billing state, integration credentials and Design Intelligence.
 
 ## Creating a tenant
 
-There are two ways a tenant row gets created today.
+### Self-service signup
 
-### Self-service signup (public, no platform admin needed)
+A company can create its workspace at `https://rentsketch.com/business/signup.html`. The public signup endpoint creates the tenant, owner user, owner membership, and a 14-day trial. No credit card is required to begin the trial.
 
-A company can create its own account at https://rentsketch.com/business/signup.html, which posts to the public POST /api/business/signup endpoint. This inserts a new tenants row (auto-generated unique slug, subscription_status "trialing", a 14-day trial via trial_ends_at), a users row for the owner, and a tenant_memberships row linking them with role owner, then returns a JWT so the new owner lands directly in the dashboard already logged in. Reserved slugs (generic, friendly, admin, api, www, app) cannot be claimed. No payment step is required to start the trial - see docs/friendly-production.md for what billing still does not do.
+### Platform-admin / internal tenant
 
-### Platform-admin path (for internal/comped tenants)
+A platform admin can provision an internal or complimentary tenant directly when needed. Friendly Party Rental was originally provisioned this way.
 
-A platform admin can still create a tenant directly in the database: an INSERT into tenants with a unique slug and name, an INSERT into users for the owner's login (email plus a bcrypt password hash), and an INSERT into tenant_memberships linking that user to that tenant with role owner. Friendly Party Rental was created this way, as an internal/comped tenant. After migration 002, embed_key is backfilled automatically for any tenant missing one.
+## Customer designer
 
-## What a new tenant gets immediately
+`https://rentsketch.com/designer/?tenant=YOUR_SLUG`
 
-As soon as the three rows above exist, the tenant can log into the business dashboard at https://rentsketch.com/dashboard/ with their email and password, see their (empty) Overview, add products from the Products page, edit branding (logo, colors, tagline, contact info) from the Branding page, and get their hosted designer URL and embed code from the Install page. None of this requires a code change or a deploy.
-
-## Hosted designer URL for a tenant
-
-```
-https://rentsketch.com/designer/?tenant=YOUR_SLUG
-```
-
-If YOUR_SLUG is friendly or generic, the designer uses its bundled catalog data (tents/tables/chairs geometry) with that tenant's branding, then overlays any name/price changes made from the dashboard. Any other slug uses the same neutral catalog as a starting point and loads that tenant's real branding and product overrides from the API - see docs/friendly-production.md, "known limitation: visual mapping" for what this does and does not cover yet.
+The designer loads tenant branding and products. Products can map to an existing shared visual, or use **Measured Generic Rental** for a neutral 2D/3D planning volume based on the supplied footprint when no dedicated model exists.
 
 ## Roles
 
-tenant_memberships.role is one of owner, admin, staff, or viewer. Only enforcement of "is this user allowed to touch this tenant at all" is implemented today (requireTenantAccess). Fine-grained permission differences between owner/admin/staff/viewer are not yet enforced - see docs/friendly-production.md.
+`tenant_memberships.role` is enforced as:
 
-## Platform admin
+- `viewer`: read-only requests and Sales Insights.
+- `staff`: viewer access plus request status work, customer design review, quote approval and approved deposit links.
+- `admin`: staff access plus product/catalog edits, branding, Stripe Connect, embed/domain configuration and visual audit.
+- `owner`: admin access plus subscription billing and rental-system integration credentials.
 
-A user with is_platform_admin = true on their users row can access any tenant's staff-only routes without a tenant_memberships row. This is intended for the RentSketch operator only, not for rental company staff.
+Platform admins remain separately authorized by the configured platform-admin identity.
+
+## Rental-system integration
+
+Owners can create a one-time integration key in Dashboard → Install & share. Use the key with `POST /api/tenants/:slug/integrations/order-attribution` to return actual booked totals/line items from ERS, TapGoods, Goodshuffle or custom middleware.
+
+Outbound signed webhook events include design and quote lifecycle events. See `docs/webhooks.md`.
+
+## Billing and deposits
+
+Business subscription checkout/portal uses Stripe when configured. Rental deposit checkout is separate: a staff member must approve the quote total first. The customer payment link is signed, and Checkout is created from the server-stored approved deposit amount, never from a browser-submitted layout estimate.
