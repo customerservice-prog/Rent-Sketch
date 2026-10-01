@@ -548,8 +548,9 @@ export function init(container,callbacks={}) {
     if(styling)stage(styling,.79,.87,.15);
     if(lightGroup)stage(lightGroup,.84,.91,0);
     marketingDetails?.children.forEach(part=>stage(part,part.userData.marketingAt,part.userData.marketingAt+.055,.6));
-    if(guests)guests.visible=false;
-    if(inflatableActivity)inflatableActivity.visible=false;
+    showGuests=p>=.98;
+    if(guests)guests.visible=showGuests;
+    if(inflatableActivity)inflatableActivity.visible=showGuests;
     const t=state.tent;
     if(t.planningArea){
       cameraMode='outside';
@@ -850,7 +851,7 @@ export function init(container,callbacks={}) {
   function toggleWalk(){if(walk.isActive()){exitWalk();return false;}return walkWorld();}
   function isWalking(){return walk.isActive();}
   function setMarketingBuildStage(key){
-    const order={space:0,tent:1,tables:2,chairs:3,sweetheart:4,dance:5,style:6,lighting:7,reception:8,evening:9};
+    const order={space:0,tent:1,tables:2,chairs:3,sweetheart:4,dance:5,style:6,lighting:7,waterslide:8,reception:9,evening:10};
     const stage=order[key] ?? 9;
     structure.visible=stage>=1;
     if(stage<1)structure.scale.y=1;
