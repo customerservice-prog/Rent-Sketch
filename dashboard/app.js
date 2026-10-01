@@ -339,7 +339,7 @@ function esc(s) {
      var statuses={};reqs.forEach(function(r){statuses[r.status]=(statuses[r.status]||0)+1;});
      var maxStatus=Math.max(1,...Object.values(statuses));
      var activeProducts=products.filter(function(p){return p.active;}).length;
-     var visualProducts=products.filter(function(p){return p.visual_model_id;}).length;
+     var nativeVisualProducts=products.filter(function(p){return (p.visual_coverage&&p.visual_coverage.native)||p.visual_model_id;}).length;\n     var renderableProducts=products.filter(function(p){return !p.visual_coverage||p.visual_coverage.renderable!==false;}).length;
      var topPairs=(patterns.pairs||[]).slice(0,6),topFeatures=(patterns.features||[]).slice(0,8),topKinds=(patterns.objectKinds||[]).slice(0,6),bookedItems=(attribution.bookedItems||[]).slice(0,8);
      var confidence=sample.confidence||'low';
      function insightRows(rows,emptyText){
@@ -384,13 +384,13 @@ function esc(s) {
        '<section class="tw-panel" style="margin-top:16px"><div class="tw-panel-head"><div><h2>Customer planning activity</h2><p>Demand and request status from your RentSketch customer workflow.</p></div></div><div class="tw-panel-body"><section class="tw-metrics compact">'+
          '<article class="tw-metric"><div class="tw-metric-label">Requests · 30 days</div><div class="tw-metric-value">'+recentReq.length+'</div><div class="tw-metric-detail">'+reqs.length+' all-time requests</div></article>'+
          '<article class="tw-metric"><div class="tw-metric-label">Designs · 30 days</div><div class="tw-metric-value">'+recentDesigns.length+'</div><div class="tw-metric-detail">'+Number(sample.learning||0)+' meaningful layouts currently learning</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Catalog active</div><div class="tw-metric-value">'+activeProducts+'</div><div class="tw-metric-detail">'+visualProducts+' products have a visual mapping</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Catalog active</div><div class="tw-metric-value">'+activeProducts+'</div><div class="tw-metric-detail">'+nativeVisualProducts+' native/photo-referenced · '+renderableProducts+' renderable</div></article>'+
          '<article class="tw-metric"><div class="tw-metric-label">Learning confidence</div><div class="tw-metric-value">'+esc(confidence.toUpperCase())+'</div><div class="tw-metric-detail">'+Number(sample.ignoredSynthetic||0)+' QA/test and '+Number(sample.ignoredEmpty||0)+' empty layouts excluded</div></article>'+
        '</section></div></section>'+
        '<div class="tw-analytics-grid" style="margin-top:16px">'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Request pipeline</h2><p>Status distribution across customer requests.</p></div></div><div class="tw-panel-body">'+Object.keys(statuses).map(function(k){return '<div class="tw-list-row"><span>'+esc(k)+'</span><strong>'+statuses[k]+'</strong></div><div class="tw-bar"><span style="width:'+Math.round(statuses[k]/maxStatus*100)+'%"></span></div>';}).join('')+(Object.keys(statuses).length?'':emptyAnalytics('No requests yet'))+'</div></section>'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Event types</h2><p>What customers are planning.</p></div></div><div class="tw-panel-body">'+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(x){return '<div class="tw-list-row"><span>'+esc(x[0])+'</span><strong>'+x[1]+'</strong></div>';}).join('')+(Object.keys(types).length?'':emptyAnalytics('No event-type data yet'))+'</div></section>'+
-         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Catalog readiness</h2><p>How much of your equipment is customer-ready.</p></div></div><div class="tw-panel-body"><div class="tw-list-row"><span>Total products</span><strong>'+products.length+'</strong></div><div class="tw-list-row"><span>Active</span><strong>'+activeProducts+'</strong></div><div class="tw-list-row"><span>Priced</span><strong>'+products.filter(function(p){return Number(p.price_per_day)>0;}).length+'</strong></div><div class="tw-list-row"><span>Visual model assigned</span><strong>'+visualProducts+'</strong></div></div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Catalog readiness</h2><p>How much of your equipment is customer-ready.</p></div></div><div class="tw-panel-body"><div class="tw-list-row"><span>Total products</span><strong>'+products.length+'</strong></div><div class="tw-list-row"><span>Active</span><strong>'+activeProducts+'</strong></div><div class="tw-list-row"><span>Priced</span><strong>'+products.filter(function(p){return Number(p.price_per_day)>0;}).length+'</strong></div><div class="tw-list-row"><span>Native/photo-referenced visuals</span><strong>'+nativeVisualProducts+'</strong></div><div class="tw-list-row"><span>Customer-renderable</span><strong>'+renderableProducts+'</strong></div></div></section>'+
        '</div>';
    }catch(err){mainEl().innerHTML=errorHtml(err);}
  }
@@ -631,7 +631,7 @@ function esc(s) {
      if(size===10||size===20) return {kind:'review',label:'Physical rule enforced',detail:(size===10?'10 ft: pop-up tents only':'20 ft: pole/frame tents only')+'. Compare the updated window/solid rendering against the website reference before approval.'};
      return {kind:'rebuild',label:'Sidewall size missing',detail:'Panel width must be identified before this item can be approved.'};
    }
-   if(product.visual_model_id) return {kind:'review',label:'Visual mapped',detail:'Compare the mapped RentSketch visual against the website photo before approval.'};
+   if(product.visual_model_id||(product.visual_coverage&&product.visual_coverage.native)) return {kind:'review',label:product.visual_model_id?'Shared visual mapped':'Photo-referenced visual',detail:'Compare the RentSketch visual against the website photo before approval.'};
    if(product.photo_url||product.image_url) return {kind:'review',label:'Photo available',detail:'Website photo is available; RentSketch visual still needs phase review.'};
    return {kind:'missing',label:'Missing visual reference',detail:'No website photo or approved RentSketch visual is currently attached.'};
  }
