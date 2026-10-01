@@ -6,6 +6,7 @@ const { isConfiguredPlatformAdmin } = require('./middleware/requireAuth');
 const { savePermission, permissionDesign } = require('./eventPassAccess');
 const { verifyToken } = require('./auth');
 const { scheduleDesignIntelligenceRefresh } = require('./designIntelligence');
+const { emitTenantEvent } = require('./integrationEvents');
 
 const MAX_SCENE_BYTES = 192 * 1024, MAX_CHECKPOINTS = 50, MAX_ALTERNATIVES = 20;
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -161,6 +162,11 @@ async function create(req, generic) {
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
   [generic ? null : scope.tenant.id, staff?.userId || null, owner || null, next.schema_version, next.event_type, next.guest_count, next.scene, next.estimate_total, next.project_name, next.site_notes, next.crew_notes]);
   scheduleDesignIntelligenceRefresh();
+  if(scope.tenant) emitTenantEvent(scope.tenant,'design.created',{
+    id:result.rows[0].id,eventType:result.rows[0].event_type||null,guestCount:result.rows[0].guest_count||null,
+    estimateTotal:result.rows[0].estimate_total==null?null:Number(result.rows[0].estimate_total),
+    projectName:result.rows[0].project_name||'',createdAt:result.rows[0].created_at
+  }).catch(()=>{});
   return detail(result.rows[0], scope.tenant, !!staff);
 }
 async function read(req, generic) {
@@ -181,6 +187,11 @@ async function write(client, design, next, auth) {
   [next.scene, next.schema_version, next.event_type, next.guest_count, next.estimate_total, next.project_name, next.site_notes, next.crew_notes, design.id, design.revision]);
   if (!result.rows[0]) fail(409, 'This design changed. Reload before saving.', 'revision_conflict');
   scheduleDesignIntelligenceRefresh();
+  if(auth.tenant) emitTenantEvent(auth.tenant,'design.updated',{
+    id:result.rows[0].id,eventType:result.rows[0].event_type||null,guestCount:result.rows[0].guest_count||null,
+    estimateTotal:result.rows[0].estimate_total==null?null:Number(result.rows[0].estimate_total),
+    projectName:result.rows[0].project_name||'',revision:result.rows[0].revision,updatedAt:result.rows[0].updated_at
+  }).catch(()=>{});
   return { ...detail(result.rows[0], auth.tenant, !!auth.staff), updated: true };
 }
 function handler(fn, status = 200) {
