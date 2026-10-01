@@ -13,7 +13,7 @@ const deps={
   '../mailer':{getMailer:()=>({send:async(to,subject,text)=>{sent.push({to,subject,text});return{id:'mail'};}})},
   '../middleware/requireAuth':{requireTenantRole:()=>()=>{}},
   '../orderProviders/quoteRequestOrderProvider':{syncOrderEntitlement:async()=>{}},
-  '../outboundWebhook':{validateWebhookUrl:()=>({ok:false}),postWebhook:async()=>{throw Error('unexpected webhook');}},
+  '../designIntelligence':{scheduleDesignIntelligenceRefresh:()=>{}},'../integrationEvents':{emitTenantEvent:async()=>({attempted:false,sent:false})},'../auth':{signToken:()=> 'fixture-token'},
   '../eventPass':{isPassEnabled:()=>false},
   '../eventPassAccess':{activePass:async()=>true},
   '../designIntelligence':{scheduleDesignIntelligenceRefresh:()=>{}}
