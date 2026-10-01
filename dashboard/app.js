@@ -403,7 +403,7 @@ function esc(s) {
        '<td>' + fmtDate(r.event_date) + '</td>' +
        '<td>' + (r.guest_count || '\u2014') + '</td>' +
        '<td>' + money(r.estimate_total) + '</td>' +
-      '<td>' + (r.payment_status === 'paid' ? ('Paid ' + money((r.amount_paid_cents || 0) / 100)) : '\u2014') + '</td>' +
+      '<td>' + (r.payment_status === 'paid' ? ('Paid ' + money((r.amount_paid_cents || 0) / 100)) : (r.approved_total_cents ? ('Approved '+money(Number(r.approved_total_cents)/100)+'<br><span class="muted">Deposit '+money(Number(r.deposit_amount_cents||0)/100)+'</span>') : '\u2014')) + '</td>' +
        '<td>' + fmtDateTime(r.created_at) + '</td>' +
        '<td>' + (withActions ? statusSelect(r) : '<span class="status-badge status-' + esc(r.status) + '">' + esc(r.status) + '</span>') + '</td>' +
        '</tr>';
