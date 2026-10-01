@@ -137,3 +137,5 @@ const designSceneTestSql = `
     await pool.end();
   }
 })().catch(err=>{console.error('FRIENDLY_TEST_DATA_CLEANUP_ERROR',err.message);process.exit(1);});
+
+// one-time cleanup deployment trigger 2026-10-01
