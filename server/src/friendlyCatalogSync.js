@@ -110,7 +110,7 @@ async function ensureScTenant(){
     ('friendly-sc','Friendly Party Rental SC','Friendly Party Rental L.L.C.','customerservice@friendlypartyrental.com','864-610-5324',
      'https://friendlypartyrentalsc.com','#0B1F3A','#E07B00','Plan your Greenville and Upstate South Carolina event with Friendly Party Rental SC',true,
      'commerce','active',NULL,encode(gen_random_bytes(16),'hex'),
-     $["https://friendlypartyrentalsc.com","https://www.friendlypartyrentalsc.com"]$::jsonb,true,
+     '["https://friendlypartyrentalsc.com","https://www.friendlypartyrentalsc.com"]'::jsonb,true,
      'free',NULL,30,7,false)
     RETURNING *`);
   tenant=r.rows[0];
