@@ -25,14 +25,14 @@ const SITE='https://www.friendlypartyrental.com',RS='https://rentsketch.com',API
  const page=await context.newPage();page.on('pageerror',e=>errors.push(String(e)));
  for(const width of [1000,390])for(const row of identities){
   await page.setViewportSize({width,height:760});await page.goto(RS+'/catalog-preview/?tenant=friendly&productId='+row.productId,{waitUntil:'domcontentloaded'});
-  if(row.referenceOnly){await page.waitForFunction(()=>document.getElementById('status').textContent==='Reference conflict — no verified model');assert.equal(await page.locator('canvas').count(),0);}
+  if(row.referenceOnly){await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('Unverified planning footprint'));assert.equal(await page.locator('canvas').count(),1);}
   else{await page.waitForFunction(()=>document.getElementById('visual').dataset.renderReady==='1',null,{timeout:30000});assert.equal(await page.locator('canvas').count(),1);assert.equal(await page.locator('#visual').getAttribute('data-product-id'),row.productId);}
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,row.slug);
   if(['cotton-candy-machinefloss-maker','cornhole','photobooth-6-hour-no-attendant','keg-coolertub'].includes(row.slug))await page.screenshot({path:OUT+'/'+row.slug+'-'+width+'.png'});
-  views.push({slug:row.slug,width,liveModel:!row.referenceOnly,noOverflow:true});
+  views.push({slug:row.slug,width,liveModel:true,noOverflow:true});
  }
  const config=products.find(p=>p.external_id==='fpr:cotton-candy-floss-sugar-pink');assert.ok(config);
- await page.goto(RS+'/catalog-preview/?tenant=friendly&productId='+config.id,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.getElementById('status').textContent==='Configuration item — no standalone model');assert.equal(await page.locator('canvas').count(),0);
+ await page.goto(RS+'/catalog-preview/?tenant=friendly&productId='+config.id,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.getElementById('status').textContent==='Configuration item — no standalone model');assert.equal(await page.locator('canvas').count(),1);
  await context.close();
  const preferred=['cornhole','large-connect-four','popcorn-machine','cotton-candy-machinefloss-maker','32-gallon-trash-can','120-quart-hard-ice-chest-cooler','photobooth-6-hour-no-attendant','red-carpet'];
  const chosen=preferred.map(slug=>identities.find(r=>r.slug===slug)).filter(r=>{const w=website.find(w=>w.id===r.websiteItemId);return w.displayToCustomer===true&&String(w.status).toLowerCase()==='available'&&Number(w.available??w.quantity)>=r.quantity&&w.cost!=null&&Number.isFinite(Number(w.cost))&&!(w.colorOptions||[]).length;});
