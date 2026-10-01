@@ -8,6 +8,7 @@ function tent() {
     type:'pole',
     widthFt:40,
     lengthFt:60,
+    planningArea:{widthFt:70,lengthFt:60},
     installationClearanceFt:5,
     centerPoles:[{x:20,y:20},{x:20,y:40}]
   };
@@ -77,6 +78,42 @@ function danceFloor() {
   return floor;
 }
 
+function weddingWaterslide() {
+  return {
+    id:'wedding-waterslide',
+    kind:'inflatable',
+    inflatableId:'marketing-lava-wave',
+    productId:null,
+    externalId:null,
+    name:'22 ft Tropical Lava Wave Waterslide',
+    widthFt:18,
+    depthFt:40,
+    modelWidthFt:18,
+    modelDepthFt:40,
+    heightFt:22,
+    footprintOriented:true,
+    dimensionsConfirmed:false,
+    heightConfirmed:false,
+    rotationDeg:0,
+    x:46,
+    y:10,
+    modelProfile:{
+      version:3,
+      slug:'22ft-tropical-lava-wave-marble-waterslide',
+      variant:'lava-wave',
+      style:'slide',
+      colors:['#b82420','#ffbf2f','#d74329','#e3811d'],
+      combo:false,
+      lanes:1,
+      palms:true,
+      marble:true,
+      wave:true,
+      flame:false
+    }
+  };
+}
+
+
 function guestTables(seats=8,styled=true,hideChairs=false) {
   const tables=[];
   for (const x of [8,32]) for (const y of [10,22,38,50]) {
@@ -132,7 +169,8 @@ export function marketingReception() {
   return scene([
     ...guestTables(8,true),
     ...serviceAreas(true),
-    ...danceFloor()
+    ...danceFloor(),
+    weddingWaterslide()
   ],'lighting-bistro');
 }
 
@@ -145,6 +183,7 @@ export function marketingWeddingBuildStages() {
   const serviceBare=serviceAreas(false);
   const serviceDressed=serviceAreas(true);
   const floor=danceFloor();
+  const waterslide=weddingWaterslide();
 
   return [
     {
@@ -230,11 +269,21 @@ export function marketingWeddingBuildStages() {
       animate:[]
     },
     {
+      key:'waterslide',
+      label:'Add the waterslide',
+      detail:'Full wedding + inflatable area',
+      scene:scene([...dressedTables,...serviceDressed,...floor,waterslide],'lighting-bistro'),
+      camera:'outside',
+      styling:true,
+      night:false,
+      animate:[waterslide.id]
+    },
+    {
       key:'reception',
-      label:'Step inside the finished reception',
-      detail:'Same layout · now in 3D',
+      label:'See the complete wedding layout',
+      detail:'Reception + waterslide · same event',
       scene:marketingReception(),
-      camera:'reception',
+      camera:'outside',
       styling:true,
       night:false,
       animate:[],
@@ -242,10 +291,10 @@ export function marketingWeddingBuildStages() {
     },
     {
       key:'evening',
-      label:'Wedding ready',
-      detail:'Evening reception preview',
+      label:'Wedding + waterslide ready',
+      detail:'Complete event preview',
       scene:marketingReception(),
-      camera:'reception',
+      camera:'outside',
       styling:true,
       night:true,
       animate:[],
