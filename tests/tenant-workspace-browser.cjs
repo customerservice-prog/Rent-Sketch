@@ -84,7 +84,7 @@ const server=http.createServer((req,res)=>{
    await page.screenshot({path:path.join(out,'tenant-'+v.name+'.png'),fullPage:true});
    await page.evaluate(()=>location.hash='#/analytics');await page.getByRole('heading',{name:'Customer planning activity'}).waitFor();
    assert.equal(await page.getByText('Request → booked',{exact:true}).count(),1);
-   await page.evaluate(()=>location.hash='#/billing');await page.getByRole('heading',{name:'Billing & subscription'}).waitFor();assert.equal(await page.getByText('Current subscription',{exact:true}).count(),1);
+   await page.evaluate(()=>location.hash='#/billing');await page.getByRole('heading',{name:'Billing',exact:true}).waitFor();assert.equal(await page.getByText('Complimentary platform access is permanent.',{exact:false}).count(),1);
    await page.evaluate(()=>location.hash='#/install');await page.getByRole('heading',{name:'Install RentSketch'}).waitFor();assert.equal(await page.getByText('Iframe embed',{exact:true}).count(),1);
    await page.evaluate(()=>location.hash='#/requests');await page.getByRole('heading',{name:'Quote requests'}).waitFor();
    await page.locator('#requestSearch').fill('Jamie');assert.equal(await page.locator('#requestTable').getByText('Jamie Wedding',{exact:false}).count(),1);assert.equal(await page.locator('#requestTable').getByText('Alex Party',{exact:false}).count(),0);
