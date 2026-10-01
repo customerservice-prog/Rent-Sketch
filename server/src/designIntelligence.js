@@ -186,4 +186,102 @@ async function getDesignIntelligence(){
   };
 }
 
-module.exports = { getDesignIntelligence };
+function snapshotPayload(intelligence){
+  return {
+    generatedAt:intelligence.generatedAt,
+    sample:intelligence.sample,
+    averages:intelligence.averages,
+    conversion:intelligence.conversion,
+    friction:intelligence.friction,
+    patterns:intelligence.patterns,
+    recommendations:intelligence.recommendations
+  };
+}
+
+async function refreshDesignIntelligenceSnapshot(){
+  const intelligence=await getDesignIntelligence();
+  const bucket=new Date();
+  bucket.setUTCMinutes(0,0,0);
+  await db.query(
+    `INSERT INTO design_intelligence_snapshots(bucket_at,payload,updated_at)
+     VALUES($1,$2::jsonb,now())
+     ON CONFLICT(bucket_at) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()`,
+    [bucket.toISOString(),JSON.stringify(snapshotPayload(intelligence))]
+  );
+  console.log('[design-intelligence] snapshot saved',JSON.stringify({
+    bucket:bucket.toISOString(),
+    learning:intelligence.sample.learning,
+    ignoredSynthetic:intelligence.sample.ignoredSynthetic,
+    ignoredEmpty:intelligence.sample.ignoredEmpty,
+    requestRate:intelligence.conversion.requestRate,
+    recommendations:intelligence.recommendations.length
+  }));
+  return intelligence;
+}
+
+async function getDesignIntelligenceHistory(limit=48){
+  const safe=Math.max(2,Math.min(168,Number(limit)||48));
+  const rows=(await db.query(
+    `SELECT bucket_at,payload FROM design_intelligence_snapshots
+     ORDER BY bucket_at DESC LIMIT $1`,
+    [safe]
+  )).rows.reverse();
+  const history=rows.map(row=>{
+    const p=row.payload||{};
+    return {
+      at:row.bucket_at,
+      learning:Number(p.sample?.learning||0),
+      confidence:p.sample?.confidence||'low',
+      requestRate:Number(p.conversion?.requestRate||0),
+      bookedRate:Number(p.conversion?.bookedRate||0),
+      objectsPerDesign:Number(p.averages?.objectsPerDesign||0),
+      revisions:Number(p.averages?.revisions||0),
+      missingGuestPct:Number(p.friction?.missingGuest?.pct||0),
+      missingTentPct:Number(p.friction?.missingTent?.pct||0),
+      sparsePct:Number(p.friction?.sparse?.pct||0),
+      highRevisionPct:Number(p.friction?.highRevision?.pct||0)
+    };
+  });
+  const current=history.at(-1)||null;
+  const previous=history.length>1?history.at(-2):null;
+  const delta=(field)=>current&&previous?Number((Number(current[field]||0)-Number(previous[field]||0)).toFixed(1)):0;
+  return {
+    points:history,
+    trend:current?{
+      learning:delta('learning'),
+      requestRate:delta('requestRate'),
+      bookedRate:delta('bookedRate'),
+      objectsPerDesign:delta('objectsPerDesign'),
+      highRevisionPct:delta('highRevisionPct'),
+      missingGuestPct:delta('missingGuestPct')
+    }:null
+  };
+}
+
+let refreshTimer=null, hourlyTimer=null;
+function scheduleDesignIntelligenceRefresh(delayMs=15000){
+  if(refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer=setTimeout(()=>{
+    refreshTimer=null;
+    refreshDesignIntelligenceSnapshot().catch(err=>console.error('[design-intelligence] refresh failed:',err.message));
+  },Math.max(1000,Number(delayMs)||15000));
+  refreshTimer.unref?.();
+}
+
+function startDesignIntelligenceWorker(){
+  scheduleDesignIntelligenceRefresh(20000);
+  if(hourlyTimer) return;
+  hourlyTimer=setInterval(
+    ()=>refreshDesignIntelligenceSnapshot().catch(err=>console.error('[design-intelligence] hourly refresh failed:',err.message)),
+    60*60*1000
+  );
+  hourlyTimer.unref?.();
+}
+
+module.exports = {
+  getDesignIntelligence,
+  getDesignIntelligenceHistory,
+  refreshDesignIntelligenceSnapshot,
+  scheduleDesignIntelligenceRefresh,
+  startDesignIntelligenceWorker
+};
