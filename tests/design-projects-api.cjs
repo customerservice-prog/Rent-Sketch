@@ -21,8 +21,8 @@ const httpSession = load('server/src/dashboardHttpSession.js', { crypto, './auth
 const authz = load('server/src/middleware/requireAuth.js', { '../dashboardHttpSession': httpSession, '../dashboardSessions': sessions, '../db': db });
 const pass = { isPassEnabled: () => true };
 const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': { refreshOrderAccess: async () => {} } });
-const projects = load('server/src/designProjects.js', { crypto, './db': db, './dashboardHttpSession': httpSession, './dashboardSessions': sessions, './middleware/requireAuth': authz, './eventPassAccess': access, './auth': auth });
-const designs = load('server/src/routes/designs.js', { express, '../db': db, '../clientIp': require('../server/src/clientIp'), '../middleware/requireAuth': authz, '../designProjects': projects });
+const projects = load('server/src/designProjects.js', {'./designIntelligence':{scheduleDesignIntelligenceRefresh:()=>{}},'./integrationEvents':{emitTenantEvent:async()=>({})}, crypto, './db': db, './dashboardHttpSession': httpSession, './dashboardSessions': sessions, './middleware/requireAuth': authz, './eventPassAccess': access, './auth': auth });
+const designs = load('server/src/routes/designs.js', {'../designIntelligence':{getDesignIntelligence:async()=>({sample:{learning:0},patterns:{},conversion:{},friction:{},recommendations:[]}),getTenantDesignIntelligenceHistory:async()=>({points:[],periods:{}})}, express, '../db': db, '../clientIp': require('../server/src/clientIp'), '../middleware/requireAuth': authz, '../designProjects': projects });
 const backgrounds = load('server/src/routes/designBackgrounds.js', { express, crypto, '../db': db, '../dashboardHttpSession': httpSession, '../dashboardSessions': sessions, '../middleware/requireAuth': authz, '../eventPassAccess': access });
 const resolvedAccess = load('server/src/access.js', { './db': db, './pricing': { EVENT_PASS_CENTS: 999 }, './eventPass': pass });
 const accessEmail = load('server/src/eventPassEmail.js', { crypto, './db': db, './auth': auth, './mailer': { getMailer: () => null }, './outboundWebhook': {} });
