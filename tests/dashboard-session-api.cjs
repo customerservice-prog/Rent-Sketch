@@ -16,8 +16,10 @@ const app=express();app.use(express.json());app.use('/api/auth',routes);
 app.get('/admin',guards.requirePlatformAdmin,(req,res)=>res.json({ok:true}));
 app.get('/tenant/:slug',guards.requireTenantAccess,(req,res)=>res.json({role:req.user.tenantRole}));
 app.post('/tenant/:slug',guards.requireTenantRole('staff'),(req,res)=>res.json({ok:true}));
+app.post('/tenant-admin/:slug',guards.requireTenantRole('admin'),(req,res)=>res.json({ok:true}));
+app.post('/tenant-owner/:slug',guards.requireTenantRole('owner'),(req,res)=>res.json({ok:true}));
 app.use((err,req,res,next)=>res.status(err.status||500).json({error:err.message}));
-const admin='10000000-0000-4000-8000-000000000001',staff='10000000-0000-4000-8000-000000000002',viewer='10000000-0000-4000-8000-000000000003',tenant='20000000-0000-4000-8000-000000000001';
+const admin='10000000-0000-4000-8000-000000000001',staff='10000000-0000-4000-8000-000000000002',viewer='10000000-0000-4000-8000-000000000003',tenantAdmin='10000000-0000-4000-8000-000000000004',owner='10000000-0000-4000-8000-000000000005',tenant='20000000-0000-4000-8000-000000000001';
 let server,base;
 async function req(url,token,body){const r=await fetch(base+url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(['/api/auth/login','/api/auth/reset-password'].includes(url)?{Origin:'https://rentsketch.com','X-RentSketch-Client':'dashboard'}:{}),...(token?{Authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});return{status:r.status,body:await r.json(),token:r.headers.get('set-cookie')?.match(/__Host-rentsketch_dashboard=([^;]+)/)?.[1],cookie:r.headers.get('set-cookie'),cache:r.headers.get('cache-control')}}
 async function login(email='platform@example.invalid',password='initial-password'){const r=await req('/api/auth/login',null,{email,password});assert.equal(r.status,200);assert.equal(r.body.token,undefined,'login JSON contains no bearer');assert.match(r.cookie,/; HttpOnly/i);assert.match(r.cookie,/; Secure/i);assert.match(r.cookie,/; SameSite=Strict/i);assert.match(r.cookie,/; Path=\//i);assert.doesNotMatch(r.cookie,/Domain=|Expires=|Max-Age=/i);return {...r.body,token:r.token};}
@@ -35,9 +37,9 @@ async function browser(url,session,body,options={}) {
  await pg.exec(fs.readFileSync(path.join(root,'server/migrations/020_dashboard_sessions.sql'),'utf8'));
  await pg.exec(fs.readFileSync(path.join(root,'server/migrations/021_account_security.sql'),'utf8'));
  await pg.exec(fs.readFileSync(path.join(root,'server/migrations/016_password_reset_tokens.sql'),'utf8'));
- await pg.query('INSERT INTO users(id,email,password_hash) VALUES($1,$2,$3),($4,$5,$3),($6,$7,$3)',[admin,env.PLATFORM_ADMIN_EMAIL,hash('initial-password'),staff,'staff@example.invalid',viewer,'viewer@example.invalid']);
+ await pg.query('INSERT INTO users(id,email,password_hash) VALUES($1,$2,$3),($4,$5,$3),($6,$7,$3),($8,$9,$3),($10,$11,$3)',[admin,env.PLATFORM_ADMIN_EMAIL,hash('initial-password'),staff,'staff@example.invalid',viewer,'viewer@example.invalid',tenantAdmin,'tenant-admin@example.invalid',owner,'owner@example.invalid']);
  await pg.query("INSERT INTO tenants VALUES($1,'friendly','Friendly','active',NULL)",[tenant]);
- await pg.query("INSERT INTO tenant_memberships VALUES($1,$2,'staff'),($1,$3,'viewer')",[tenant,staff,viewer]);
+ await pg.query("INSERT INTO tenant_memberships VALUES($1,$2,'staff'),($1,$3,'viewer'),($1,$4,'admin'),($1,$5,'owner')",[tenant,staff,viewer,tenantAdmin,owner]);
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
  assert.equal((await req('/admin')).status,401);
  assert.equal((await req('/api/auth/me')).status,401);
@@ -76,9 +78,9 @@ async function browser(url,session,body,options={}) {
 
  assert.equal((await pg.query('SELECT count(*)::int n FROM dashboard_sessions WHERE token_hash=$1',[hash(payload.sid)])).rows[0].n,1);
  assert.notEqual((await pg.query('SELECT token_hash FROM dashboard_sessions LIMIT 1')).rows[0].token_hash,payload.sid,'raw session bearer not stored');
- const staffLogin=await login('staff@example.invalid'),staffToken=staffLogin.token,viewerToken=(await login('viewer@example.invalid')).token;
+ const staffLogin=await login('staff@example.invalid'),staffToken=staffLogin.token,viewerToken=(await login('viewer@example.invalid')).token,tenantAdminToken=(await login('tenant-admin@example.invalid')).token,ownerToken=(await login('owner@example.invalid')).token;
  assert.equal((await browser('/api/auth/sessions/'+staffLogin.session.id,a,null,{method:'DELETE'})).status,404,'session revocation is owner-scoped');
- assert.equal((await req('/admin',staffToken)).status,403);assert.equal((await req('/tenant/friendly',staffToken,{})).status,200);assert.equal((await req('/tenant/friendly',viewerToken,{})).status,403);
+ assert.equal((await req('/admin',staffToken)).status,403);assert.equal((await req('/tenant/friendly',staffToken,{})).status,200);assert.equal((await req('/tenant/friendly',viewerToken,{})).status,403);assert.equal((await req('/tenant-admin/friendly',staffToken,{})).status,403,'staff cannot perform admin mutations');assert.equal((await req('/tenant-owner/friendly',staffToken,{})).status,403,'staff cannot perform owner mutations');assert.equal((await req('/tenant-admin/friendly',tenantAdminToken,{})).status,200,'tenant admin can perform admin mutations');assert.equal((await req('/tenant-owner/friendly',tenantAdminToken,{})).status,403,'tenant admin cannot perform owner-only mutations');assert.equal((await req('/tenant/friendly',ownerToken,{})).status,200,'owner inherits staff access');assert.equal((await req('/tenant-admin/friendly',ownerToken,{})).status,200,'owner inherits admin access');assert.equal((await req('/tenant-owner/friendly',ownerToken,{})).status,200,'owner can perform owner-only mutations');
  const claimed=jwt.sign({...auth.verifyToken(staffToken),isPlatformAdmin:true},env.JWT_SECRET);
  assert.equal((await req('/admin',claimed)).status,403,'signed admin claim cannot override current DB identity');
  for(const invalid of [auth.signToken({userId:admin,isPlatformAdmin:true}),auth.signToken({kind:'tenant_design_share',userId:admin}),jwt.sign({kind:'dashboard_session',userId:admin,sid:payload.sid},'wrong-key'),a.token.slice(0,-8)+'tampered',jwt.sign({kind:'dashboard_session',userId:admin,sid:payload.sid},env.JWT_SECRET,{expiresIn:-1}),jwt.sign({kind:'dashboard_session',userId:admin,sid:payload.sid},env.JWT_SECRET,{algorithm:'HS384'})]){
@@ -106,5 +108,5 @@ async function browser(url,session,body,options={}) {
  const otherDevice=await login(env.PLATFORM_ADMIN_EMAIL,'bootstrap-fixture-password');
  assert.equal((await browser('/api/auth/sessions/revoke-others',resetFresh,{})).status,200);assert.equal((await browser('/api/auth/me',otherDevice)).status,401);assert.equal((await browser('/api/auth/me',resetFresh)).status,200);
  await pg.query('DELETE FROM users WHERE id=$1',[admin]);assert.equal((await req('/api/auth/me',resetFresh.token)).status,401,'deleting account cascades session revocation');
- console.log('PASS HttpOnly cookie origin/CSRF/session inventory/logout-race + dashboard security: real signed sessions; anonymous/forged/legacy/share-token denial; current admin identity; staff/viewer boundaries; logout; server idle/absolute expiry; password-change/reset revocation; byte limit; customer recovery compatibility. Isolated database only.');
+ console.log('PASS HttpOnly cookie origin/CSRF/session inventory/logout-race + dashboard security: real signed sessions; anonymous/forged/legacy/share-token denial; current admin identity; viewer/staff/admin/owner role hierarchy; logout; server idle/absolute expiry; password-change/reset revocation; byte limit; customer recovery compatibility. Isolated database only.');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{server?.close();await pg.close()});
