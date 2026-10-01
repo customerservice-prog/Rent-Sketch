@@ -82,3 +82,5 @@ const designMarkerSql = `
     await pool.end();
   }
 })().catch(err=>{console.error('FRIENDLY_TEST_DATA_AUDIT_ERROR',err);process.exit(1);});
+
+// dry-run deployment trigger 2026-10-01
