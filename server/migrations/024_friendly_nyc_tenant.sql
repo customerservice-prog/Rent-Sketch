@@ -63,3 +63,30 @@ WHERE nyc.slug='friendly-nyc'
       AND COALESCE(existing.external_id,'')=COALESCE(p.external_id,'')
       AND existing.name=p.name
   );
+
+
+UPDATE products target
+SET
+  category=source_product.category,
+  name=source_product.name,
+  sku=source_product.sku,
+  price_per_day=NULL,
+  price_type=source_product.price_type,
+  width_ft=source_product.width_ft,
+  length_ft=source_product.length_ft,
+  capacity=source_product.capacity,
+  photo_url=source_product.photo_url,
+  visual_model_id=source_product.visual_model_id,
+  active=source_product.active,
+  sort_order=source_product.sort_order,
+  metadata=COALESCE(source_product.metadata,'{}'::jsonb) || '{"sourceTenant":"friendly","nycPriceHidden":true}'::jsonb,
+  updated_at=now()
+FROM tenants nyc, tenants source_tenant, products source_product
+WHERE nyc.slug='friendly-nyc'
+  AND source_tenant.slug='friendly'
+  AND source_product.tenant_id=source_tenant.id
+  AND target.tenant_id=nyc.id
+  AND (
+    (target.external_id IS NOT NULL AND source_product.external_id=target.external_id)
+    OR (target.external_id IS NULL AND source_product.external_id IS NULL AND source_product.name=target.name)
+  );
