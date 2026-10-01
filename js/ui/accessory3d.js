@@ -181,8 +181,34 @@ function createBar(item){
   const top=box(Math.max(4.2,item.widthFt+.2),.18,Math.max(2.2,item.depthFt+.2),0x30251e,.55,.1);top.position.y=3.5;g.add(top);return g;
 }
 function createStage(item){
-  const g=new THREE.Group();g.name='Stage';
-  const deck=box(Math.max(2,item.widthFt),Math.max(.3,item.heightFt||1.5),Math.max(2,item.depthFt),0x4a4a48,.8,.12);deck.position.y=(item.heightFt||1.5)/2;g.add(deck);return g;
+  const g=new THREE.Group(),type=String(item.accessoryType||item.visualType||'stage');
+  const w=Math.max(2,Number(item.widthFt)||4),d=Math.max(2,Number(item.depthFt)||4),h=Math.max(.3,Number(item.heightFt)||1.5);
+  if(type==='stage-ramp'){
+    g.name='Illustrative stage ramp';
+    // Wedge rises from grade to the stage edge. The catalog currently confirms
+    // the function (step-free stage access) but not rise/run/ADA compliance.
+    const geo=new THREE.BufferGeometry();
+    const x=w/2,z=d/2;
+    const v=[
+      -x,0,-z, x,0,-z, -x,0,z, x,0,z,
+      -x,h,-z, x,h,-z
+    ];
+    geo.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
+    geo.setIndex([
+      0,1,2, 1,3,2,
+      0,4,1, 1,4,5,
+      2,3,4, 3,5,4,
+      0,2,4, 1,5,3
+    ]);
+    geo.computeVertexNormals();
+    const ramp=new THREE.Mesh(geo,mat(0x4a4a48,.8,.12));ramp.castShadow=ramp.receiveShadow=true;g.add(ramp);
+    const topEdge=box(w,.10,.12,0x262b2c,.72,.22);topEdge.position.set(0,h-.05,-z+.06);g.add(topEdge);
+    g.userData.features={stageRamp:true,dimensionsVerified:false,accessComplianceVerified:false};
+    return g;
+  }
+  g.name=type==='stage-stair'?'Illustrative stage stair':'Stage';
+  const deck=box(w,h,d,0x4a4a48,.8,.12);deck.position.y=h/2;g.add(deck);
+  return g;
 }
 function createBackdrop(item){
   const g=new THREE.Group();g.name='Backdrop';
