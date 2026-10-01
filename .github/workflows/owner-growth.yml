@@ -1,0 +1,59 @@
+name: Owner growth regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/src/designIntelligence.js'
+      - 'server/src/designProjects.js'
+      - 'server/src/integrationEvents.js'
+      - 'server/src/routes/integrations.js'
+      - 'server/src/routes/quoteRequests.js'
+      - 'server/src/routes/payments.js'
+      - 'server/src/routes/stripeWebhook.js'
+      - 'server/src/routes/designs.js'
+      - 'server/src/routes/products.js'
+      - 'server/src/routes/visualLibrary.js'
+      - 'server/src/middleware/requireAuth.js'
+      - 'server/migrations/026_owner_growth.sql'
+      - 'dashboard/app.js'
+      - 'dashboard/tenant-v2.css'
+      - 'designer/index.html'
+      - 'js/ui/smart-suggestions.js'
+      - 'js/data/equipment.js'
+      - 'tests/design-intelligence-tenant.cjs'
+      - 'tests/integrations-api.cjs'
+      - 'tests/quote-approval.cjs'
+      - 'tests/approved-deposit-security.cjs'
+      - 'tests/quote-notifications.cjs'
+      - 'tests/generic-visual-mapping.test.mjs'
+      - 'tests/dashboard-session-api.cjs'
+      - '.github/workflows/owner-growth.yml'
+  workflow_dispatch:
+
+jobs:
+  owner-growth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm --prefix tests ci
+      - name: Dashboard syntax
+        run: node --check dashboard/app.js
+      - name: Revenue attribution and tenant trends
+        run: node tests/design-intelligence-tenant.cjs
+      - name: Rental-system integration API
+        run: node tests/integrations-api.cjs
+      - name: Approved quote workflow
+        run: node tests/quote-approval.cjs
+      - name: Approved deposit security
+        run: node tests/approved-deposit-security.cjs
+      - name: Quote notifications
+        run: node tests/quote-notifications.cjs
+      - name: Arbitrary product visual mapping
+        run: node --test tests/generic-visual-mapping.test.mjs
+      - name: Tenant role enforcement
+        run: node tests/dashboard-session-api.cjs
