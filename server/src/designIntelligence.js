@@ -172,12 +172,12 @@ function historyShape(rows){
     const target=new Date(current.at).getTime()-days*86400000;
     let baseline=null;
     for(const point of history){ if(new Date(point.at).getTime()<=target)baseline=point; else break; }
-    if(!baseline)baseline=history[0]||null;
-    return baseline?{
+    if(!baseline)return null;
+    return {
       days,from:baseline.at,to:current.at,
       learning:delta('learning',current,baseline),requestRate:delta('requestRate',current,baseline),
       bookedRate:delta('bookedRate',current,baseline),bookedRevenueCents:delta('bookedRevenueCents',current,baseline)
-    }:null;
+    };
   }
   return {
     points:history,
