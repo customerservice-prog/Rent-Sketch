@@ -89,5 +89,6 @@ test('Syracuse sync is pinned to slug friendly and NYC sync is pinned to friendl
  const source=fs.readFileSync(new URL('../server/src/friendlyCatalogSync.js',import.meta.url),'utf8');
  assert.match(source,/WHERE slug='friendly' LIMIT 1/);
  assert.match(source,/WHERE slug='friendly-nyc' LIMIT 1/);
- assert.match(source,/const NYC_BASE='https:\/\/friendlypartyrentalnyc\.com'/);\n assert.match(source,/NYC_BASE\+'\\/api\\/items'/);
+ assert.match(source,/const NYC_BASE='https:\/\/friendlypartyrentalnyc\.com'/);
+ assert.match(source,/NYC_BASE\+'\\/api\\/items'/);
 });
