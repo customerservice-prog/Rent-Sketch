@@ -5,6 +5,7 @@ const { verifyDashboardToken } = require('./dashboardSessions');
 const { isConfiguredPlatformAdmin } = require('./middleware/requireAuth');
 const { savePermission, permissionDesign } = require('./eventPassAccess');
 const { verifyToken } = require('./auth');
+const { scheduleDesignIntelligenceRefresh } = require('./designIntelligence');
 
 const MAX_SCENE_BYTES = 192 * 1024, MAX_CHECKPOINTS = 50, MAX_ALTERNATIVES = 20;
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -159,6 +160,7 @@ async function create(req, generic) {
   const result = await db.query(`INSERT INTO designs(tenant_id,owner_user_id,anonymous_session_id,schema_version,event_type,guest_count,scene,estimate_total,project_name,site_notes,crew_notes)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
   [generic ? null : scope.tenant.id, staff?.userId || null, owner || null, next.schema_version, next.event_type, next.guest_count, next.scene, next.estimate_total, next.project_name, next.site_notes, next.crew_notes]);
+  scheduleDesignIntelligenceRefresh();
   return detail(result.rows[0], scope.tenant, !!staff);
 }
 async function read(req, generic) {
@@ -178,6 +180,7 @@ async function write(client, design, next, auth) {
     project_name=$6,site_notes=$7,crew_notes=$8,revision=revision+1,updated_at=now() WHERE id=$9 AND revision=$10 RETURNING *`,
   [next.scene, next.schema_version, next.event_type, next.guest_count, next.estimate_total, next.project_name, next.site_notes, next.crew_notes, design.id, design.revision]);
   if (!result.rows[0]) fail(409, 'This design changed. Reload before saving.', 'revision_conflict');
+  scheduleDesignIntelligenceRefresh();
   return { ...detail(result.rows[0], auth.tenant, !!auth.staff), updated: true };
 }
 function handler(fn, status = 200) {
@@ -236,6 +239,7 @@ function register(router, base, generic = false) {
       const row = (await client.query(`INSERT INTO designs(tenant_id,owner_user_id,anonymous_session_id,schema_version,event_type,guest_count,scene,estimate_total,project_name,site_notes,crew_notes,project_root_id)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [design.tenant_id, design.owner_user_id, root.anonymous_session_id, next.schema_version, next.event_type, next.guest_count, next.scene, next.estimate_total, next.project_name, next.site_notes, next.crew_notes, root.id])).rows[0];
+      scheduleDesignIntelligenceRefresh();
       return detail(row, ctx.auth.tenant, !!ctx.auth.staff);
     });
   }, 201));
