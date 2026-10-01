@@ -4,6 +4,7 @@
   var APP_VERSION = 'Event Pass';
   var LEGAL_VERSION = '2026-09-20';
   var q = new URLSearchParams(location.search);
+  if (q.get('showcase')) return;
   var tenantSlug = q.get('tenant') || 'generic';
   var selfSrc = document.currentScript && document.currentScript.src;
   if (tenantSlug !== 'generic' && !window.RENTSKETCH_CATALOG_READY) {
