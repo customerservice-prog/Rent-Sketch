@@ -13,7 +13,7 @@ INSERT INTO tenants (
   '315-884-1498','https://friendlypartyrentalnyc.com','#0B1F3A','#E07B00',
   'Plan your Riverdale and Downstate New York event with Friendly Party Rental NYC',true,
   'commerce','active',NULL,encode(gen_random_bytes(16),'hex'),
-  '["https://friendlypartyrentalnyc.com","https://www.friendlypartyrentalnyc.com","https://nyc.friendlypartyrental.com"]'::jsonb,
+  '["https://friendlypartyrentalnyc.com","https://www.friendlypartyrentalnyc.com"]'::jsonb,
   true,'free',NULL,30,7,false
 )
 ON CONFLICT (slug) DO UPDATE SET
