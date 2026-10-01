@@ -6,7 +6,7 @@ function text(v){ return String(v == null ? '' : v).trim(); }
 function key(v){ return text(v).toLowerCase(); }
 function inc(map,k,n=1){ if(!k)return; map.set(k,(map.get(k)||0)+n); }
 function top(map,limit=8){ return [...map.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,limit).map(([name,count])=>({name,count})); }
-function label(v){ return text(v).replace(/[_-]+/g,' ').replace(/s+/g,' ').replace(/w/g,m=>m.toUpperCase()); }
+function label(v){ return text(v).replace(/[_-]+/g,' ').replace(/\s+/g,' ').replace(/\b\w/g,m=>m.toUpperCase()); }
 
 function sceneObjects(scene){ return Array.isArray(scene?.objects) ? scene.objects.filter(Boolean) : []; }
 function tentId(scene,objects){
