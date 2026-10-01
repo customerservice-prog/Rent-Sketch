@@ -42,8 +42,22 @@ const designSceneTestSql = `
     await client.query('BEGIN');
     const already=(await client.query('SELECT id FROM platform_admin_audit WHERE action=$1 LIMIT 1',[MARKER])).rows[0];
     if(already){
+      const tenant=(await client.query("SELECT id FROM tenants WHERE slug='friendly' LIMIT 1")).rows[0];
+      const remaining=tenant?(await client.query(`
+        SELECT d.id,d.event_type,d.guest_count,d.estimate_total,d.created_at,d.updated_at,
+          CASE WHEN d.owner_user_id IS NOT NULL THEN 'staff'
+               WHEN d.anonymous_session_id LIKE 'direct_%' THEN 'direct_checkout'
+               WHEN d.anonymous_session_id IS NULL OR d.anonymous_session_id='' THEN 'none'
+               ELSE 'anonymous' END AS session_kind,
+          CASE WHEN jsonb_typeof(d.scene->'objects')='array' THEN jsonb_array_length(d.scene->'objects') ELSE 0 END AS object_count,
+          nullif(d.scene->>'tentId','') AS tent_id,
+          (nullif(d.scene->'customer'->>'name','') IS NOT NULL) AS has_customer_name,
+          (nullif(d.scene->'customer'->>'email','') IS NOT NULL) AS has_customer_email,
+          (nullif(d.scene->>'propertyAddress','') IS NOT NULL) AS has_property_address
+        FROM designs d WHERE d.tenant_id=$1 ORDER BY d.created_at ASC
+      `,[tenant.id])).rows:[];
       await client.query('ROLLBACK');
-      console.log('FRIENDLY_TEST_DATA_CLEANUP '+JSON.stringify({alreadyApplied:true}));
+      console.log('FRIENDLY_REMAINING_DESIGNS '+JSON.stringify({alreadyApplied:true,count:remaining.length,designs:remaining}));
       return;
     }
     const tenant=(await client.query("SELECT id FROM tenants WHERE slug='friendly' LIMIT 1")).rows[0];
