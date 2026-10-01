@@ -5,7 +5,7 @@ export function bookingDay(value=''){
  const d=new Date(value+'T12:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value?value:'';
 }
 export function buildBookingHandoff({tenant,lines,products,designId=null,eventDate='',source='designer',surfaceType='notSure',deliveryZip=''}){
- if(!['friendly','friendly-nyc'].includes(tenant))throw new Error('Open this designer from Friendly Party Rental to book its rentals.');
+ if(!['friendly','friendly-nyc','friendly-sc'].includes(tenant))throw new Error('Open this designer from Friendly Party Rental to book its rentals.');
  if(!Array.isArray(lines)||!lines.length)throw new Error('Add rentals to your layout first.');
  const catalog=Array.isArray(products)?products:[],items=new Map();
  for(const line of lines){
@@ -24,6 +24,6 @@ export function buildBookingHandoff({tenant,lines,products,designId=null,eventDa
  return {version:1,tenant,designId:typeof designId==='string'?designId:null,eventDate:bookingDay(eventDate),source:/^[a-z0-9_-]{1,100}$/i.test(source)?source:'designer',surfaceType:['grass','concrete','asphalt','deck','notSure'].includes(surfaceType)?surfaceType:'notSure',...(zip?{deliveryZip:zip}:{}),items:[...items.values()]};
 }
 export function friendlyBookingUrl(payload){
- const origin=payload?.tenant==='friendly-nyc'?'https://friendlypartyrentalnyc.com':'https://www.friendlypartyrental.com';
+ const origin=payload?.tenant==='friendly-nyc'?'https://friendlypartyrentalnyc.com':payload?.tenant==='friendly-sc'?'https://friendlypartyrentalsc.com':'https://www.friendlypartyrental.com';
  return origin+'/design-your-event/book?auto=1#layout='+encodeURIComponent(JSON.stringify(payload));
 }
