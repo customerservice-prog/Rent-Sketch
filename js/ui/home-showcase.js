@@ -156,6 +156,10 @@ import { LINENS } from '../data/linens.js';
   }
 
   function setCamera() {
+    const bridge = window.FriendlyBridge;
+    if (bridge?.showcaseCamera) {
+      return bridge.showcaseCamera(selectedMode === 'styled' ? 'inside' : selectedMode === 'waterslide' ? 'wide' : 'outside');
+    }
     const inside = selectedMode === 'styled';
     const id = inside ? 'view3dInside' : 'view3dFit';
     const button = document.getElementById(id);
