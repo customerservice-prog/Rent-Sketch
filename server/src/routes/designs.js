@@ -3,6 +3,7 @@ const db = require('../db');
 const { clientIp } = require('../clientIp');
 const { requireTenantAccess } = require('../middleware/requireAuth');
 const projects = require('../designProjects');
+const { getDesignIntelligence } = require('../designIntelligence');
 const router = express.Router();
 const buckets = new Map();
 function limit(req, res, next) {
@@ -17,6 +18,13 @@ router.post('/:slug/designs', limit, projects.handler(req => projects.create(req
 router.patch('/:slug/designs/:id', limit, projects.handler(req => projects.update(req, false)));
 router.post('/:slug/shared-design/restore', projects.handler(projects.restoreShared));
 projects.register(router, '/:slug/designs');
+router.get('/:slug/design-intelligence', requireTenantAccess, async (req,res,next)=>{
+  try{
+    const intelligence=await getDesignIntelligence({tenantId:req.tenant.id});
+    res.setHeader('Cache-Control','no-store');
+    res.json(intelligence);
+  }catch(error){next(error);}
+});
 router.get('/:slug/designs', requireTenantAccess, async (req, res, next) => {
   try {
     const result = await db.query(`SELECT id,event_type,guest_count,estimate_total,created_at,project_name,revision,updated_at
