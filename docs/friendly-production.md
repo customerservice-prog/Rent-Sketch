@@ -1,31 +1,46 @@
-# Friendly Party Rental in Production: Current State and Known Limitations
+# Friendly Party Rental in Production: Current State
 
-This document is the honest, current-state companion to docs/tenant-setup.md, docs/embed.md, docs/api.md, and the root INTEGRATION_HANDOFF.md. It exists so nobody (including a future engineer, a future Claude session, or the business owner) overclaims what is actually live.
+This is the current production-state companion for the RentSketch multi-tenant customer-planning platform.
 
-## What is real and live today
+## What is live
 
-A real Postgres-backed multi-tenant backend at https://rentsketch-api-production.up.railway.app, with tenants, users, tenant_memberships, products, designs, and quote_requests as real tables, not JS config files. Friendly Party Rental exists as tenant slug friendly, a real row, created the same way any other tenant would be. The public designer at https://rentsketch.com/designer/ reads Friendly's branding from the live API and overlays live product name/price changes onto the bundled catalog. The "Request a Quote" flow creates a real quote_requests row via POST /api/tenants/friendly/quote-requests, not just a mailto: link. A business dashboard at https://rentsketch.com/dashboard/ lets a logged-in Friendly staff member view quote requests, edit products, edit branding, and get embed code from the Install page. An embed loader (embed/v1.js) and iframe option exist for installing the designer on friendlypartyrental.com without copying any RentSketch source into that repository. A public self-service business signup flow (POST /api/business/signup, hosted at business/signup.html) creates a new trialing tenant - complete with its own owner login - with no platform-admin involvement.
+- Postgres-backed tenants, users, memberships, products, designs, revisions, quote requests, payments, integrations and Design Intelligence.
+- Friendly Party Rental (`friendly`) and Friendly Party Rental NYC (`friendly-nyc`) are independent real tenants.
+- The public designer loads tenant branding and product data from the API.
+- Customer layouts persist as real projects, revisions and alternatives.
+- Quote requests are persisted, shown in the tenant dashboard, can notify staff/customer by email when mail delivery is configured, and can emit signed webhook events.
+- Sales Insights is tenant-scoped and excludes QA/synthetic and empty layout rows from learning.
+- Hourly tenant intelligence snapshots support 7/30/90-day trends once enough actual snapshot history exists.
+- Final booked order totals and line items can be recorded manually or returned by a rental-system integration for real revenue attribution.
+- Staff can approve a quote total and issue a signed deposit-payment link. Stripe Checkout is created only from the server-stored approved total/deposit; a customer layout estimate is never charge authority.
+- Stripe business subscriptions, Event Pass checkout, and Stripe Connect deposit settlement are live paths where configured.
+- Self-service business signup creates a tenant owner and 14-day trial.
+- Hosted links, iframe embeds and the versioned embed loader are live.
 
-## Known limitation: visual mapping
+## Visual mapping
 
-Tents, tables, and chairs keep their real geometry (dimensions, shapes, seat counts, silhouettes) from the bundled JS files in js/data/, not from the database, because that data does not exist in the products table schema. The live overlay only changes name and price for products whose external_id matches an existing bundled catalog id. A brand-new product added from the dashboard with no matching external_id is stored and returned by the API, but will not render inside the 2D/3D designer yet. This is intentional: building a full visual-mapping system (letting any new product pick a rendering shape) was explicitly out of scope for this pass, to avoid risking the working scene engine. Treat "add a product" on the dashboard as "add pricing/catalog metadata" today, not yet "add a fully new visual item," until a visual-mapping feature is built and documented here as live.
+Tenant products can select a shared visual model in the Products dashboard. Products without a dedicated audited model can use the explicit **Measured Generic Rental** visual. That path preserves the tenant product identity and measured footprint in 2D/3D rather than silently dropping the item. A measured generic planning volume is not a claim that RentSketch has reproduced the product's exact appearance.
 
-## Known limitation: roles
+Dedicated procedural/photo-referenced models still require visual audit for physical accuracy.
 
-tenant_memberships.role (owner/admin/staff/viewer) is stored but not yet enforced beyond "does this user have any membership on this tenant." Every staff member currently has equal access to every staff-only route on their tenant.
+## Roles
 
-## Known limitation: billing
+Tenant roles are enforced as a hierarchy:
 
-Stripe is not integrated. tenants.subscription_plan and subscription_status exist as real columns and Friendly is stored as an internal/comped tenant so it is never blocked by billing, but there is no self-serve checkout, no webhook-driven plan changes, and no enforcement of plan limits anywhere in the code yet.
+- **viewer** — read-only tenant views such as requests and Sales Insights.
+- **staff** — sales/request work, customer design review and quote approval.
+- **admin** — staff capabilities plus product/catalog, branding, Stripe Connect and install/domain configuration.
+- **owner** — admin capabilities plus subscription billing and integration credential rotation.
+- **platform_admin** — RentSketch operator access across tenants.
 
-## Known limitation: email
+Server authorization remains authoritative even when UI controls are hidden.
 
-Quote request confirmation emails to customers and staff notification emails are not implemented. The only current notification path for a rental company is logging into the dashboard's Requests page, or configuring a webhook (see docs/webhooks.md).
+## Notifications
 
-## Signup (built, with remaining limitations)
+When mail delivery is configured, a new quote request can send a staff notification to the tenant contact email and a customer receipt that lists the submitted setup and explicitly states that nothing is booked or charged until the rental company confirms it.
 
-Self-service signup is live: POST /api/business/signup (public, unauthenticated) creates a new tenant on a 14-day trial with no payment step, and business/signup.html is the hosted form for it - see docs/tenant-setup.md. A platform admin can still create tenants directly in the database instead; Friendly itself was created this way. What is NOT built yet: collecting payment at signup, any enforcement of what happens when a trial ends, and any Stripe-backed billing for the paid plans stored in tenants.subscription_plan/subscription_status (see "Known limitation: billing" above).
+Webhook/integration delivery is separate and documented in `docs/webhooks.md`.
 
-## Do not overclaim
+## Important boundaries
 
-Do not describe this system as "real-time inventory availability," "fully role-based access control," or "billing-ready" - none of those are true yet. It is accurate to describe it as: a real multi-tenant backend, a real persisted quote request pipeline, a real (if basic) business dashboard, and a real, documented embed path that does not require copying RentSketch source code into another repository.
+RentSketch does **not** claim real-time rental availability unless a supported external system provides it. A design or visual suggestion is planning guidance, not a site/installation approval. Tenant Sales Insights does not invent sales-lift percentages; booked revenue appears only when an actual booked total is recorded or returned by an integration. Photo Match and scan-derived context must retain their existing uncertainty/measurement disclosures.
