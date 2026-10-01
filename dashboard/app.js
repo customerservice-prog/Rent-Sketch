@@ -339,7 +339,8 @@ function esc(s) {
      var statuses={};reqs.forEach(function(r){statuses[r.status]=(statuses[r.status]||0)+1;});
      var maxStatus=Math.max(1,...Object.values(statuses));
      var activeProducts=products.filter(function(p){return p.active;}).length;
-     var nativeVisualProducts=products.filter(function(p){return (p.visual_coverage&&p.visual_coverage.native)||p.visual_model_id;}).length;\n     var renderableProducts=products.filter(function(p){return !p.visual_coverage||p.visual_coverage.renderable!==false;}).length;
+     var nativeVisualProducts=products.filter(function(p){return (p.visual_coverage&&p.visual_coverage.native)||p.visual_model_id;}).length;
+     var renderableProducts=products.filter(function(p){return !p.visual_coverage||p.visual_coverage.renderable!==false;}).length;
      var topPairs=(patterns.pairs||[]).slice(0,6),topFeatures=(patterns.features||[]).slice(0,8),topKinds=(patterns.objectKinds||[]).slice(0,6),bookedItems=(attribution.bookedItems||[]).slice(0,8);
      var confidence=sample.confidence||'low';
      function insightRows(rows,emptyText){
