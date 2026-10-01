@@ -2,6 +2,7 @@ const express = require('express');
 const { query, pool } = require('../db');
 const { fulfillEventPass, PASS_KINDS } = require('../eventPass');
 const { syncOrderEntitlement } = require('../orderProviders/quoteRequestOrderProvider');
+const { emitTenantEvent } = require('../integrationEvents');
 const { scheduleDesignIntelligenceRefresh } = require('../designIntelligence');
 
 const router = express.Router();
@@ -139,13 +140,16 @@ router.post('/', async (req, res) => {
       const alreadyPaid = quote.payment_status === 'paid';
       if (marker.rows.length && !alreadyPaid) {
         const updated = (await client.query(
-          `UPDATE quote_requests SET payment_status='paid',status='booked',amount_paid_cents=$1,stripe_payment_intent_id=$2 WHERE id=$3 RETURNING *`,
+          `UPDATE quote_requests SET payment_status='paid',status='booked',amount_paid_cents=$1,stripe_payment_intent_id=$2,booked_total_cents=COALESCE(booked_total_cents,approved_total_cents),booked_line_items=CASE WHEN jsonb_array_length(booked_line_items)=0 THEN approved_line_items ELSE booked_line_items END,booked_at=COALESCE(booked_at,now()),attribution_updated_at=now() WHERE id=$3 RETURNING *`,
           [s.amount_total, s.payment_intent, quote.id]
         )).rows[0];
         await syncOrderEntitlement(updated, tenant, (sql, args) => client.query(sql, args));
       }
       await client.query('COMMIT');
-      if (marker.rows.length && !alreadyPaid) scheduleDesignIntelligenceRefresh();
+      if (marker.rows.length && !alreadyPaid) {
+        scheduleDesignIntelligenceRefresh();
+        emitTenantEvent(tenant,'quote_request.booked',{id:quote.id,designId:quote.design_id,status:'booked',bookedTotalCents:Number(quote.approved_total_cents)||null,paymentStatus:'paid'}).catch(()=>{});
+      }
       return res.json({ received: true, ...(!marker.rows.length || alreadyPaid ? { duplicate: true } : {}) });
     } catch (err) {
       if (client) await client.query('ROLLBACK');
