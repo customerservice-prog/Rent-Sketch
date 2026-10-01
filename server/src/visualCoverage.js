@@ -69,7 +69,7 @@ function visualCoverage(product,tenantSlug){
     return {level:'shared',renderable:true,native:true,label:'Shared native visual'};
   }
   const slug=friendlySlug(product);
-  if((tenantSlug==='friendly'||tenantSlug==='friendly-nyc')&&slug&&FRIENDLY_SOURCE_VISUALS.has(slug)){
+  if(['friendly','friendly-nyc','friendly-sc'].includes(tenantSlug)&&slug&&FRIENDLY_SOURCE_VISUALS.has(slug)){
     return {level:'source',renderable:true,native:true,label:'Photo-referenced native visual'};
   }
   const name=String(product.name||'');
