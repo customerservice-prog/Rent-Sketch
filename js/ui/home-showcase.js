@@ -180,6 +180,12 @@ import { LINENS } from '../data/linens.js';
     try {
       bridge.loadScene(scene);
       bridge.setViewMode('3d');
+      bridge.state.selectedId = selectedMode === 'waterslide'
+        ? 'showcase-waterslide'
+        : selectedMode === 'styled' || selectedMode === 'open'
+          ? 'showcase-table-1'
+          : null;
+      bridge.refreshAll();
     } finally {
       window.RENTSKETCH_PASS_RESTORING = false;
       window.RENTSKETCH_SHARED_READONLY = true;
