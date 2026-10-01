@@ -1,0 +1,18 @@
+name: Friendly NYC tenant regression
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  tenant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: NYC tenant, catalog and booking isolation
+        run: node --test tests/friendly-catalog-sync.test.mjs tests/booking-handoff.test.mjs tests/friendly-nyc-tenant.test.mjs
