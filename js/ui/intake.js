@@ -67,7 +67,7 @@ function renderFriendlyIntake(bridge) {
         <form id="friendlyAddressPlanner" novalidate>
           <label style="display:block;font-weight:700;margin-bottom:7px" for="plannerAddress">Event address</label>
           <div class="rs-property-actions">
-            <input id="plannerAddress" autocomplete="street-address" placeholder="${(window.RENTSKETCH_TENANT_SLUG||'')==='friendly-nyc'?'123 Main St, Riverdale, NY 10471':'123 Main St, Syracuse, NY 13202'}" required style="flex:1 1 420px;padding:13px 14px;border:1px solid #bbc9bf;border-radius:12px;font:inherit">
+            <input id="plannerAddress" autocomplete="street-address" placeholder="${(window.RENTSKETCH_TENANT_SLUG||'')==='friendly-nyc'?'123 Main St, Riverdale, NY 10471':(window.RENTSKETCH_TENANT_SLUG||'')==='friendly-sc'?'123 Main St, Greenville, SC 29601':'123 Main St, Syracuse, NY 13202'}" required style="flex:1 1 420px;padding:13px 14px;border:1px solid #bbc9bf;border-radius:12px;font:inherit">
             <button id="plannerFind" type="button" style="padding:13px 18px;border:0;border-radius:12px;background:#183429;color:#fff;font-weight:800;cursor:pointer">Find property</button>
           </div>
           <div id="plannerLookupStatus" role="status" aria-live="polite" style="min-height:24px;margin:8px 0 4px;color:#53625a;font-size:14px"></div>
@@ -170,7 +170,7 @@ function renderFriendlyIntake(bridge) {
       rec.style.display = 'block';
       rec.style.background = '#fff5e8';
       rec.style.borderColor = '#efcf9d';
-      rec.innerHTML = '<strong>No current Friendly tent cleanly matches all of those inputs.</strong><br><span style="color:#6b5a44">That can mean the stated area is too small once installation clearance is included, the guest count needs more space, or a hard surface rules out pole tents. You can adjust the measurements or call Friendly at 315-884-1498.</span>';
+      rec.innerHTML = '<strong>No current Friendly tent cleanly matches all of those inputs.</strong><br><span style="color:#6b5a44">That can mean the stated area is too small once installation clearance is included, the guest count needs more space, or a hard surface rules out pole tents. You can adjust the measurements or contact Friendly Party Rental for site-specific help.</span>';
       return;
     }
 
@@ -212,7 +212,7 @@ export function startIntake() {
   if (document.getElementById('step-designer')?.classList.contains('active')) return true;
   const p = params();
   const tenantSlug=(window.RENTSKETCH_TENANT_SLUG || p.get('tenant'));
-  const isFriendly = ['friendly','friendly-nyc'].includes(tenantSlug);
+  const isFriendly = ['friendly','friendly-nyc','friendly-sc'].includes(tenantSlug);
   const directDesign = p.get('design') || p.get('focus') || p.get('order') || p.get('demo') === '1' || p.get('mode') === 'order';
   if (isFriendly && !directDesign) return renderFriendlyIntake(bridge);
   return simpleStart(bridge);
