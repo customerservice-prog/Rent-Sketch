@@ -15,6 +15,9 @@
   if (orderPanel && friendlyTenant) {
     orderPanel.hidden = false;
     orderPanel.open = orderMode;
+    var requestedOrder = query.get('order');
+    var orderInput = document.getElementById('orderNumber');
+    if (orderInput && requestedOrder && /^[a-zA-Z0-9-]{1,80}$/.test(requestedOrder)) orderInput.value = requestedOrder;
   }
   document.body.classList.toggle('order-access-page', orderMode);
   if (orderMode) {
