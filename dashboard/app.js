@@ -91,7 +91,7 @@ function esc(s) {
          '<button id="btnLogout" class="btn-logout" type="button">Log out</button>' +
        '</div>' +
      '</header>' +
-     '<div class="tw-topbar"><div class="tw-breadcrumb"><strong>' + esc(tenantLabel) + '</strong><span>/</span><span>' + esc(route.charAt(0).toUpperCase()+route.slice(1)) + '</span></div><div class="tw-top-actions"><a href="#/requests">Requests</a><a href="' + designerUrl + '" target="_blank" rel="noopener" class="primary">✦ Open RentSketch</a></div></div>' +
+     '<div class="tw-topbar"><div class="tw-breadcrumb"><strong>' + esc(tenantLabel) + '</strong><span>/</span><span>' + esc(route.charAt(0).toUpperCase()+route.slice(1)) + '</span></div><div class="tw-top-actions">' + (platformAdmin ? '<a href="/dashboard/platform.html#overview">⌂ Admin Home</a>' : '') + '<a href="#/requests">Requests</a><a href="' + designerUrl + '" target="_blank" rel="noopener" class="primary">✦ Open RentSketch</a></div></div>' +
      '<main class="dash-main" id="dashMain">' + inner + '</main>' +
      '</div>';
  }
