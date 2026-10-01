@@ -319,7 +319,7 @@ function esc(s) {
        api('/api/tenants/'+state.tenant+'/design-intelligence')
      ]);
      var reqs=data[0].quoteRequests||[],designs=data[1].designs||[],products=data[2].products||[],intel=data[3]||{};
-     var sample=intel.sample||{},conversion=intel.conversion||{},friction=intel.friction||{},patterns=intel.patterns||{},recs=intel.recommendations||[];
+     var sample=intel.sample||{},conversion=intel.conversion||{},attribution=intel.attribution||{},history=intel.history||{},periods=history.periods||{},friction=intel.friction||{},patterns=intel.patterns||{},recs=intel.recommendations||[];
      var now=Date.now(),monthAgo=now-30*86400000;
      var recentReq=reqs.filter(function(r){return new Date(r.created_at).getTime()>=monthAgo;});
      var recentDesigns=designs.filter(function(d){return new Date(d.created_at||d.updated_at).getTime()>=monthAgo;});
@@ -333,7 +333,7 @@ function esc(s) {
      var maxStatus=Math.max(1,...Object.values(statuses));
      var activeProducts=products.filter(function(p){return p.active;}).length;
      var visualProducts=products.filter(function(p){return p.visual_model_id;}).length;
-     var topPairs=(patterns.pairs||[]).slice(0,6),topFeatures=(patterns.features||[]).slice(0,8),topKinds=(patterns.objectKinds||[]).slice(0,6);
+     var topPairs=(patterns.pairs||[]).slice(0,6),topFeatures=(patterns.features||[]).slice(0,8),topKinds=(patterns.objectKinds||[]).slice(0,6),bookedItems=(attribution.bookedItems||[]).slice(0,8);
      var confidence=sample.confidence||'low';
      function insightRows(rows,emptyText){
        if(!rows||!rows.length)return emptyAnalytics(emptyText);
@@ -344,6 +344,11 @@ function esc(s) {
        if(!goodWhenLow)cls='';
        return '<div class="tw-friction-row"><div><strong>'+esc(label)+'</strong><span>'+Number(obj.count||0)+' learning layouts</span></div><em class="'+cls+'">'+pct+'%</em></div>';
      }
+     function trendCard(label,p){
+       if(!p)return '<article><span>'+esc(label)+'</span><strong>Collecting</strong><small>Trend history starts automatically as snapshots accumulate.</small></article>';
+       var revenue=Number(p.bookedRevenueCents||0),request=Number(p.requestRate||0),bookedDelta=Number(p.bookedRate||0);
+       return '<article><span>'+esc(label)+'</span><strong>'+(revenue?((revenue>0?'+':'−')+money(Math.abs(revenue)/100)):((request>=0?'+':'')+request+' pts'))+'</strong><small>Request rate '+(request>=0?'+':'')+request+' pts · booked '+(bookedDelta>=0?'+':'')+bookedDelta+' pts</small></article>';
+     }
      if(gen!==renderGeneration)return;
      mainEl().innerHTML=
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Owner sales intelligence</div><h1 class="dash-title">Sales Insights</h1><p class="dash-subtitle">Real customer behavior from your own RentSketch layouts and requests. No invented ROI percentages.</p></div><div class="tw-actions"><a class="tw-btn" href="#/requests">Open requests</a><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open RentSketch</a></div></div>'+
@@ -351,12 +356,14 @@ function esc(s) {
          '<article><span>Meaningful customer layouts</span><strong>'+Number(sample.learning||0)+'</strong><small>'+recentDesigns.length+' saved in the last 30 days</small></article>'+
          '<article><span>Design → quote request</span><strong>'+Number(conversion.requestRate||0)+'%</strong><small>'+Number(conversion.withRequest||0)+' layouts reached a request</small></article>'+
          '<article><span>Request → booked</span><strong>'+requestBookedRate+'%</strong><small>'+booked+' booked of '+reqs.length+' requests</small></article>'+
-         '<article><span>Average request estimate</span><strong>'+money(avg)+'</strong><small>'+(avgGuests?avgGuests+' average guests':'Guest count not available')+'</small></article>'+
+         '<article><span>Attributed booked revenue</span><strong>'+money(Number(attribution.bookedRevenueCents||0)/100)+'</strong><small>'+Number(attribution.bookedOrders||0)+' booked orders with real order totals</small></article>'+
        '</section>'+
+       '<section class="tw-owner-scorecard tw-owner-trends">'+trendCard('7-day movement',periods.days7)+trendCard('30-day movement',periods.days30)+trendCard('90-day movement',periods.days90)+'<article><span>Average request estimate</span><strong>'+money(avg)+'</strong><small>'+(avgGuests?avgGuests+' average guests':'Guest count not available')+'</small></article></section>'+ 
        '<div class="tw-owner-truth"><strong>What this can prove today</strong><span>RentSketch can show what customers build, what reaches a quote request, which equipment appears together, and where people rework or abandon layouts. It does not claim sales lift until your real activity supports it.</span><em>Learning confidence: '+esc(confidence)+'</em></div>'+
        '<div class="tw-analytics-grid tw-owner-grid">'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>What customers keep putting together</h2><p>Repeated combinations can reveal package and add-on opportunities.</p></div></div><div class="tw-panel-body">'+insightRows(topPairs,'No repeated combinations yet. More real designs will strengthen this signal.')+'</div></section>'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Most-used equipment signals</h2><p>What appears most often in meaningful saved layouts.</p></div></div><div class="tw-panel-body">'+insightRows(topFeatures.length?topFeatures:topKinds,'No repeated equipment pattern yet.')+'</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>What actually booked</h2><p>Real line items returned by your rental system or recorded on booked requests.</p></div></div><div class="tw-panel-body">'+insightRows(bookedItems,'No booked line-item attribution yet. Connect your rental system or record the final booked order on a request.')+'</div></section>'+ 
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Where customers may be getting stuck</h2><p>Use these signals to improve defaults, templates and the designer flow.</p></div></div><div class="tw-panel-body">'+
            frictionRow('Missing guest count',friction.missingGuest,true)+
            frictionRow('No recognized tent / starting structure',friction.missingTent,true)+
