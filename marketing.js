@@ -91,6 +91,59 @@
     closeMenu();
   });
 
+  var liveShowcase = document.querySelector('[data-rs-live-showcase]');
+  if (liveShowcase) {
+    var liveFrame = liveShowcase.querySelector('[data-showcase-frame]');
+    var liveShell = liveShowcase.querySelector('.rs-live-shell');
+    var liveTitle = liveShowcase.querySelector('[data-showcase-title]');
+    var liveCopy = liveShowcase.querySelector('[data-showcase-copy]');
+    var scenes = {
+      styled: {
+        title: 'Styled reception · 64 seats',
+        copy: 'Go inside the 20 × 40 tent and see guests, table linens, place settings and centerpiece styling rendered together.'
+      },
+      open: {
+        title: 'Open 20 × 40 pole tent',
+        copy: 'Pull the camera outside to understand the complete tent footprint, anchoring area and furnished reception in the backyard.'
+      },
+      sidewalls: {
+        title: 'Cathedral-window sidewalls',
+        copy: 'Close the same event with window sidewall segments and see the physical tent change without redrawing the tables inside.'
+      },
+      waterslide: {
+        title: 'Tent + waterslide in one event',
+        copy: 'Add a full-size inflatable beside the tent and see both rentals together in the same outdoor planning scene.'
+      }
+    };
+    function showcaseUrl(mode) {
+      return '/designer/?tenant=friendly&source=homepage_live_showcase&showcase=' + encodeURIComponent(mode);
+    }
+    function selectShowcase(mode) {
+      var scene = scenes[mode] || scenes.styled;
+      liveShowcase.querySelectorAll('[data-showcase-mode]').forEach(function (button) {
+        button.setAttribute('aria-pressed', String(button.dataset.showcaseMode === mode));
+      });
+      if (liveTitle) liveTitle.textContent = scene.title;
+      if (liveCopy) liveCopy.textContent = scene.copy;
+      if (liveShell) liveShell.classList.remove('is-ready');
+      if (liveFrame) {
+        liveFrame.title = 'Live RentSketch ' + scene.title;
+        if (liveFrame.getAttribute('src') !== showcaseUrl(mode)) liveFrame.setAttribute('src', showcaseUrl(mode));
+      }
+      track('view_showcase_scene', { showcase_scene: mode });
+    }
+    liveShowcase.querySelectorAll('[data-showcase-mode]').forEach(function (button) {
+      button.addEventListener('click', function () { selectShowcase(button.dataset.showcaseMode); });
+    });
+    if (liveFrame) liveFrame.addEventListener('load', function () {
+      setTimeout(function () { liveShell?.classList.add('is-ready'); }, 500);
+    });
+    window.addEventListener('message', function (event) {
+      if (event.source !== liveFrame?.contentWindow || event.data?.type !== 'rentsketch.showcase.ready') return;
+      liveShell?.classList.add('is-ready');
+    });
+  }
+
   // Keep the rest of the page immediately paintable. The wedding build is the
   // primary motion system; generic section reveal effects caused expensive
   // style/layout work on first load.
