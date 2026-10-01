@@ -13,6 +13,7 @@ test('Friendly NYC gets a dedicated free tenant with hidden designer prices',()=
   assert.match(sql,/friendlypartyrentalnyc\.com/);
   assert.match(sql,/INSERT INTO products/);
   assert.match(sql,/price_per_day[\s\S]*NULL/);
+  assert.doesNotMatch(sql,/price_per_day[\s\S]{0,100}p\.price_per_day/);
 });
 
 test('order access routes keep Syracuse and NYC tenants isolated',()=>{
@@ -34,5 +35,4 @@ test('order access routes keep Syracuse and NYC tenants isolated',()=>{
   assert.match(paywall,/friendly-nyc/);
   assert.match(intake,/friendly-nyc/);
   assert.match(intake,/Riverdale, NY 10463/);
-  assert.doesNotMatch(sql,/price_per_day[\s\S]{0,100}p\.price_per_day/);
 });
