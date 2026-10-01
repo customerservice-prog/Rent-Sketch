@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { requirePlatformAdmin } = require('../middleware/requireAuth');
-const { getDesignIntelligence } = require('../designIntelligence');
+const { getDesignIntelligence, getDesignIntelligenceHistory } = require('../designIntelligence');
 
 const router = express.Router();
 
@@ -428,9 +428,9 @@ router.get('/onboarding', requirePlatformAdmin, async (req, res) => {
 });
 
 router.get('/design-intelligence', requirePlatformAdmin, async (req, res) => {
-  const intelligence = await getDesignIntelligence();
+  const [intelligence,history] = await Promise.all([getDesignIntelligence(),getDesignIntelligenceHistory(72)]);
   res.setHeader('Cache-Control','no-store');
-  res.json(intelligence);
+  res.json({ ...intelligence, history });
 });
 
 router.get('/alerts', requirePlatformAdmin, async (req, res) => {
