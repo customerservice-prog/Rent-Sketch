@@ -3,6 +3,7 @@
 (function () {
   'use strict';
   var params = new URLSearchParams(location.search);
+  if (params.get('showcase')) return;
   // Product entry owns its preview; the questionnaire must never race it.
   if (['tent','inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1') return;
   var started = false;
