@@ -528,7 +528,7 @@ function esc(s) {
        '<div class="tw-panel"><div class="tw-panel-head"><div><h2>Rental catalog</h2><p>Assign a visual, product photo and measured dimensions. Unmapped physical rentals use labeled approximate footprints; configurable services are listed for review.</p></div></div><div class="tw-table-scroll">' + table + '</div></div>' +
        '<h2 class="dash-section-title">Add a Product</h2>' +
        '<form id="productForm" class="dash-form">' +
-       '<label>Category<select id="pCategory" required><option value="">Select a category</option><option value="tent">Tent</option><option value="table">Table</option><option value="chair">Chair</option><option value="dance_floor">Dance Floor</option><option value="lighting">Lighting</option><option value="linen">Linen</option></select></label>' +
+       '<label>Category<select id="pCategory" required><option value="">Select a category</option><option value="tent">Tent</option><option value="table">Table</option><option value="chair">Chair</option><option value="dance_floor">Dance Floor</option><option value="lighting">Lighting</option><option value="linen">Linen</option><option value="other">Other physical rental</option></select></label>' +
        '<label>Name<input type="text" id="pName" placeholder="20x20 Pole Tent" required></label>' +
        '<label>SKU<input type="text" id="pSku"></label>' +
        '<label>Price per day<input type="number" step="0.01" id="pPrice"></label>' +
@@ -1015,6 +1015,9 @@ function esc(s) {
      window.location.hash = '#/overview';
      return;
    }
+   var adminRoutes=['products','catalog-audit','branding','install'];
+   if(adminRoutes.indexOf(route)!==-1&&!canTenant('admin')){window.location.hash='#/overview';return;}
+   if(route==='billing'&&!canTenant('owner')){window.location.hash='#/overview';return;}
    renderGeneration++;
   var __gen = renderGeneration;
   if (route === 'overview') viewOverview(route, __gen);
