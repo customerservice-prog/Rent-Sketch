@@ -705,7 +705,8 @@ function esc(s) {
    bindShellEvents();
    if (!state.tenant) { mainEl().innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    try {
-     var t = await api('/api/tenants/' + state.tenant + '/admin');
+     var installData=await Promise.all([api('/api/tenants/' + state.tenant + '/admin'),api('/api/tenants/'+state.tenant+'/integrations').catch(function(){return{configured:false,recent:[]};})]);
+     var t=installData[0],integration=installData[1]||{};
      if (gen !== renderGeneration) return;
      mainEl().innerHTML = '' +
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Customer experience</div><h1 class="dash-title">Branding &amp; payouts</h1><p class="dash-subtitle">Control how your designer looks, how customers contact you, and where deposit payouts are sent.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant=' + encodeURIComponent(state.tenant) + '" target="_blank" rel="noopener">Preview live designer</a></div></div>' +
@@ -814,8 +815,34 @@ function esc(s) {
          '<section class="tw-install-card"><div class="tw-eyebrow">Option 2</div><h2>Iframe embed</h2><p>Recommended when you want RentSketch to appear directly inside a page on your existing website.</p><textarea class="code-box" rows="4" readonly>' + esc(iframeCode) + '</textarea></section>'+
          '<section class="tw-install-card"><div class="tw-eyebrow">Option 3</div><h2>Versioned loader</h2><p>Use the loader when you want a smaller embed snippet that can receive future RentSketch updates automatically.</p><textarea class="code-box" rows="4" readonly>' + esc(loaderCode) + '</textarea></section>'+
          '<section class="tw-install-card"><div class="tw-eyebrow">Security</div><h2>Allowed website domains</h2><p>Only the domains listed here can embed your tenant designer.</p><form id="originsForm" class="dash-form" style="box-shadow:none;border:0;padding:0"><textarea id="originsBox" rows="5" style="grid-column:1/-1">' + esc(origins) + '</textarea><div id="originsError" class="dash-error" hidden></div><div id="originsSaved" class="dash-saved" hidden>Allowed domains saved.</div><button type="submit" class="btn-primary">Save allowed domains</button></form></section>'+
+         '<section class="tw-install-card full"><div class="tw-eyebrow">Rental system integration</div><h2>Send booked orders back to Sales Insights</h2><p>Use a dedicated integration key from ERS, TapGoods, Goodshuffle, Zapier/Make, or your own middleware. The integration can attach the real booked order total and line items to the original RentSketch request without using a dashboard password.</p>'+
+         '<div class="tw-integration-status"><div><span>Provider</span><strong>'+esc(integration.provider||'Not configured')+'</strong></div><div><span>API key</span><strong>'+(integration.configured?'•••• '+esc(integration.keyLast4||''):'Not created')+'</strong></div><div><span>Outbound webhook</span><strong>'+(integration.webhookConfigured?'Configured':'Not configured')+'</strong></div></div>'+
+         (canTenant('owner')?'<div class="tw-integration-actions"><select id="integrationProvider"><option value="custom">Custom / middleware</option><option value="ers">Event Rental Systems (ERS)</option><option value="tapgoods">TapGoods</option><option value="goodshuffle">Goodshuffle</option><option value="zapier">Zapier / Make</option></select><button type="button" class="tw-btn primary" id="integrationKeyBtn">'+(integration.configured?'Rotate integration key':'Create integration key')+'</button>'+(integration.configured?'<button type="button" class="tw-btn" id="integrationRevokeBtn">Revoke key</button>':'')+'</div><div id="integrationKeyResult" class="tw-secret-result" hidden></div>':'<div class="role-banner">Only the tenant owner can create or rotate the integration credential.</div>')+
+         '<div class="tw-integration-endpoint"><strong>Inbound order attribution</strong><code>POST https://rentsketch-api-production.up.railway.app/api/tenants/'+esc(state.tenant)+'/integrations/order-attribution</code><small>Header: X-RentSketch-Integration-Key · Body can include quoteRequestId or designId, externalOrderId, orderTotalCents, lineItems, source, and status.</small></div>'+
+         '<div class="tw-event-chips"><span>design.created</span><span>design.updated</span><span>quote_request.created</span><span>quote_request.approved</span><span>quote_request.updated</span><span>quote_request.booked</span></div>'+
+         (integration.recent&&integration.recent.length?'<div class="tw-recent-events">'+integration.recent.slice(0,6).map(function(ev){return '<div><strong>'+esc(ev.event_type)+'</strong><span>'+esc(ev.direction)+' · '+esc(ev.delivery_status||'')+' · '+fmtDateTime(ev.created_at)+'</span></div>';}).join('')+'</div>':'')+
+         '</section>'+
          '<section class="tw-install-card full"><div class="tw-eyebrow">Go live checklist</div><h2>Before sharing with customers</h2><div class="tw-checklist"><a class="tw-check '+(installed?'done':'')+'" href="#/install"><i>'+(installed?'✓':'•')+'</i><span><strong>Website domain</strong><small>'+(installed?'Allowed domain saved':'Add the website that will embed RentSketch')+'</small></span></a><a class="tw-check done" href="#/branding"><i>✓</i><span><strong>Hosted link</strong><small>Your tenant link is available now</small></span></a><a class="tw-check" href="#/products"><i>•</i><span><strong>Catalog review</strong><small>Confirm customer-facing products and visuals</small></span></a></div></section>'+
        '</div>';
+     var integrationKeyBtn=document.getElementById('integrationKeyBtn');
+     if(integrationKeyBtn)integrationKeyBtn.addEventListener('click',async function(){
+       var provider=document.getElementById('integrationProvider').value,result=document.getElementById('integrationKeyResult');
+       integrationKeyBtn.disabled=true;var old=integrationKeyBtn.textContent;integrationKeyBtn.textContent='Creating…';
+       try{
+         var created=await api('/api/tenants/'+state.tenant+'/integrations/key',{method:'POST',body:{provider:provider}});
+         result.hidden=false;result.innerHTML='<strong>Copy this key now. It will not be shown again.</strong><textarea rows="3" readonly>'+esc(created.apiKey)+'</textarea><button type="button" class="tw-btn" data-copy-integration>Copy key</button>';
+         result.querySelector('[data-copy-integration]').onclick=async function(){try{await navigator.clipboard.writeText(created.apiKey);this.textContent='Copied';}catch(_){result.querySelector('textarea').select();}};
+         integrationKeyBtn.textContent='Rotate integration key';
+       }catch(err){window.alert('Could not create integration key: '+err.message);integrationKeyBtn.textContent=old;}
+       finally{integrationKeyBtn.disabled=false;}
+     });
+     var integrationRevokeBtn=document.getElementById('integrationRevokeBtn');
+     if(integrationRevokeBtn)integrationRevokeBtn.addEventListener('click',async function(){
+       if(!window.confirm('Revoke the current rental-system integration key? Connected middleware will stop working until a new key is installed.'))return;
+       integrationRevokeBtn.disabled=true;
+       try{await api('/api/tenants/'+state.tenant+'/integrations/key',{method:'DELETE'});viewInstall(route,gen);}
+       catch(err){window.alert('Could not revoke integration key: '+err.message);integrationRevokeBtn.disabled=false;}
+     });
      document.getElementById('originsForm').addEventListener('submit', async function (e) {
        e.preventDefault();
        var errEl = document.getElementById('originsError'),savedEl=document.getElementById('originsSaved');
