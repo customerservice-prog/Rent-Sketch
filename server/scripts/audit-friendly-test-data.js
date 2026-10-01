@@ -77,6 +77,66 @@ const designMarkerSql = `
       designsWithExplicitTestMarkers: markedDesigns.rows,
       recentDesignMetadata: recentDesigns.rows
     },null,2));
+    
+    const designSceneTestSql = `
+      (
+        lower(coalesce(d.scene->'customer'->>'name','')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
+        OR lower(coalesce(d.scene->'customer'->>'email','')) ~ '@example\\.(com|invalid|test)
+  } finally {
+    await pool.end();
+  }
+})().catch(err=>{console.error('FRIENDLY_TEST_DATA_AUDIT_ERROR',err);process.exit(1);});
+
+// dry-run deployment trigger 2026-10-01
+
+        OR lower(coalesce(d.scene->'customer'->>'email','')) ~ '(^|[._+\\-])(test|qa|fake|demo|fixture|regression|claude)([._+\\-]|@)'
+        OR lower(coalesce(d.scene->>'eventName','')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
+      )
+    `;
+    const designCandidates=await pool.query(`
+      WITH fake_requests AS (
+        SELECT design_id FROM quote_requests q
+        WHERE q.tenant_id=$1 AND q.design_id IS NOT NULL AND ${requestTestSql}
+      )
+      SELECT d.id,d.event_type,d.guest_count,d.project_name,d.estimate_total,d.created_at,d.updated_at,
+             (d.owner_user_id IS NOT NULL) AS staff_owned,
+             left(coalesce(d.anonymous_session_id,''),60) AS anonymous_session_id,
+             nullif(d.scene->'customer'->>'name','') AS customer_name,
+             nullif(d.scene->'customer'->>'email','') AS customer_email,
+             nullif(d.scene->>'eventName','') AS event_name,
+             (fr.design_id IS NOT NULL) AS linked_to_fake_request
+      FROM designs d
+      LEFT JOIN fake_requests fr ON fr.design_id=d.id
+      WHERE d.tenant_id=$1 AND (
+        fr.design_id IS NOT NULL OR ${designMarkerSql} OR ${designSceneTestSql}
+      )
+      ORDER BY d.created_at ASC
+    `,[tenantId]);
+
+    const designStats=await pool.query(`
+      SELECT
+        count(*)::int AS total,
+        count(*) FILTER (WHERE owner_user_id IS NOT NULL)::int AS staff_owned,
+        count(*) FILTER (WHERE anonymous_session_id LIKE 'direct_%')::int AS direct_checkout_placeholders,
+        count(*) FILTER (WHERE anonymous_session_id LIKE 'direct_%'
+          AND event_type IS NULL AND guest_count IS NULL AND coalesce(project_name,'')=''
+          AND jsonb_array_length(coalesce(scene->'objects','[]'::jsonb))=0)::int AS direct_empty,
+        count(*) FILTER (WHERE event_type IS NOT NULL)::int AS with_event_type,
+        count(*) FILTER (WHERE guest_count IS NOT NULL)::int AS with_guest_count,
+        count(*) FILTER (WHERE coalesce(project_name,'')<>'')::int AS named_projects,
+        count(*) FILTER (WHERE nullif(scene->>'propertyAddress','') IS NOT NULL)::int AS with_property_address
+      FROM designs WHERE tenant_id=$1
+    `,[tenantId]);
+
+    console.log('FRIENDLY_TEST_DATA_AUDIT_COMPACT '+JSON.stringify({
+      totalQuoteRequests:totalRequests.rows[0].count,
+      syntheticQuoteRequestCount:fakeRequests.rows.length,
+      totalDesigns:totalDesigns.rows[0].count,
+      syntheticDesignCandidateCount:designCandidates.rows.length,
+      designStats:designStats.rows[0],
+      syntheticDesignCandidates:designCandidates.rows
+    }));
+
     console.log('FRIENDLY_TEST_DATA_AUDIT_END');
   } finally {
     await pool.end();
