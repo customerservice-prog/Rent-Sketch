@@ -7,26 +7,30 @@
   <meta name="robots" content="noindex">
   <title>Open My Event | RentSketch</title>
   <link rel="icon" href="/logo.png">
-  <link rel="stylesheet" href="/my-event/access.css?v=20260929-free-friendly-2">
-  <script>
-    (function(){
-      var q=new URLSearchParams(location.search);
-      if(q.get('tenant')==='friendly'&&q.get('mode')==='order'){
-        var u=new URL('/designer/',location.origin);
-        u.searchParams.set('tenant','friendly');
-        u.searchParams.set('source','legacy_order_access');
-        location.replace(u.toString());
-      }
-    })();
-  </script>
-  <script src="/my-event/access.js?v=20260929-free-friendly-2" defer></script>
+  <link rel="stylesheet" href="/my-event/access.css?v=20260930-friendly-nyc-1">
+  <script src="/my-event/access.js?v=20260930-friendly-nyc-1" defer></script>
 </head>
 <body>
   <header><a class="brand" href="/"><img src="/logo.png" width="34" height="34" alt="">RentSketch</a><a href="/designer/" data-preview>Open designer</a></header>
   <main>
     <div class="eyebrow">Welcome back</div>
     <h1>Your event.<br>Your way back in.</h1>
-    <p class="intro">Return to a saved RentSketch event using its private email link.</p>
+    <p class="intro" id="accessIntro">Return to a saved RentSketch event using its private email link.</p>
+
+    <details id="orderAccess" hidden>
+      <summary>Already have a Friendly Party Rental booking?</summary>
+      <p>Use the first name on the booking and your order number. Eligible active bookings include RentSketch access.</p>
+      <form id="orderAccessForm">
+        <label for="orderFirstName">First name on booking</label>
+        <input id="orderFirstName" name="firstName" autocomplete="given-name" maxlength="100" required>
+        <label for="orderNumber">Order number</label>
+        <input id="orderNumber" name="orderNumber" autocomplete="off" inputmode="text" maxlength="80" placeholder="Example: 9218" required>
+        <button type="submit">Open my event</button>
+      </form>
+      <p id="orderAccessStatus" role="status" aria-live="polite"></p>
+      <a id="orderContinue" class="back" href="#" hidden>Continue to my event</a>
+    </details>
+
     <section id="paidAccess">
       <form id="accessForm">
         <label for="accessEmail">Email for your saved event</label>
@@ -35,9 +39,9 @@
       </form>
       <p id="accessStatus" role="status" aria-live="polite"></p>
     </section>
-    <div class="details"><strong>No password. No code to remember.</strong><p>Open the email on your phone, tablet or computer. Your private link brings back the same saved event.</p></div>
+    <div class="details" id="emailDetails"><strong>No password. No code to remember.</strong><p>Open the email on your phone, tablet or computer. Your private link brings back the same saved event.</p></div>
     <details id="emailHelp"><summary>Can’t find the email?</summary><p>Check your spam folder and request the link again using the same email tied to the saved event.</p></details>
-    <p class="private">Your event link is private. Share the rental summary from Review when you want someone else to see your plan.</p>
+    <p class="private" id="privateNote">Your event link is private. Share the rental summary from Review when you want someone else to see your plan.</p>
     <a class="back" href="/designer/" data-preview>Back to the designer</a>
   </main>
 </body>
