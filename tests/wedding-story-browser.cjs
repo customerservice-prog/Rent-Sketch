@@ -31,7 +31,7 @@ const server=http.createServer((req,res)=>{
   const browser=await chromium.launch({args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   const results=[];
   try{
-    // Homepage: automatic build must stay lightweight; 3D is explicit.
+    // Homepage: automatic build must become the real 3D RentSketch scene when visible.
     {
       const ctx=await browser.newContext({viewport:{width:1440,height:900}}),page=await ctx.newPage(),errors=[];
       page.on('pageerror',e=>errors.push(e.message));
@@ -44,9 +44,11 @@ const server=http.createServer((req,res)=>{
       assert.equal(await page.locator('.tour-poster').isVisible(),true,'a first-frame image is present immediately');
       await page.locator('[data-wedding-story]').scrollIntoViewIfNeeded();
       await page.locator('.story-build-plan').waitFor({timeout:10000});
-      await page.waitForTimeout(1200);
-      assert.equal(await page.locator('.tour-3d canvas').count(),0,'homepage autoplay never creates WebGL');
-      assert.equal(await page.locator('.story-build-plan').isVisible(),true,'staged wedding plan is visible during autoplay');
+      await page.locator('.tour-3d canvas').waitFor({timeout:30000});
+      await page.locator('.story-has-webgl').waitFor({timeout:30000});
+      const autoplayRender=await page.locator('.tour-3d canvas').evaluate(el=>({w:el.width,h:el.height,lost:el.getContext('webgl2')?.isContextLost()}));
+      assert(autoplayRender.w>0&&autoplayRender.h>0&&!autoplayRender.lost,'homepage autoplay renders the actual WebGL scene');
+      assert.equal(await page.locator('.story-build-plan').evaluate(el=>getComputedStyle(el).opacity),'0','2D plan stays hidden during 3D autoplay');
       const chairs=await page.locator('.story-build-plan [data-story-layer="chairs"] rect').count();
       const floor=await page.locator('.story-build-plan [data-story-layer="dance"] rect').count();
       assert.equal(chairs,64,'homepage plan contains 64 chairs');
@@ -55,7 +57,7 @@ const server=http.createServer((req,res)=>{
       await page.locator('[data-story-pause]').click();
       const before=await page.locator('[data-story-label]').innerText();
       await page.waitForTimeout(700);
-      assert.equal(await page.locator('[data-story-label]').innerText(),before,'pause holds the current stage');
+      assert.equal(await page.locator('[data-story-label]').innerText(),before,'pause holds the current 3D stage');
       await page.locator('[data-story-replay]').click();
       await page.waitForTimeout(900);
       assert.match(await page.locator('[data-story-label]').innerText(),/empty venue|Measure|tent footprint/i);
@@ -68,25 +70,24 @@ const server=http.createServer((req,res)=>{
       await page.screenshot({path:path.join(out,'home-plan-desktop.png')});
 
       await page.locator('[data-story-explore]').click();
-      await page.locator('.story-has-webgl').waitFor({timeout:30000});
       const render=await page.locator('.tour-3d canvas').evaluate(el=>({w:el.width,h:el.height,lost:el.getContext('webgl2')?.isContextLost()}));
-      assert(render.w>0&&render.h>0&&!render.lost,'explicit Explore 3D renders the actual WebGL wedding');
+      assert(render.w>0&&render.h>0&&!render.lost,'Explore freely keeps the actual WebGL wedding active');
       await page.locator('[data-camera="outside"]').click();
       await page.screenshot({path:path.join(out,'home-3d-desktop.png')});
       assert.deepEqual(errors,[]);
-      results.push({route:'/',lightweightAutoplay:true,desktop3d:render,replay:true,pause:true,switch2d:true,errors});
+      results.push({route:'/',autoplay3d:true,desktop3d:render,replay:true,pause:true,switch2d:true,errors});
       await ctx.close();
     }
 
-    // Demo: lightweight first, real 3D loads only after an explicit request.
+    // Demo: visible autoplay also uses the real 3D scene.
     {
       const ctx=await browser.newContext({viewport:{width:1440,height:900}}),page=await ctx.newPage(),errors=[];
       page.on('pageerror',e=>errors.push(e.message));
       await page.goto(base+'/demo/');
       await page.locator('[data-wedding-story]').scrollIntoViewIfNeeded();
       await page.locator('.story-build-plan').waitFor({timeout:10000});
-      await page.waitForTimeout(1200);
-      assert.equal(await page.locator('.tour-3d canvas').count(),0,'demo critical path must remain WebGL-free');
+      await page.locator('.tour-3d canvas').waitFor({timeout:30000});
+      await page.locator('.story-has-webgl').waitFor({timeout:30000});
       assert.equal(await page.locator('[data-story-scrub]').count(),1);
       await page.locator('[data-story-pause]').click();
       const before=await page.locator('[data-story-label]').innerText();
@@ -103,27 +104,27 @@ const server=http.createServer((req,res)=>{
       await page.locator('[data-camera="outside"]').click();
       await page.screenshot({path:path.join(out,'demo-3d-desktop.png')});
       assert.deepEqual(errors,[]);
-      results.push({route:'/demo/',lightweightFirst:true,explicit3D:true,desktop3d:render,scrub:true,switch2d:true,errors});
+      results.push({route:'/demo/',autoplay3d:true,desktop3d:render,scrub:true,switch2d:true,errors});
       await ctx.close();
     }
 
-    // Phones: lightweight build, first viewport, no horizontal overflow, no WebGL.
+    // Phones: visible story still uses the real 3D scene and keeps the layout responsive.
     for(const width of [320,390]){
       const ctx=await browser.newContext({viewport:{width,height:720},hasTouch:true}),page=await ctx.newPage(),errors=[];
       page.on('pageerror',e=>errors.push(e.message));
       await page.goto(base+'/');
       await page.locator('.story-build-plan').waitFor({timeout:10000});
-      await page.waitForTimeout(600);
+      await page.locator('.tour-3d canvas').waitFor({timeout:30000});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no horizontal overflow at '+width);
       assert((await page.locator('.story-view').boundingBox()).y<720,'wedding build visible in first phone viewport');
-      assert.equal(await page.locator('.tour-3d canvas').count(),0,'phone autoplay uses no WebGL');
+      assert.equal(await page.locator('.tour-3d canvas').count(),1,'phone autoplay uses the real 3D renderer');
       await page.screenshot({path:path.join(out,'home-mobile-'+width+'.png')});
       await page.locator('[data-view="2d"]').click();
       assert.equal(await page.locator('.story-build-plan.show-plan').count(),1);
       await page.locator('[data-story-replay]').click();
       assert.equal(await page.locator('[data-view="3d"]').getAttribute('aria-pressed'),'true');
       assert.deepEqual(errors,[]);
-      results.push({width,mobilePlan:true,noOverflow:true,firstViewport:true,noAutoplayWebGL:true,errors});
+      results.push({width,mobile3d:true,noOverflow:true,firstViewport:true,errors});
       await ctx.close();
     }
 
@@ -141,7 +142,7 @@ const server=http.createServer((req,res)=>{
     }
 
     fs.writeFileSync(path.join(out,'results.json'),JSON.stringify(results,null,2));
-    console.log('PASS wedding story: lightweight homepage build, explicit 3D handoff, interactive demo, phone layout, reduced motion and no browser errors.');
+    console.log('PASS wedding story: real 3D autoplay on homepage/demo/mobile, 2D alternate view, reduced-motion fallback and no browser errors.');
   }finally{
     await browser.close();
     await new Promise(resolve=>server.close(resolve));
