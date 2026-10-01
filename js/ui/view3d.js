@@ -18,7 +18,7 @@ import { createGuests } from './scene-guests.js';
 import { createPartyStyling } from './party-styling.js';
 import { sceneSetting } from './scene-setting.js';
 import { lightingForTent } from '../data/lighting.js';
-import { makeReferenceLighting } from './lighting-reference3d.js?v=20261001-tent-light-clearance-1';
+import { makeReferenceLighting } from './lighting-reference3d.js';
 import { fitTentCamera } from './view3d-framing.js';
 import { createMarketingDetails } from './marketing-details.js';
 import { structuralProfile } from '../data/tentStructure.js';
