@@ -3,6 +3,7 @@
 (function () {
   'use strict';
   var params = new URLSearchParams(location.search);
+  if (params.get('showcase')) return;
   var slug = params.get('tenant') || 'generic';
   if (!['friendly', 'friendly-nyc', 'generic'].includes(slug)) return;
   var fragment = new URLSearchParams(location.hash.slice(1));
