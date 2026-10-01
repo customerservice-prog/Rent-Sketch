@@ -6,12 +6,12 @@
     return error.message || fallback;
   }
   var tenant = new URLSearchParams(location.search).get('tenant');
-  if (!['friendly', 'generic'].includes(tenant)) tenant = null;
+  if (!['friendly', 'friendly-nyc', 'generic'].includes(tenant)) tenant = null;
   var query = new URLSearchParams(location.search);
   var orderPanel = document.getElementById('orderAccess');
-  if (tenant === 'friendly' && query.get('mode') === 'order') {
+  if (['friendly','friendly-nyc'].includes(tenant) && query.get('mode') === 'order') {
     var destination = new URL('/designer/', location.origin);
-    destination.searchParams.set('tenant', 'friendly');
+    destination.searchParams.set('tenant', tenant);
     destination.searchParams.set('source', 'legacy_order_access');
     location.replace(destination.toString());
     return;
@@ -26,12 +26,12 @@
     try {
       var response = await fetch('https://rentsketch-api-production.up.railway.app/api/consumer/order-access/request', {
         method: 'POST', headers: { 'Content-Type':'application/json' }, signal: controller.signal,
-        body: JSON.stringify({ orderNumber: document.getElementById('orderNumber').value.trim(), firstName: document.getElementById('orderFirstName').value.trim() }),
+        body: JSON.stringify({ orderNumber: document.getElementById('orderNumber').value.trim(), firstName: document.getElementById('orderFirstName').value.trim(), tenant: tenant || 'friendly' }),
       });
       var result = await response.json(); if (!response.ok) throw new Error(result.error || 'Please try again shortly.');
       var destination;
       try { destination = new URL(result.accessUrl); } catch (_) {}
-      if (!destination || destination.origin !== 'https://rentsketch.com' || destination.pathname !== '/designer/' || destination.searchParams.get('tenant') !== 'friendly' || !new URLSearchParams(destination.hash.slice(1)).get('recoveryToken')) throw new Error('Your event could not be opened. Please try again.');
+      if (!destination || destination.origin !== 'https://rentsketch.com' || destination.pathname !== '/designer/' || destination.searchParams.get('tenant') !== (tenant || 'friendly') || !new URLSearchParams(destination.hash.slice(1)).get('recoveryToken')) throw new Error('Your event could not be opened. Please try again.');
       message.textContent = 'Booking verified. Opening your event…';
       submit.textContent = 'Opening your event…';
       continueLink.href = destination.href; continueLink.hidden = false;
