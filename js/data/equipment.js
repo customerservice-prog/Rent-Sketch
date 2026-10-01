@@ -54,7 +54,7 @@ export function equipmentType(product){
   if(reference?.kind==='equipment'&&byType(reference.type))return reference.type;
   const n=String(product?.name||'').toLowerCase(),m=metadata(product||{});
   const visual=String(product?.visual_model_id||'').trim();
-  const visualAliases={'photo-booth':'photobooth','tumbling-blocks':'tumbling-timbers'};
+  const visualAliases={'photo-booth':'photobooth','tumbling-blocks':'tumbling-timbers','generic-box':'generic','measured-generic':'generic'};
   const mapped=visualAliases[visual]||visual;
   if(mapped&&byType(mapped))return mapped;
   const explicit=m.equipmentType||m.equipment_type;
