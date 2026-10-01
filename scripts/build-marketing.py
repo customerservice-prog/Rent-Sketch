@@ -5,8 +5,8 @@ import json
 import math
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '20261001-public-premium-1'
-STORY_VERSION = '20261001-public-premium-1'
+VERSION = '20261001-owner-outcomes-1'
+STORY_VERSION = '20261001-owner-outcomes-1'
 URL = 'https://rentsketch.com'
 EVENT_PASS_CHECKOUT = 'https://rentsketch-api-production.up.railway.app/api/consumer/event-pass/direct-checkout?tenant=generic'
 PAGES = []
