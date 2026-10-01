@@ -541,17 +541,28 @@ export function init(container,callbacks={}) {
         else if(child.name==='Linen fabric')stage(child,.74,.80,.2);
       });
     }
+    for(const item of state.objects){
+      if(item.kind!=='inflatable')continue;
+      stage(rendered.get(item.id),.91,.97,1.1);
+    }
     if(styling)stage(styling,.79,.87,.15);
     if(lightGroup)stage(lightGroup,.84,.91,0);
     marketingDetails?.children.forEach(part=>stage(part,part.userData.marketingAt,part.userData.marketingAt+.055,.6));
     if(guests)guests.visible=false;
     if(inflatableActivity)inflatableActivity.visible=false;
-    const c=level(.82,.98),e=c*c*(3-2*c),t=state.tent;
-    const altitude=Math.max(t.widthFt,t.lengthFt)*(camera.aspect<1?1.75:1.32);
-    camera.fov=36+16*e;camera.updateProjectionMatrix();
-    camera.position.set(t.widthFt*.28*e,altitude+(5.6-altitude)*e,.1+(t.lengthFt*.46-.1)*e);
-    controls.target.set(-t.widthFt*.08*e,2.2*e,-t.lengthFt*.18*e);
-    controls.enabled=p>=1;controls.update();
+    const t=state.tent;
+    if(t.planningArea){
+      cameraMode='outside';
+      frame(t);
+      controls.enabled=p>=1;
+    }else{
+      const c=level(.82,.98),e=c*c*(3-2*c);
+      const altitude=Math.max(t.widthFt,t.lengthFt)*(camera.aspect<1?1.75:1.32);
+      camera.fov=36+16*e;camera.updateProjectionMatrix();
+      camera.position.set(t.widthFt*.28*e,altitude+(5.6-altitude)*e,.1+(t.lengthFt*.46-.1)*e);
+      controls.target.set(-t.widthFt*.08*e,2.2*e,-t.lengthFt*.18*e);
+      controls.enabled=p>=1;controls.update();
+    }
     if(marketingFootprint)marketingFootprint.visible=p>.04&&p<.89;
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
