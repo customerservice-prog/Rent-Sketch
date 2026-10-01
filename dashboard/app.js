@@ -121,13 +121,24 @@ function esc(s) {
    document.querySelectorAll('.dash-nav a').forEach(function (link) {
      link.addEventListener('click', closeWorkspaceMenu);
    });
-   document.addEventListener('keydown', function(event){ if(event.key==='Escape') closeWorkspaceMenu(); }, {once:true});
-   document.addEventListener('click', function(event){
-     if(!shell || !shell.classList.contains('menu-open')) return;
-     if(event.target.closest('.dash-header,#tenantMobileMenu')) return;
-     closeWorkspaceMenu();
-   }, {once:true});
-   window.addEventListener('resize', function(){ if(window.innerWidth>800) closeWorkspaceMenu(); }, {once:true});
+   if(window.__rentSketchTenantShellHandlers){
+     document.removeEventListener('keydown',window.__rentSketchTenantShellHandlers.keydown);
+     document.removeEventListener('click',window.__rentSketchTenantShellHandlers.click);
+     window.removeEventListener('resize',window.__rentSketchTenantShellHandlers.resize);
+   }
+   var handlers={
+     keydown:function(event){ if(event.key==='Escape') closeWorkspaceMenu(); },
+     click:function(event){
+       if(!shell || !shell.classList.contains('menu-open')) return;
+       if(event.target.closest('.dash-header,#tenantMobileMenu')) return;
+       closeWorkspaceMenu();
+     },
+     resize:function(){ if(window.innerWidth>800) closeWorkspaceMenu(); }
+   };
+   window.__rentSketchTenantShellHandlers=handlers;
+   document.addEventListener('keydown',handlers.keydown);
+   document.addEventListener('click',handlers.click);
+   window.addEventListener('resize',handlers.resize);
  }
 
  function viewLogin() {
