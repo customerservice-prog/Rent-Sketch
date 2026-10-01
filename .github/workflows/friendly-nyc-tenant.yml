@@ -18,7 +18,7 @@ jobs:
         run: node --test tests/friendly-catalog-sync.test.mjs tests/booking-handoff.test.mjs tests/friendly-nyc-tenant.test.mjs
       - name: Install recovery-test dependencies
         run: npm --prefix tests ci
-      - name: Included-order recovery and access DOM regression
-        run: |
-          node --experimental-vm-modules tests/event-pass-dom.cjs
-          node tests/access-recovery.cjs
+      - name: Included-order paywall DOM regression
+        run: node --experimental-vm-modules tests/event-pass-dom.cjs
+      - name: First-name and order-number recovery regression
+        run: node tests/access-recovery.cjs
