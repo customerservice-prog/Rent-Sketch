@@ -12,6 +12,7 @@ const router = express.Router();
 // lighting.js and linens.js - see docs/ROADMAP.md for the follow-up to load
 // both from one shared source instead of two copies.
 const VISUAL_LIBRARY = [
+  { id: 'generic-box', category: 'equipment', name: 'Measured Generic Rental', silhouette: 'measured-box', dimensionsConfirmed: false, dimensionsNote: 'Uses the tenant product footprint and a neutral labeled 3D planning volume until a dedicated model is approved.' },
   { id: 'plastic-white', category: 'chair', name: 'White Plastic Folding Chair', silhouette: 'folding' },
   { id: 'resin-white', category: 'chair', name: 'White Resin Folding Chair', silhouette: 'resin' },
   { id: 'chiavari-gold', category: 'chair', name: 'Gold Chiavari Chair', silhouette: 'chiavari' },
