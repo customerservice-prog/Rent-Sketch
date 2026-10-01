@@ -153,7 +153,8 @@ function snapshotPayload(intelligence){
   };
 }
 function historyShape(rows){
-  const history=rows.map(row=>{
+  const ordered=[...(rows||[])].sort((a,b)=>new Date(a.bucket_at).getTime()-new Date(b.bucket_at).getTime());
+  const history=ordered.map(row=>{
     const p=row.payload||{};
     return {
       at:row.bucket_at,
@@ -210,7 +211,7 @@ async function refreshTenantDesignIntelligenceSnapshots(){
 }
 async function getDesignIntelligenceHistory(limit=48){
   const safe=Math.max(2,Math.min(2160,Number(limit)||48));
-  const rows=(await db.query('SELECT bucket_at,payload FROM design_intelligence_snapshots ORDER BY bucket_at DESC LIMIT $1',[safe])).rows.reverse();
+  const rows=(await db.query('SELECT bucket_at,payload FROM design_intelligence_snapshots ORDER BY bucket_at DESC LIMIT $1',[safe])).rows;
   return historyShape(rows);
 }
 async function getTenantDesignIntelligenceHistory(tenantId,limit=2160){
@@ -218,7 +219,7 @@ async function getTenantDesignIntelligenceHistory(tenantId,limit=2160){
   const rows=(await db.query(
     'SELECT bucket_at,payload FROM tenant_design_intelligence_snapshots WHERE tenant_id=$1 ORDER BY bucket_at DESC LIMIT $2',
     [tenantId,safe]
-  )).rows.reverse();
+  )).rows;
   return historyShape(rows);
 }
 
