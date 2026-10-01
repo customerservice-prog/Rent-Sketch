@@ -91,7 +91,7 @@ async function ensureNycTenant(){
     ('friendly-nyc','Friendly Party Rental NYC','Friendly Party Rental L.L.C.','customerservice@friendlypartyrental.com','315-884-1498',
      'https://friendlypartyrentalnyc.com','#0B1F3A','#E07B00','Plan your Riverdale and Downstate New York event with Friendly Party Rental NYC',true,
      'commerce','active',NULL,encode(gen_random_bytes(16),'hex'),
-     '["https://friendlypartyrentalnyc.com","https://www.friendlypartyrentalnyc.com"]'::jsonb,true,
+     '["https://friendlypartyrentalnyc.com","https://www.friendlypartyrentalnyc.com","https://nyc.friendlypartyrental.com"]'::jsonb,true,
      'free',NULL,30,7,false)
     RETURNING *`);
   tenant=r.rows[0];
@@ -102,7 +102,7 @@ async function ensureNycTenant(){
     website='https://friendlypartyrentalnyc.com',primary_color='#0B1F3A',secondary_color='#E07B00',
     tagline='Plan your Riverdale and Downstate New York event with Friendly Party Rental NYC',
     show_prices=true,customer_access='free',powered_by_enabled=true,
-    allowed_origins='["https://friendlypartyrentalnyc.com","https://www.friendlypartyrentalnyc.com"]'::jsonb,
+    allowed_origins='["https://friendlypartyrentalnyc.com","https://www.friendlypartyrentalnyc.com","https://nyc.friendlypartyrental.com"]'::jsonb,
     updated_at=now() WHERE id=$1 RETURNING *`,[tenant.id]);
   tenant=r.rows[0];
  }
