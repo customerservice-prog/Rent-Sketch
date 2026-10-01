@@ -153,6 +153,9 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
 
   const plan=buildPlanSvg();
   poster.after(plan);
+  // The homepage story is now a real 3D autoplay. Keep the 2D SVG as an
+  // explicit alternate view and as the reduced-motion/WebGL fallback only.
+  if(!reduce.matches)plan.classList.add('is-hidden');
 
   function stepIndex(value){
     let index=0;
@@ -207,7 +210,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   }
 
   function scheduleNext(){
-    if(!playing||disposed||!visible||selected!=='3d'||(view&&!demo))return;
+    if(!playing||disposed||!visible||selected!=='3d')return;
     const index=stepIndex(progress);
     if(index>=steps.length-1){
       stop();
@@ -215,14 +218,23 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     }
     const next=index+1;
     timer=setTimeout(()=>{
-      if(!playing||disposed||!visible||selected!=='3d'||(view&&!demo))return;
+      if(!playing||disposed||!visible||selected!=='3d')return;
       setProgress(steps[next].p);
+      // Near the end, briefly move into the reception so the autoplay proves
+      // this is a navigable 3D scene, then finish wide enough to show the
+      // wedding and waterslide together.
+      if(view&&next===steps.length-2){
+        if(view.transitionCamera)view.transitionCamera('reception',1050);
+        else view.reception?.();
+      }else if(view&&next===steps.length-1){
+        view.fitCamera?.();
+      }
       scheduleNext();
     },stageDelays[index]||750);
   }
 
   function play(){
-    if(reduce.matches||disposed||!visible||selected!=='3d'||(view&&!demo)||playing)return;
+    if(reduce.matches||disposed||!visible||selected!=='3d'||playing)return;
     if(progress>=1)setProgress(0);
     playing=true;
     pause.textContent='Pause';
@@ -316,7 +328,11 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     else play();
   });
 
-  explore?.addEventListener('click',showInteractive3D);
+  explore?.addEventListener('click',async()=>{
+    const active=await ensure3D();
+    if(!active)return;
+    stop();selected='3d';setProgress(1);active.fitCamera?.();controls.hidden=false;
+  });
 
   modeButtons.forEach(button=>button.addEventListener('click',()=>{
     if(button.dataset.view==='2d')show2D();
@@ -354,15 +370,18 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   const observer=new IntersectionObserver(entries=>{
     visible=entries.some(entry=>entry.isIntersecting);
     if(!visible){stop();return;}
-    if(!reduce.matches&&progress<1&&!view){
-      // Keep every public marketing story lightweight until the visitor
-      // explicitly asks for 3D. The dedicated demo starts its staged SVG build
-      // sooner, but it still does not import Three.js on the critical path.
+    if(!reduce.matches&&progress<1){
+      // Load the real RentSketch renderer only once the story is near/in view.
+      // The first paint stays fast, but the autoplay itself is now genuinely 3D.
       clearTimeout(autoplayStartTimer);
-      autoplayStartTimer=setTimeout(()=>{
+      autoplayStartTimer=setTimeout(async()=>{
         autoplayStartTimer=0;
-        if(!disposed&&visible&&!view)play();
-      },demo?450:1800);
+        if(disposed||!visible||selected!=='3d')return;
+        const active=await ensure3D();
+        if(!active||disposed||!visible||selected!=='3d')return;
+        setProgress(progress);
+        play();
+      },demo?180:120);
     }
   },{rootMargin:'120px',threshold:.08});
   observer.observe(studio);
