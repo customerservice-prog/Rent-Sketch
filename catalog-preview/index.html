@@ -57,8 +57,11 @@ try{
  const showFallback=()=>{visual.classList.remove('is-live-3d');visual.innerHTML=equipmentPhoto(resolved,{category,showProductPhoto:false});status.textContent='3D unavailable — fallback planning illustration, not live 3D';};
  if(phase6bReference(p)){
   const ref=phase6bReference(p);
-  if(ref.kind==='reference-only'){visual.textContent=ref.note;status.textContent='Reference conflict — no verified model';}
-  else{try{const {mountCatalogPhase6b}=await import('../js/ui/catalog-phase6b.js');const viewer=mountCatalogPhase6b(visual,p,showFallback);if(!viewer)throw new Error('Model unavailable');status.textContent='Live RentSketch geometry · Drag to rotate · '+viewer.note;}catch(error){showFallback();}}
+  try{
+   const {mountCatalogPhase6b}=await import('../js/ui/catalog-phase6b.js');
+   const viewer=mountCatalogPhase6b(visual,p,showFallback);if(!viewer)throw new Error('Model unavailable');
+   status.textContent=ref.kind==='reference-only'?'Unverified planning footprint · Drag to rotate · '+viewer.note:'Live RentSketch geometry · Drag to rotate · '+viewer.note;
+  }catch(error){showFallback();}
  }else if(isPhase6Configuration(p)){
   visual.textContent='This is a supply or service option, not a standalone physical machine. No equipment model is invented.';status.textContent='Configuration item — no standalone model';
  }else if(phase6Reference(p)){
