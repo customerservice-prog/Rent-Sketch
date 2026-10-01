@@ -25,6 +25,13 @@ const root=path.resolve(__dirname,'..');
   const old=legacy.createAccessory3d({...item,kind:'accessory',accessoryType:type,modelWidthFt:p.widthFt,modelDepthFt:p.depthFt,rotationDeg:90});assert.equal(old.userData.kind,'accessory');assert.ok(old.userData.asset.version);assert.equal(old.rotation.y,0,'legacy placement renderer owns rotation');
   console.log('PASS '+type+': '+draws+' draws, '+triangles+' triangles; footprint, operation stop and legacy identity');
  }
+ const rampItem={id:'qa-stage-ramp',kind:'accessory',accessoryType:'stage-ramp',name:'Stage Ramp',widthFt:4,depthFt:8,heightFt:2,modelWidthFt:4,modelDepthFt:8,rotationDeg:0};
+ const ramp=legacy.createAccessory3d(rampItem),rampBounds=physicalBounds(ramp);
+ assert.equal(ramp.userData.features?.stageRamp,true,'stage ramp uses dedicated wedge geometry');
+ assert.equal(ramp.userData.features?.dimensionsVerified,false,'stage ramp dimensions stay unverified');
+ assert.equal(ramp.userData.features?.accessComplianceVerified,false,'stage ramp does not claim access-code compliance');
+ assert.ok(rampBounds.max.y>1.9&&rampBounds.min.y>=-.012,'stage ramp rises from grade to stage height');
+ assert.ok(rampBounds.max.z-rampBounds.min.z<=8.05,'stage ramp stays inside illustrative run');
  for(const type of ['stanchion','cooler','trash-can','power-distribution','cornhole','connect-four','tumbling-timbers','stage']){
   const p=data.EQUIPMENT.find(p=>p.type===type),model=models.createEquipment(data.equipmentItem(p,'idle-'+type,0,0));assert.equal(model.userData.operation.supported,false,type+' has no spontaneous animation');assert.equal(model.userData.update,undefined);
  }
