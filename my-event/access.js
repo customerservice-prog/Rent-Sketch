@@ -6,7 +6,7 @@
     return error.message || fallback;
   }
   var tenant = new URLSearchParams(location.search).get('tenant');
-  if (!['friendly', 'generic'].includes(tenant)) tenant = null;
+  if (!['friendly', 'friendly-nyc', 'generic'].includes(tenant)) tenant = null;
   var query = new URLSearchParams(location.search);
   var orderPanel = document.getElementById('orderAccess');
   if (tenant === 'friendly' && query.get('mode') === 'order') {
@@ -26,12 +26,12 @@
     try {
       var response = await fetch('https://rentsketch-api-production.up.railway.app/api/consumer/order-access/request', {
         method: 'POST', headers: { 'Content-Type':'application/json' }, signal: controller.signal,
-        body: JSON.stringify({ orderNumber: document.getElementById('orderNumber').value.trim(), firstName: document.getElementById('orderFirstName').value.trim() }),
+        body: JSON.stringify({ tenant: tenant || 'friendly', orderNumber: document.getElementById('orderNumber').value.trim(), firstName: document.getElementById('orderFirstName').value.trim() }),
       });
       var result = await response.json(); if (!response.ok) throw new Error(result.error || 'Please try again shortly.');
       var destination;
       try { destination = new URL(result.accessUrl); } catch (_) {}
-      if (!destination || destination.origin !== 'https://rentsketch.com' || destination.pathname !== '/designer/' || destination.searchParams.get('tenant') !== 'friendly' || !new URLSearchParams(destination.hash.slice(1)).get('recoveryToken')) throw new Error('Your event could not be opened. Please try again.');
+      if (!destination || destination.origin !== 'https://rentsketch.com' || destination.pathname !== '/designer/' || destination.searchParams.get('tenant') !== (tenant || 'friendly') || !new URLSearchParams(destination.hash.slice(1)).get('recoveryToken')) throw new Error('Your event could not be opened. Please try again.');
       message.textContent = 'Booking verified. Opening your event…';
       submit.textContent = 'Opening your event…';
       continueLink.href = destination.href; continueLink.hidden = false;
