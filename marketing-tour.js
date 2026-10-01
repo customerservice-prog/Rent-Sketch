@@ -144,7 +144,7 @@ if(studio){
   const ticket=++generation;failed=false;
   if(!cinematic)say('Opening the interactive 3D reception…');
   try{
-   const renderer=await import('/js/ui/view3d.js');
+   const renderer=await import('/js/ui/view3d.js?v=20261001-tent-light-clearance-1');
    if(disposed||ticket!==generation)return;
    target.classList.add('active');target.style.visibility='hidden';
    const next=renderer.init(target,{registerActive:false});pendingView=next;
