@@ -9,7 +9,7 @@
   if (!['friendly', 'friendly-nyc', 'generic'].includes(tenant)) tenant = null;
   var query = new URLSearchParams(location.search);
   var orderPanel = document.getElementById('orderAccess');
-  if (['friendly','friendly-nyc'].includes(tenant) && query.get('mode') === 'order') {
+  if (tenant === 'friendly' && query.get('mode') === 'order') {
     var destination = new URL('/designer/', location.origin);
     destination.searchParams.set('tenant', tenant);
     destination.searchParams.set('source', 'legacy_order_access');
