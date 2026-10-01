@@ -17,12 +17,13 @@ const steps=[
   {p:.74,label:'Add cocktail tables',detail:'Create gathering points'},
   {p:.80,label:'Dress the tables',detail:'Add wedding linens'},
   {p:.85,label:'Place the centerpieces',detail:'Finish each guest table'},
-  {p:.91,label:'String the lights',detail:'Add bistro lighting'},
-  {p:.95,label:'Create the entrance',detail:'Frame the guest arrival path'},
-  {p:.975,label:'Welcome the guests',detail:'Bring the finished layout to life'},
-  {p:1,label:'Step inside the reception',detail:'Reveal the finished 3D wedding'}
+  {p:.89,label:'String the lights',detail:'Add bistro lighting'},
+  {p:.93,label:'Create the entrance',detail:'Frame the guest arrival path'},
+  {p:.955,label:'Add the waterslide',detail:'Place the inflatable beside the reception'},
+  {p:.98,label:'Welcome the guests',detail:'Bring the finished layout to life'},
+  {p:1,label:'Wedding + waterslide ready',detail:'See the complete event together'}
 ];
-const stageDelays=[650,700,850,900,900,720,760,620,620,620,620,760,680,760,620,850,1500];
+const stageDelays=[650,700,850,900,900,720,760,620,620,620,620,760,680,760,620,720,850,1500];
 const reduce=matchMedia('(prefers-reduced-motion: reduce)');
 
 function svgNode(name,attrs={}){
@@ -46,7 +47,7 @@ function esc(value){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<
 function buildPlanSvg(){
   const guestTables=scene.objects.filter(o=>o.id?.startsWith('wedding-table-'));
   const serviceObject=id=>scene.objects.find(o=>o.id===id);
-  const tables=[],chairs=[],linens=[],centerpieces=[],dance=[],lighting=[],entrance=[],guests=[];
+  const tables=[],chairs=[],linens=[],centerpieces=[],dance=[],lighting=[],entrance=[],waterslide=[],guests=[];
 
   guestTables.forEach((o,index)=>{
     const [cx,cy]=centerOf(o);
@@ -84,6 +85,18 @@ function buildPlanSvg(){
     '<path d="M27.2 39 H32.8" stroke="#cfb675" stroke-width=".16" stroke-dasharray=".42 .34"/>'
   );
 
+  waterslide.push(
+    '<g transform="translate(63 3)">',
+    '<rect x="0" y="0" width="18" height="34" rx="3.2" fill="#d64a2b" stroke="#8f2b1f" stroke-width=".24"/>',
+    '<rect x="2.2" y="2" width="5.1" height="21.5" rx="1.4" fill="#f5b935" stroke="#9d6f18" stroke-width=".16"/>',
+    '<rect x="10.4" y="2" width="5.3" height="21.5" rx="1.4" fill="#ef6b35" stroke="#9a311f" stroke-width=".16"/>',
+    '<path d="M3.2 3.5 H6.2 M3.2 6 H6.2 M3.2 8.5 H6.2 M3.2 11 H6.2 M3.2 13.5 H6.2 M3.2 16 H6.2 M3.2 18.5 H6.2" stroke="#5f4935" stroke-width=".28"/>',
+    '<rect x="2.2" y="22.5" width="13.5" height="8.2" rx="3" fill="#58b9dc" stroke="#2c7391" stroke-width=".22"/>',
+    '<path d="M4 26 C7 24.5 10 27.8 14 25.5" fill="none" stroke="#d9f5ff" stroke-width=".35" opacity=".9"/>',
+    '<circle cx="2.4" cy="3.2" r="1.6" fill="#4a9f56"/><circle cx="15.6" cy="3.2" r="1.6" fill="#4a9f56"/>',
+    '<path d="M2.4 3.2 l-1.4 -1 M2.4 3.2 l1.5 -1 M2.4 3.2 l0 -1.8 M15.6 3.2 l-1.5 -1 M15.6 3.2 l1.4 -1 M15.6 3.2 l0 -1.8" stroke="#2f6f3c" stroke-width=".22" stroke-linecap="round"/>',
+    '</g>'
+  );
   [[12,8],[12,20],[12,36],[48,8],[48,20],[48,36],[20,14],[40,14],[20,46],[40,46]].forEach(([x,y],i)=>{
     const fill=i%3===0?'#355c7d':i%3===1?'#8b5c6b':'#546b46';
     guests.push(`<circle cx="${x}" cy="${y}" r=".42" fill="${fill}" stroke="#fff" stroke-width=".12"/><path d="M${x} ${y+.45} v1.05" stroke="${fill}" stroke-width=".22" stroke-linecap="round"/>`);
@@ -96,7 +109,7 @@ function buildPlanSvg(){
 
   const markup=`
     <defs><pattern id="story-grid" width="3" height="3" patternUnits="userSpaceOnUse"><path d="M3 0H0V3" fill="none" stroke="#78926f" stroke-width=".07" opacity=".28"/></pattern></defs>
-    <g class="story-build-base"><rect x="0" y="0" width="60" height="40" fill="#e8f1df"/><rect x="0" y="0" width="60" height="40" fill="url(#story-grid)"/></g>
+    <g class="story-build-base"><rect x="0" y="0" width="84" height="40" fill="#e8f1df"/><rect x="0" y="0" width="84" height="40" fill="url(#story-grid)"/></g>
     <g data-story-layer="footprint" data-threshold="1"><rect x=".7" y=".7" width="58.6" height="38.6" rx="1" fill="none" stroke="#71906f" stroke-width=".18" stroke-dasharray=".65 .55"/><line x1="2" y1="2.1" x2="58" y2="2.1" stroke="#78926f" stroke-width=".1"/><line x1="2" y1="1.7" x2="2" y2="2.5" stroke="#78926f" stroke-width=".1"/><line x1="58" y1="1.7" x2="58" y2="2.5" stroke="#78926f" stroke-width=".1"/></g>
     <g data-story-layer="tent" data-threshold="2"><rect x="1.1" y="1.1" width="57.8" height="37.8" rx="1.1" fill="#fffdf8" stroke="#6f856a" stroke-width=".32"/><line x1="1.8" y1="20" x2="58.2" y2="20" stroke="#b0bda9" stroke-width=".11" stroke-dasharray=".7 .65"/>${poles}</g>
     <g data-story-layer="tables" data-threshold="3">${tables.join('')}</g>
@@ -111,10 +124,11 @@ function buildPlanSvg(){
     <g data-story-layer="centerpieces" data-threshold="12">${centerpieces.join('')}</g>
     <g data-story-layer="lighting" data-threshold="13">${lighting.join('')}</g>
     <g data-story-layer="entrance" data-threshold="14">${entrance.join('')}</g>
-    <g data-story-layer="guests" data-threshold="15">${guests.join('')}</g>`;
+    <g data-story-layer="waterslide" data-threshold="15">${waterslide.join('')}</g>
+    <g data-story-layer="guests" data-threshold="16">${guests.join('')}</g>`;
 
   const template=document.createElement('template');
-  template.innerHTML=`<svg class="story-build-plan" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Animated overhead wedding layout building from an empty venue to a complete reception">${markup}</svg>`;
+  template.innerHTML=`<svg class="story-build-plan" viewBox="0 0 84 40" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Animated overhead wedding layout building from an empty venue to a complete reception with a waterslide beside it">${markup}</svg>`;
   return template.content.firstElementChild;
 }
 
@@ -176,7 +190,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
       syncPlan(index);
       plan.classList.remove('show-plan','is-hidden');
       plan.classList.toggle('is-finished',index===steps.length-1);
-      poster.classList.toggle('story-final',index===steps.length-1);
+      poster.classList.remove('story-final');
     }
   }
 
@@ -242,7 +256,8 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
         target.style.visibility='';target.classList.remove('active');
         studio.classList.remove('story-has-webgl');
         plan.classList.remove('is-hidden');
-        poster.classList.add('story-final');
+        poster.classList.remove('story-final');
+        plan.classList.add('show-plan');
         controls.hidden=true;
         return null;
       }finally{
@@ -263,7 +278,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
       studio.classList.add('story-has-webgl');
       plan.classList.add('is-hidden');
       active.setMarketingProgress(1);
-      active.reception();
+      active.fitCamera();
       controls.hidden=false;
     }
   }
@@ -276,7 +291,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     target.classList.remove('active');
     studio.classList.remove('story-has-webgl');
     setProgress(1);
-    label.textContent='Complete reception floor plan';
+    label.textContent='Complete wedding + waterslide plan';
   }
 
   replay.addEventListener('click',()=>{
