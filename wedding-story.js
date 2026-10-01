@@ -220,14 +220,22 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     timer=setTimeout(()=>{
       if(!playing||disposed||!visible||selected!=='3d')return;
       setProgress(steps[next].p);
-      // Near the end, briefly move into the reception so the autoplay proves
-      // this is a navigable 3D scene, then finish wide enough to show the
-      // wedding and waterslide together.
-      if(view&&next===steps.length-2){
-        if(view.transitionCamera)view.transitionCamera('reception',1050);
+      // Prove the scene is navigable in 3D without ending on a distorted
+      // close-up. Go inside before guests appear, then pull back and keep the
+      // complete tent + waterslide framed for the final hero shot.
+      if(view&&next===steps.length-3){
+        if(view.transitionCamera)view.transitionCamera('reception',900);
         else view.reception?.();
+      }else if(view&&next===steps.length-2){
+        if(view.transitionCamera)view.transitionCamera('outsideWide',1050);
+        else if(view.outsideWide)view.outsideWide();
+        else if(view.wide)view.wide();
+        else view.fitCamera?.();
       }else if(view&&next===steps.length-1){
-        view.fitCamera?.();
+        if(view.transitionCamera)view.transitionCamera('outsideWide',650);
+        else if(view.outsideWide)view.outsideWide();
+        else if(view.wide)view.wide();
+        else view.fitCamera?.();
       }
       scheduleNext();
     },stageDelays[index]||750);
@@ -290,7 +298,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
       studio.classList.add('story-has-webgl');
       plan.classList.add('is-hidden');
       active.setMarketingProgress(1);
-      active.fitCamera();
+      if(active.outsideWide)active.outsideWide();else if(active.wide)active.wide();else active.fitCamera();
       controls.hidden=false;
     }
   }
@@ -331,7 +339,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   explore?.addEventListener('click',async()=>{
     const active=await ensure3D();
     if(!active)return;
-    stop();selected='3d';setProgress(1);active.fitCamera?.();controls.hidden=false;
+    stop();selected='3d';setProgress(1);if(active.outsideWide)active.outsideWide();else if(active.wide)active.wide();else active.fitCamera?.();controls.hidden=false;
   });
 
   modeButtons.forEach(button=>button.addEventListener('click',()=>{
