@@ -173,7 +173,7 @@ router.post('/:slug/quote-requests/:id/approve',requireTenantRole('staff'),wrap(
   const row=(await db.query(
     `UPDATE quote_requests SET status='quoted',approved_total_cents=$1,approved_line_items=$2::jsonb,
       approved_at=now(),approved_by_user_id=$3,deposit_amount_cents=$4,payment_token_issued_at=now(),
-      stripe_checkout_session_id=NULL,updated_at=COALESCE(updated_at,created_at)
+      stripe_checkout_session_id=NULL
      WHERE id=$5 AND tenant_id=$6 RETURNING *`,
     [totalCents,JSON.stringify(approvedItems),req.user.userId||null,depositCents,req.params.id,req.tenant.id]
   )).rows[0];
