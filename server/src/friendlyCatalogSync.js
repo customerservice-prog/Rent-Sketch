@@ -46,6 +46,7 @@ async function configureFriendlyWebhook(tenantId){const url=String(process.env.F
 async function syncFriendlyCatalog(){const tr=await db.query("SELECT id,slug,name,contact_email FROM tenants WHERE slug='friendly' LIMIT 1"),tenant=tr.rows[0];if(!tenant){console.log('[catalog-sync] Friendly Party Rental tenant not found; skipped');return{skipped:true};}await configureFriendlyWebhook(tenant.id);const urls=await discover();if(!urls.length)throw new Error('No Friendly Party Rental item URLs discovered');let imported=0,failed=0,mapped=0;for(let i=0;i<urls.length;i+=6)await Promise.all(urls.slice(i,i+6).map(async url=>{try{const p=parse(url,await getText(url));if(!p){failed++;return;}if(p.visualModelId)mapped++;await upsert(tenant.id,p);imported++;}catch(e){failed++;console.warn('[catalog-sync] item failed',url,e.message);}}));console.log(`[catalog-sync] ${tenant.slug}: discovered=${urls.length} imported=${imported} mapped=${mapped} failed=${failed}`);return{tenant:tenant.slug,discovered:urls.length,imported,mapped,failed};}
 
 const NYC_BASE='https://friendlypartyrentalnyc.com';
+const SC_BASE='https://friendlypartyrentalsc.com';
 
 function nycBaseCategory(item){
  const slug=String(item?.category?.slug||'').toLowerCase();
@@ -78,6 +79,70 @@ function nycProduct(item){
  if(size){p.widthFt=Number(size[1]);p.lengthFt=Number(size[2]);}
  p.visualModelId=visualModel(p);
  return p;
+}
+
+function scProduct(item){
+ const name=String(item?.name||'').trim(),slugValue=String(item?.slug||'').trim(),price=Number(item?.cost);
+ if(!name||!/^[-a-z0-9]{1,180}$/i.test(slugValue)||!Number.isFinite(price))return null;
+ const p={
+  externalId:'fpr:'+slugValue,
+  name,
+  category:nycBaseCategory(item),
+  price,
+  photoUrl:SC_BASE+'/api/item-image/'+encodeURIComponent(slugValue),
+  widthFt:null,lengthFt:null,capacity:null
+ };
+ const size=name.match(/(\d{1,3})\s*[x×]\s*(\d{1,3})/i);
+ if(size){p.widthFt=Number(size[1]);p.lengthFt=Number(size[2]);}
+ p.visualModelId=visualModel(p);
+ return p;
+}
+
+async function ensureScTenant(){
+ let tenant=(await db.query("SELECT * FROM tenants WHERE slug='friendly-sc' LIMIT 1")).rows[0];
+ const origins='["https://friendlypartyrentalsc.com","https://www.friendlypartyrentalsc.com"]';
+ if(!tenant){
+  const r=await db.query(`INSERT INTO tenants
+    (slug,name,legal_name,contact_email,phone,website,primary_color,secondary_color,tagline,show_prices,
+     subscription_plan,subscription_status,trial_ends_at,embed_key,allowed_origins,powered_by_enabled,
+     customer_access,pass_price_cents,pass_duration_days,active_order_grace_days,credit_pass_to_order)
+    VALUES
+    ('friendly-sc','Friendly Party Rental SC','Friendly Party Rental L.L.C.','customerservice@friendlypartyrental.com','864-610-5324',
+     'https://friendlypartyrentalsc.com','#0B1F3A','#E07B00','Plan your Greenville and Upstate South Carolina event with Friendly Party Rental SC',true,
+     'commerce','active',NULL,encode(gen_random_bytes(16),'hex'),
+     $["https://friendlypartyrentalsc.com","https://www.friendlypartyrentalsc.com"]$::jsonb,true,
+     'free',NULL,30,7,false)
+    RETURNING *`);
+  tenant=r.rows[0];
+ }else{
+  const r=await db.query(`UPDATE tenants SET
+    name='Friendly Party Rental SC',legal_name='Friendly Party Rental L.L.C.',
+    contact_email='customerservice@friendlypartyrental.com',phone='864-610-5324',
+    website='https://friendlypartyrentalsc.com',primary_color='#0B1F3A',secondary_color='#E07B00',
+    tagline='Plan your Greenville and Upstate South Carolina event with Friendly Party Rental SC',
+    show_prices=true,customer_access='free',powered_by_enabled=true,
+    allowed_origins=$1::jsonb,updated_at=now() WHERE id=$2 RETURNING *`,[origins,tenant.id]);
+  tenant=r.rows[0];
+ }
+ return tenant;
+}
+
+async function syncScCatalog(){
+ const tenant=await ensureScTenant();
+ const response=await fetch(SC_BASE+'/api/items',{cache:'no-store',headers:{Accept:'application/json','user-agent':'RentSketchCatalogSync/1.0 (+https://rentsketch.com)'},signal:AbortSignal.timeout(15000)});
+ if(!response.ok)throw new Error('SC catalog HTTP '+response.status);
+ const body=await response.json(),items=Array.isArray(body?.items)?body.items:[];
+ if(!items.length)throw new Error('SC catalog returned no public items');
+ let imported=0,mapped=0,failed=0;
+ for(const item of items){
+  try{
+   const p=scProduct(item);if(!p){failed++;continue;}
+   if(p.visualModelId)mapped++;
+   await upsert(tenant.id,p);imported++;
+  }catch(error){failed++;console.warn('[catalog-sync] SC item failed',item?.slug,error.message);}
+ }
+ console.log(`[catalog-sync] friendly-sc: discovered=${items.length} imported=${imported} mapped=${mapped} failed=${failed}`);
+ return{tenant:'friendly-sc',discovered:items.length,imported,mapped,failed};
 }
 
 async function ensureNycTenant(){
@@ -141,10 +206,11 @@ async function syncNycCatalog(){
 
 async function syncAllFriendlyCatalogs(){
  const syracuse=await syncFriendlyCatalog();
- let nyc;
+ let nyc,sc;
  try{nyc=await syncNycCatalog();}catch(error){console.error('[catalog-sync] friendly-nyc failed:',error.message);nyc={error:error.message};}
- return{syracuse,nyc};
+ try{sc=await syncScCatalog();}catch(error){console.error('[catalog-sync] friendly-sc failed:',error.message);sc={error:error.message};}
+ return{syracuse,nyc,sc};
 }
 
 module.exports=syncAllFriendlyCatalogs;
-module.exports._test={visualModel,refineCategory,parse,nycBaseCategory,nycProduct};
+module.exports._test={visualModel,refineCategory,parse,nycBaseCategory,nycProduct,scProduct};
