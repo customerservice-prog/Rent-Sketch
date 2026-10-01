@@ -66,8 +66,11 @@ try{
   visual.textContent='This is a supply or service option, not a standalone physical machine. No equipment model is invented.';status.textContent='Configuration item — no standalone model';
  }else if(phase6Reference(p)){
   const reference=phase6Reference(p);
-  if(reference.kind==='reference-only'){visual.textContent=reference.note;status.textContent='Reference conflict — no verified model';}
-  else{try{const {mountCatalogPhase6}=await import('../js/ui/catalog-phase6.js');const viewer=mountCatalogPhase6(visual,p,showFallback);if(!viewer)throw new Error('Model unavailable');status.textContent='Live RentSketch geometry · Drag to rotate · '+viewer.note;}catch(error){showFallback();}}
+  try{
+   const {mountCatalogPhase6}=await import('../js/ui/catalog-phase6.js');
+   const viewer=mountCatalogPhase6(visual,p,showFallback);if(!viewer)throw new Error('Model unavailable');
+   status.textContent=reference.kind==='reference-only'?'Unverified planning footprint · Drag to rotate · '+viewer.note:'Live RentSketch geometry · Drag to rotate · '+viewer.note;
+  }catch(error){showFallback();}
  }else if(phase5Reference(p)){
    const reference=phase5Reference(p);
    if(reference.kind==='reference-only'){visual.textContent=reference.note;status.textContent='Reference conflict — no verified model';}
