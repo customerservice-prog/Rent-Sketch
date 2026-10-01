@@ -16,6 +16,9 @@ export const INFLATABLE_PROFILES = [
   profile('fire-red-marble-inflatable-water-slide','slide',['#e44125','#ffca3b','#dc3024','#717a7c'],16,32,18,{lanes:1,marble:true,variant:'fire-marble'}),
   profile('18ft-purple-tropical-marble-double-bay-waterslide','slide',['#753dac','#f2be33','#17b6dd','#702c9c'],18,36,18,{lanes:2,palms:true,marble:true,variant:'purple-tropical'}),
   profile('22ft-tropical-lava-wave-marble-waterslide','slide',['#b82420','#ffbf2f','#d74329','#e3811d'],18,40,22,{lanes:1,palms:true,marble:true,variant:'lava-wave',wave:true}),
+  // Dedicated interactive-game silhouette. Dimensions remain illustrative until
+  // Friendly publishes measured product dimensions; this is not a safety/setup envelope.
+  profile('inflatable-basketball-game','basketball',['#d83b35','#174d9d','#f0c32f','#27313a'],12,14,10,{lanes:2,variant:'basketball-shootout'}),
 ];
 const normal=v=>String(v||'').toLowerCase().replace(/×/g,'x').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 export function isInflatableProduct(p){return p?.active!==false && !/package|cover|blower|repair|accessor/i.test(p?.name||'') && /\bbounce\s*house\b|\bwater\s*slide\b|\bwaterslide\b|\bobstacle\s*course\b|\binflatable\s+(?:slide|game|combo)\b/i.test(p?.name||'');}
@@ -38,7 +41,7 @@ export function inflatableCatalog(products,showPrices){
 }
 export function byId(id){return INFLATABLES.find(p=>p.id===id);}
 function visualProfile(product={}){
- return {version:3,slug:String(product.slug||''),variant:String(product.variant||''),style:['castle','crayon','white','firetruck','pirate','slide','combo'].includes(product.style)?product.style:'castle',colors:(Array.isArray(product.colors)?product.colors:[]).slice(0,4).map(c=>/^#[0-9a-f]{3,8}$/i.test(c)?c:'#70998b'),combo:product.combo===true,lanes:product.lanes===2?2:1,palms:product.palms===true,marble:product.marble===true,wave:product.wave===true,flame:product.flame===true};
+ return {version:3,slug:String(product.slug||''),variant:String(product.variant||''),style:['castle','crayon','white','firetruck','pirate','slide','combo','basketball'].includes(product.style)?product.style:'castle',colors:(Array.isArray(product.colors)?product.colors:[]).slice(0,4).map(c=>/^#[0-9a-f]{3,8}$/i.test(c)?c:'#70998b'),combo:product.combo===true,lanes:product.lanes===2?2:1,palms:product.palms===true,marble:product.marble===true,wave:product.wave===true,flame:product.flame===true};
 }
 export function inflatableItem(product,id,x=0,y=0){
  return {id,kind:'inflatable',inflatableId:product.id,productId:product.productId||null,externalId:product.externalId||null,name:product.name||'Inflatable',widthFt:product.widthFt,depthFt:product.depthFt,modelWidthFt:product.widthFt,modelDepthFt:product.depthFt,heightFt:product.heightFt,footprintOriented:true,dimensionsConfirmed:product.dimensionsConfirmed===true,heightConfirmed:product.heightConfirmed===true,modelProfile:visualProfile(product),rotationDeg:0,x,y};
@@ -64,6 +67,7 @@ export function inflatableSizeLabel(p){return p.dimensionsConfirmed?`${p.widthFt
 // Shared geometry/activity coordinates: feet, positive Z toward the entrance.
 export function inflatableZones(p){
   const w=p.widthFt,d=p.depthFt,h=p.heightFt;
+  if(p.style==='basketball')return {};
   if(p.combo)return {bounce:{x:0,z:-d*.25,w:w*.72,d:d*.34,floor:1.35},slide:{x:0,z0:-d*.05,z1:d*.23,y0:h*.48,y1:1.30,width:w*.36,lanes:1,laneWidth:w*.32,climb:{x:-w*.28,width:w*.10}}};
   if(p.style==='slide'){
     const photoSingle=['tidal-wave','fire-marble','lava-wave'].includes(p.variant);
