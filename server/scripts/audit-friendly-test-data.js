@@ -2,145 +2,97 @@
 'use strict';
 
 const { Pool } = require('pg');
-
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const requestTestSql = `
-  (
-    lower(q.customer_name) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
-    OR lower(q.customer_name) LIKE '%access engine%'
-    OR lower(q.customer_name) LIKE '%access-engine%'
-    OR lower(q.customer_email) ~ '@example\\.(com|invalid)$'
-    OR lower(q.customer_email) ~ '(^|[._+\\-])(test|qa|fake|demo|fixture|regression|claude)([._+\\-]|@)'
-    OR lower(q.customer_email) LIKE '%access-engine%'
-    OR lower(q.customer_email) LIKE '%access_engine%'
-  )
+(
+  lower(q.customer_name) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
+  OR lower(q.customer_name) LIKE '%access engine%'
+  OR lower(q.customer_name) LIKE '%access-engine%'
+  OR lower(q.customer_email) ~ '@example\\.(com|invalid|test)$'
+  OR lower(q.customer_email) ~ '(^|[._+\\-])(test|qa|fake|demo|fixture|regression|claude)([._+\\-]|@)'
+  OR lower(q.customer_email) LIKE '%access-engine%'
+  OR lower(q.customer_email) LIKE '%access_engine%'
+)
 `;
 
 const designMarkerSql = `
-  (
-    lower(coalesce(d.project_name,'')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
-    OR lower(coalesce(d.event_type,'')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
-    OR lower(coalesce(d.anonymous_session_id,'')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
-    OR lower(coalesce(d.anonymous_session_id,'')) LIKE '%access-engine%'
-    OR lower(coalesce(d.anonymous_session_id,'')) LIKE '%access_engine%'
-  )
+(
+  lower(coalesce(d.project_name,'')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
+  OR lower(coalesce(d.event_type,'')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
+  OR lower(coalesce(d.anonymous_session_id,'')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
+  OR lower(coalesce(d.anonymous_session_id,'')) LIKE '%access-engine%'
+  OR lower(coalesce(d.anonymous_session_id,'')) LIKE '%access_engine%'
+)
+`;
+
+const designSceneTestSql = `
+(
+  lower(coalesce(d.scene->'customer'->>'name','')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
+  OR lower(coalesce(d.scene->'customer'->>'email','')) ~ '@example\\.(com|invalid|test)$'
+  OR lower(coalesce(d.scene->'customer'->>'email','')) ~ '(^|[._+\\-])(test|qa|fake|demo|fixture|regression|claude)([._+\\-]|@)'
+  OR lower(coalesce(d.scene->>'eventName','')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
+)
 `;
 
 (async()=>{
-  try{
-    const tenantResult=await pool.query("SELECT id,name FROM tenants WHERE slug='friendly' LIMIT 1");
-    if(!tenantResult.rows[0]) throw new Error('friendly tenant not found');
-    const tenantId=tenantResult.rows[0].id;
+  try {
+    const tenant=(await pool.query("SELECT id FROM tenants WHERE slug='friendly' LIMIT 1")).rows[0];
+    if(!tenant) throw new Error('friendly tenant not found');
+    const id=tenant.id;
 
-    const totalRequests=await pool.query('SELECT count(*)::int AS count FROM quote_requests WHERE tenant_id=$1',[tenantId]);
-    const fakeRequests=await pool.query(`
-      SELECT q.id,q.customer_name,q.customer_email,q.status,q.estimate_total,q.created_at,q.design_id
-      FROM quote_requests q
-      WHERE q.tenant_id=$1 AND ${requestTestSql}
-      ORDER BY q.created_at ASC
-    `,[tenantId]);
+    const totalQuoteRequests=Number((await pool.query('SELECT count(*) AS n FROM quote_requests WHERE tenant_id=$1',[id])).rows[0].n);
+    const syntheticQuoteRequests=Number((await pool.query(`SELECT count(*) AS n FROM quote_requests q WHERE q.tenant_id=$1 AND ${requestTestSql}`,[id])).rows[0].n);
+    const totalDesigns=Number((await pool.query('SELECT count(*) AS n FROM designs WHERE tenant_id=$1',[id])).rows[0].n);
 
-    const totalDesigns=await pool.query('SELECT count(*)::int AS count FROM designs WHERE tenant_id=$1',[tenantId]);
-    const linkedFakeDesigns=await pool.query(`
-      SELECT DISTINCT d.id,d.event_type,d.guest_count,d.project_name,d.estimate_total,d.created_at,d.updated_at,
-             left(coalesce(d.anonymous_session_id,''),60) AS anonymous_session_id
-      FROM designs d
-      JOIN quote_requests q ON q.design_id=d.id
+    const linkedToSyntheticRequests=Number((await pool.query(`
+      SELECT count(DISTINCT d.id) AS n
+      FROM designs d JOIN quote_requests q ON q.design_id=d.id
       WHERE d.tenant_id=$1 AND q.tenant_id=$1 AND ${requestTestSql}
-      ORDER BY d.created_at ASC
-    `,[tenantId]);
-    const markedDesigns=await pool.query(`
-      SELECT d.id,d.event_type,d.guest_count,d.project_name,d.estimate_total,d.created_at,d.updated_at,
-             left(coalesce(d.anonymous_session_id,''),60) AS anonymous_session_id
-      FROM designs d
-      WHERE d.tenant_id=$1 AND ${designMarkerSql}
-      ORDER BY d.created_at ASC
-    `,[tenantId]);
+    `,[id])).rows[0].n);
 
-    const recentDesigns=await pool.query(`
-      SELECT d.id,d.event_type,d.guest_count,d.project_name,d.estimate_total,d.created_at,d.updated_at,
-             left(coalesce(d.anonymous_session_id,''),40) AS anonymous_session_id
-      FROM designs d
-      WHERE d.tenant_id=$1
-      ORDER BY d.created_at DESC
-      LIMIT 60
-    `,[tenantId]);
+    const explicitDesignMarkers=Number((await pool.query(`SELECT count(*) AS n FROM designs d WHERE d.tenant_id=$1 AND ${designMarkerSql}`,[id])).rows[0].n);
+    const sceneTestMarkers=Number((await pool.query(`SELECT count(*) AS n FROM designs d WHERE d.tenant_id=$1 AND ${designSceneTestSql}`,[id])).rows[0].n);
 
-    console.log('FRIENDLY_TEST_DATA_AUDIT_BEGIN');
-    console.log(JSON.stringify({
-      tenant: tenantResult.rows[0].name,
-      totalQuoteRequests: totalRequests.rows[0].count,
-      clearlySyntheticQuoteRequests: fakeRequests.rows,
-      totalDesigns: totalDesigns.rows[0].count,
-      designsLinkedToSyntheticRequests: linkedFakeDesigns.rows,
-      designsWithExplicitTestMarkers: markedDesigns.rows,
-      recentDesignMetadata: recentDesigns.rows
-    },null,2));
-    
-    const designSceneTestSql = `
-      (
-        lower(coalesce(d.scene->'customer'->>'name','')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
-        OR lower(coalesce(d.scene->'customer'->>'email','')) ~ '@example\\.(com|invalid|test)
-  } finally {
-    await pool.end();
-  }
-})().catch(err=>{console.error('FRIENDLY_TEST_DATA_AUDIT_ERROR',err);process.exit(1);});
-
-// dry-run deployment trigger 2026-10-01
-
-        OR lower(coalesce(d.scene->'customer'->>'email','')) ~ '(^|[._+\\-])(test|qa|fake|demo|fixture|regression|claude)([._+\\-]|@)'
-        OR lower(coalesce(d.scene->>'eventName','')) ~ '(^|[^a-z0-9])(test|qa|fake|demo|fixture|regression|claude)([^a-z0-9]|$)'
-      )
-    `;
-    const designCandidates=await pool.query(`
+    const strictSyntheticDesigns=Number((await pool.query(`
       WITH fake_requests AS (
         SELECT design_id FROM quote_requests q
         WHERE q.tenant_id=$1 AND q.design_id IS NOT NULL AND ${requestTestSql}
       )
-      SELECT d.id,d.event_type,d.guest_count,d.project_name,d.estimate_total,d.created_at,d.updated_at,
-             (d.owner_user_id IS NOT NULL) AS staff_owned,
-             left(coalesce(d.anonymous_session_id,''),60) AS anonymous_session_id,
-             nullif(d.scene->'customer'->>'name','') AS customer_name,
-             nullif(d.scene->'customer'->>'email','') AS customer_email,
-             nullif(d.scene->>'eventName','') AS event_name,
-             (fr.design_id IS NOT NULL) AS linked_to_fake_request
-      FROM designs d
-      LEFT JOIN fake_requests fr ON fr.design_id=d.id
-      WHERE d.tenant_id=$1 AND (
-        fr.design_id IS NOT NULL OR ${designMarkerSql} OR ${designSceneTestSql}
-      )
-      ORDER BY d.created_at ASC
-    `,[tenantId]);
+      SELECT count(DISTINCT d.id) AS n
+      FROM designs d LEFT JOIN fake_requests fr ON fr.design_id=d.id
+      WHERE d.tenant_id=$1 AND (fr.design_id IS NOT NULL OR ${designMarkerSql} OR ${designSceneTestSql})
+    `,[id])).rows[0].n);
 
-    const designStats=await pool.query(`
+    const stats=(await pool.query(`
       SELECT
-        count(*)::int AS total,
         count(*) FILTER (WHERE owner_user_id IS NOT NULL)::int AS staff_owned,
         count(*) FILTER (WHERE anonymous_session_id LIKE 'direct_%')::int AS direct_checkout_placeholders,
-        count(*) FILTER (WHERE anonymous_session_id LIKE 'direct_%'
-          AND event_type IS NULL AND guest_count IS NULL AND coalesce(project_name,'')=''
-          AND jsonb_array_length(coalesce(scene->'objects','[]'::jsonb))=0)::int AS direct_empty,
+        count(*) FILTER (
+          WHERE anonymous_session_id LIKE 'direct_%'
+          AND event_type IS NULL
+          AND guest_count IS NULL
+          AND coalesce(project_name,'')=''
+          AND CASE WHEN jsonb_typeof(scene->'objects')='array' THEN jsonb_array_length(scene->'objects') ELSE 0 END=0
+        )::int AS direct_empty,
         count(*) FILTER (WHERE event_type IS NOT NULL)::int AS with_event_type,
         count(*) FILTER (WHERE guest_count IS NOT NULL)::int AS with_guest_count,
         count(*) FILTER (WHERE coalesce(project_name,'')<>'')::int AS named_projects,
         count(*) FILTER (WHERE nullif(scene->>'propertyAddress','') IS NOT NULL)::int AS with_property_address
       FROM designs WHERE tenant_id=$1
-    `,[tenantId]);
+    `,[id])).rows[0];
 
     console.log('FRIENDLY_TEST_DATA_AUDIT_COMPACT '+JSON.stringify({
-      totalQuoteRequests:totalRequests.rows[0].count,
-      syntheticQuoteRequestCount:fakeRequests.rows.length,
-      totalDesigns:totalDesigns.rows[0].count,
-      syntheticDesignCandidateCount:designCandidates.rows.length,
-      designStats:designStats.rows[0],
-      syntheticDesignCandidates:designCandidates.rows
+      totalQuoteRequests,
+      syntheticQuoteRequests,
+      totalDesigns,
+      linkedToSyntheticRequests,
+      explicitDesignMarkers,
+      sceneTestMarkers,
+      strictSyntheticDesigns,
+      ...stats
     }));
-
-    console.log('FRIENDLY_TEST_DATA_AUDIT_END');
   } finally {
     await pool.end();
   }
-})().catch(err=>{console.error('FRIENDLY_TEST_DATA_AUDIT_ERROR',err);process.exit(1);});
-
-// dry-run deployment trigger 2026-10-01
+})().catch(err=>{console.error('FRIENDLY_TEST_DATA_AUDIT_ERROR',err.message);process.exit(1);});
