@@ -413,9 +413,11 @@ function esc(s) {
 
  function statusSelect(r) {
    var opts = ['new', 'contacted', 'quoted', 'booked', 'declined'];
-   return '<select class="status-select" data-id="' + esc(r.id) + '">' + opts.map(function (o) {
+   var select='<select class="status-select" data-id="' + esc(r.id) + '">' + opts.map(function (o) {
      return '<option value="' + o + '"' + (o === r.status ? ' selected' : '') + '>' + o + '</option>';
    }).join('') + '</select>';
+   var approve=r.payment_status==='paid'?'':'<button type="button" class="tw-mini-action quote-approve" data-id="'+esc(r.id)+'">'+(r.approved_total_cents?'Refresh payment link':'Approve & deposit')+'</button>';
+   return '<div class="tw-request-actions">'+select+approve+'</div>';
  }
 
  async function viewRequests(route, gen) {
@@ -439,13 +441,47 @@ function esc(s) {
      function paint(){
        var q=(document.getElementById('requestSearch').value||'').toLowerCase(),st=document.getElementById('requestStatus').value;
        var rows=reqs.filter(function(r){return (!st||r.status===st)&&(!q||[r.customer_name,r.customer_email,r.event_type,r.customer_phone].join(' ').toLowerCase().includes(q));});
-       document.getElementById('requestTable').innerHTML=renderRequestsTable(rows,true);
+       document.getElementById('requestTable').innerHTML=renderRequestsTable(rows,canTenant('staff'));
        Array.prototype.forEach.call(document.querySelectorAll('.status-select'), function (sel) {
          sel.addEventListener('change', async function () {
            sel.disabled=true;
-           try { await api('/api/tenants/'+state.tenant+'/quote-requests/'+sel.getAttribute('data-id'),{method:'PATCH',body:{status:sel.value}}); var row=reqs.find(function(r){return String(r.id)===String(sel.getAttribute('data-id'));});if(row)row.status=sel.value; }
-           catch(err){window.alert('Could not update status: '+err.message);}
+           var row=reqs.find(function(r){return String(r.id)===String(sel.getAttribute('data-id'));});
+           var body={status:sel.value};
+           if(sel.value==='booked'&&row){
+             var starting=row.booked_total_cents!=null?(Number(row.booked_total_cents)/100):(row.approved_total_cents!=null?(Number(row.approved_total_cents)/100):Number(row.estimate_total||0));
+             var entered=window.prompt('Final booked order total in USD (optional, but needed for real revenue attribution):',starting?Number(starting).toFixed(2):'');
+             if(entered!==null&&String(entered).trim()!==''){
+               var dollars=Number(String(entered).replace(/[$,]/g,''));
+               if(!Number.isFinite(dollars)||dollars<0){window.alert('Enter a valid booked total.');sel.value=row.status;sel.disabled=false;return;}
+               body.bookedTotalCents=Math.round(dollars*100);
+               body.bookedLineItems=Array.isArray(row.line_items)?row.line_items:[];
+               body.externalOrderSource=row.external_order_source||'manual-dashboard';
+             }
+           }
+           try {
+             var updated=await api('/api/tenants/'+state.tenant+'/quote-requests/'+sel.getAttribute('data-id'),{method:'PATCH',body:body});
+             if(row&&updated.quoteRequest)Object.assign(row,updated.quoteRequest);
+           }
+           catch(err){window.alert('Could not update status: '+err.message);if(row)sel.value=row.status;}
            finally{sel.disabled=false;}
+         });
+       });
+       Array.prototype.forEach.call(document.querySelectorAll('.quote-approve'),function(btn){
+         btn.addEventListener('click',async function(){
+           var row=reqs.find(function(r){return String(r.id)===String(btn.getAttribute('data-id'));});if(!row)return;
+           var starting=row.approved_total_cents!=null?(Number(row.approved_total_cents)/100):Number(row.estimate_total||0);
+           var entered=window.prompt('Approved rental total in USD. This server-approved amount controls the deposit link:',starting?Number(starting).toFixed(2):'');
+           if(entered===null)return;
+           var dollars=Number(String(entered).replace(/[$,]/g,''));
+           if(!Number.isFinite(dollars)||dollars<=0)return window.alert('Enter a valid approved quote total greater than $0.');
+           btn.disabled=true;var old=btn.textContent;btn.textContent='Approving…';
+           try{
+             var result=await api('/api/tenants/'+state.tenant+'/quote-requests/'+row.id+'/approve',{method:'POST',body:{approvedTotalCents:Math.round(dollars*100),lineItems:Array.isArray(row.line_items)?row.line_items:[]}});
+             if(result.quoteRequest)Object.assign(row,result.quoteRequest);
+             var copied=false;try{await navigator.clipboard.writeText(result.paymentUrl);copied=true;}catch(_){}
+             window.alert((result.customerEmailSent?'Approved quote emailed to the customer. ':'Quote approved. ')+(copied?'The payment link was also copied to your clipboard.':'Payment link: '+result.paymentUrl));
+             paint();
+           }catch(err){window.alert('Could not approve this quote: '+err.message);btn.disabled=false;btn.textContent=old;}
          });
        });
      }
