@@ -17,7 +17,7 @@ function loadSyncHelpers(){
   return mod.exports._test;
 }
 
-const {visualModel}=loadSyncHelpers();
+const {visualModel,nycBaseCategory,nycProduct}=loadSyncHelpers();
 
 test('Friendly sync maps supported animated equipment while excluding non-placeable add-ons',()=>{
   const cases=[
@@ -67,4 +67,27 @@ test('every equipment id emitted by Friendly sync exists in the public visual li
     const id=visualModel({name,category});
     assert.ok(id&&library.has(id),name+' -> '+id+' must be in visual library');
   }
+});
+
+
+test('NYC sync preserves NYC price and uses NYC image proxy without changing the Syracuse external-id convention',()=>{
+ const item={slug:'20x20-pole-tent',name:'20x20 Pole Tent',cost:425,category:{slug:'tent-rentals'}};
+ const p=nycProduct(item);
+ assert.equal(p.externalId,'fpr:20x20-pole-tent');
+ assert.equal(p.price,425);
+ assert.equal(p.category,'tent');
+ assert.equal(p.visualModelId,'pole-20x20');
+ assert.equal(p.photoUrl,'https://friendlypartyrentalnyc.com/api/item-image/20x20-pole-tent');
+});
+test('NYC category mapping supports inflatables, linens, concessions and packages',()=>{
+ assert.equal(nycBaseCategory({name:'Tidal Wave Water Slide',category:{slug:'bounce-house-rentals'}}),'inflatable');
+ assert.equal(nycBaseCategory({name:'120 Round Tablecloth',category:{slug:'linen-rentals'}}),'linen');
+ assert.equal(nycBaseCategory({name:'Popcorn Machine',category:{slug:'concession-machine-rentals'}}),'concession');
+ assert.equal(nycBaseCategory({name:'Graduation Package',category:{slug:'party-rental-packages'}}),'package');
+});
+test('Syracuse sync is pinned to slug friendly and NYC sync is pinned to friendly-nyc',()=>{
+ const source=fs.readFileSync(new URL('../server/src/friendlyCatalogSync.js',import.meta.url),'utf8');
+ assert.match(source,/WHERE slug='friendly' LIMIT 1/);
+ assert.match(source,/WHERE slug='friendly-nyc' LIMIT 1/);
+ assert.match(source,/https:\/\/friendlypartyrentalnyc\.com\/api\/items/);
 });
