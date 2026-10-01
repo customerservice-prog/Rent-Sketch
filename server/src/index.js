@@ -3,6 +3,7 @@ const bootstrapPlatformAdmin = require('./bootstrapPlatformAdmin');
 const syncFriendlyCatalog = require('./friendlyCatalogSync');
 const { startEmailWorker } = require('./eventPassEmail');
 const { startDesignIntelligenceWorker } = require('./designIntelligence');
+const { startStaleDraftCleanupWorker } = require('./staleDraftCleanup');
 
 const port = process.env.PORT || 4000;
 
@@ -16,6 +17,7 @@ const port = process.env.PORT || 4000;
       syncFriendlyCatalog().catch(err => console.error('[catalog-sync] failed:', err.message));
       startEmailWorker();
       startDesignIntelligenceWorker();
+      startStaleDraftCleanupWorker();
     });
   } catch (err) {
     console.error('[startup] Failed to initialize RentSketch:', err);
