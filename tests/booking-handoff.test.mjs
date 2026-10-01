@@ -16,3 +16,14 @@ test('unknown items and ballast require a quote instead of disappearing from che
  assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:[{...lines[0],qty:1.5}],products}),/quantity/);
  assert.throws(()=>buildBookingHandoff({tenant:'different-business',lines,products}),/Friendly/);
 });
+
+
+test('NYC booking handoff stays on the NYC storefront and preserves the NYC tenant identity',()=>{
+ const p=buildBookingHandoff({tenant:'friendly-nyc',lines,products,designId:'nyc-design-123',eventDate:'2027-06-01',deliveryZip:'10471'});
+ assert.equal(p.tenant,'friendly-nyc');
+ assert.equal(p.deliveryZip,'10471');
+ const url=new URL(friendlyBookingUrl(p));
+ assert.equal(url.origin,'https://friendlypartyrentalnyc.com');
+ assert.equal(url.pathname,'/design-your-event/book');
+ assert.equal(JSON.parse(new URLSearchParams(url.hash.slice(1)).get('layout')).tenant,'friendly-nyc');
+});
