@@ -79,7 +79,7 @@ function esc(s) {
        '<nav class="dash-nav" aria-label="Business workspace">' +
          '<div class="tw-nav-label">Workspace</div>' +
          navLink('overview', 'Overview', '⌂') + navLink('requests', 'Requests', '▤') + navLink('products', 'Products', '▦') + navLink('catalog-audit', 'Catalog Accuracy', '◎') +
-         navLink('branding', 'Branding & payouts', '◇') + navLink('analytics', 'Analytics', '▥') +
+         navLink('branding', 'Branding & payouts', '◇') + navLink('analytics', 'Sales Insights', '▥') +
          '<div class="tw-nav-label tw-nav-label-secondary">Account</div>' +
          navLink('billing', 'Billing', '$') + navLink('install', 'Install & share', '↗') +
          (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link"><span class="tw-nav-icon">★</span><span>Platform Console</span></a>' : '') +
@@ -292,7 +292,7 @@ function esc(s) {
        '</section>'+
        '<div class="tw-grid"><div class="tw-stack">'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Recent quote requests</h2><p>Newest customer requests and current status.</p></div><a class="tw-btn" href="#/requests">View all</a></div><div class="tw-table-scroll">'+renderRequestsTable(reqs.slice(0,7),false)+'</div></section>'+
-         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Recent activity</h2><p>Customer requests and saved-design activity.</p></div><a class="tw-btn" href="#/analytics">Analytics</a></div><div class="tw-panel-body">'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Recent activity</h2><p>Customer requests and saved-design activity.</p></div><a class="tw-btn" href="#/analytics">Sales Insights</a></div><div class="tw-panel-body">'+
            (activity.length?'<div class="tw-activity-list">'+activity.map(function(a){return '<div class="tw-activity-row"><div><strong>'+esc(a.title)+'</strong><p>'+esc(a.detail)+' · '+fmtDateTime(a.at)+'</p></div><span class="tw-status '+esc(a.status)+'">'+esc(a.type)+'</span></div>';}).join('')+'</div>':'<div class="dash-empty"><h3>No customer activity yet</h3><p>Preview your designer or share its link to start collecting layouts and requests.</p></div>')+
          '</div></section>'+
        '</div><aside class="tw-stack">'+
@@ -309,38 +309,74 @@ function esc(s) {
  }
 
  async function viewAnalytics(route,gen){
-   appEl().innerHTML=shellHtml(route,loadingHtml('Loading analytics...'));bindShellEvents();
+   appEl().innerHTML=shellHtml(route,loadingHtml('Loading sales insights...'));bindShellEvents();
    if(!state.tenant){mainEl().innerHTML='<div class="dash-empty">No tenant access.</div>';return;}
    try{
      var data=await Promise.all([
        api('/api/tenants/'+state.tenant+'/quote-requests'),
        api('/api/tenants/'+state.tenant+'/designs'),
-       api('/api/tenants/'+state.tenant+'/products')
+       api('/api/tenants/'+state.tenant+'/products'),
+       api('/api/tenants/'+state.tenant+'/design-intelligence')
      ]);
-     var reqs=data[0].quoteRequests||[],designs=data[1].designs||[],products=data[2].products||[];
+     var reqs=data[0].quoteRequests||[],designs=data[1].designs||[],products=data[2].products||[],intel=data[3]||{};
+     var sample=intel.sample||{},conversion=intel.conversion||{},friction=intel.friction||{},patterns=intel.patterns||{},recs=intel.recommendations||[];
      var now=Date.now(),monthAgo=now-30*86400000;
      var recentReq=reqs.filter(function(r){return new Date(r.created_at).getTime()>=monthAgo;});
-     var recentDesigns=designs.filter(function(d){return new Date(d.created_at).getTime()>=monthAgo;});
+     var recentDesigns=designs.filter(function(d){return new Date(d.created_at||d.updated_at).getTime()>=monthAgo;});
      var booked=reqs.filter(function(r){return r.status==='booked';}).length;
+     var requestBookedRate=reqs.length?Math.round(booked/reqs.length*100):0;
      var avg=reqs.length?reqs.reduce(function(s,r){return s+Number(r.estimate_total||0);},0)/reqs.length:0;
      var avgGuests=reqs.filter(function(r){return Number(r.guest_count)>0;});
      avgGuests=avgGuests.length?Math.round(avgGuests.reduce(function(s,r){return s+Number(r.guest_count);},0)/avgGuests.length):0;
      var types={};reqs.forEach(function(r){var k=r.event_type||'Unspecified';types[k]=(types[k]||0)+1;});
      var statuses={};reqs.forEach(function(r){statuses[r.status]=(statuses[r.status]||0)+1;});
      var maxStatus=Math.max(1,...Object.values(statuses));
+     var activeProducts=products.filter(function(p){return p.active;}).length;
+     var visualProducts=products.filter(function(p){return p.visual_model_id;}).length;
+     var topPairs=(patterns.pairs||[]).slice(0,6),topFeatures=(patterns.features||[]).slice(0,8),topKinds=(patterns.objectKinds||[]).slice(0,6);
+     var confidence=sample.confidence||'low';
+     function insightRows(rows,emptyText){
+       if(!rows||!rows.length)return emptyAnalytics(emptyText);
+       return rows.map(function(x){return '<div class="tw-insight-row"><span>'+esc(x.name)+'</span><strong>'+Number(x.count||0)+'</strong></div>';}).join('');
+     }
+     function frictionRow(label,obj,goodWhenLow){
+       obj=obj||{count:0,pct:0};var pct=Number(obj.pct||0);var cls=pct>=35?'risk':pct>=15?'watch':'good';
+       if(!goodWhenLow)cls='';
+       return '<div class="tw-friction-row"><div><strong>'+esc(label)+'</strong><span>'+Number(obj.count||0)+' learning layouts</span></div><em class="'+cls+'">'+pct+'%</em></div>';
+     }
      if(gen!==renderGeneration)return;
      mainEl().innerHTML=
-       '<div class="tw-page-head"><div><div class="tw-eyebrow">Workspace analytics</div><h1 class="dash-title">Customer planning activity</h1><p class="dash-subtitle">A practical view of demand coming through your RentSketch designer.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open RentSketch</a></div></div>'+
-       '<section class="tw-metrics">'+
-         '<article class="tw-metric"><div class="tw-metric-label">Requests · 30 days</div><div class="tw-metric-value">'+recentReq.length+'</div><div class="tw-metric-detail">'+reqs.length+' all-time requests</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Designs · 30 days</div><div class="tw-metric-value">'+recentDesigns.length+'</div><div class="tw-metric-detail">'+designs.length+' saved layouts in current history</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Request → booked</div><div class="tw-metric-value">'+(reqs.length?Math.round(booked/reqs.length*100):0)+'%</div><div class="tw-metric-detail">'+booked+' booked of '+reqs.length+' requests</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Average estimate</div><div class="tw-metric-value">'+money(avg)+'</div><div class="tw-metric-detail">'+(avgGuests?avgGuests+' average guests':'Guest count not available')+'</div></article>'+
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Owner sales intelligence</div><h1 class="dash-title">Sales Insights</h1><p class="dash-subtitle">Real customer behavior from your own RentSketch layouts and requests. No invented ROI percentages.</p></div><div class="tw-actions"><a class="tw-btn" href="#/requests">Open requests</a><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open RentSketch</a></div></div>'+
+       '<section class="tw-owner-scorecard">'+
+         '<article><span>Meaningful customer layouts</span><strong>'+Number(sample.learning||0)+'</strong><small>'+recentDesigns.length+' saved in the last 30 days</small></article>'+
+         '<article><span>Design → quote request</span><strong>'+Number(conversion.requestRate||0)+'%</strong><small>'+Number(conversion.withRequest||0)+' layouts reached a request</small></article>'+
+         '<article><span>Request → booked</span><strong>'+requestBookedRate+'%</strong><small>'+booked+' booked of '+reqs.length+' requests</small></article>'+
+         '<article><span>Average request estimate</span><strong>'+money(avg)+'</strong><small>'+(avgGuests?avgGuests+' average guests':'Guest count not available')+'</small></article>'+
        '</section>'+
-       '<div class="tw-analytics-grid">'+
+       '<div class="tw-owner-truth"><strong>What this can prove today</strong><span>RentSketch can show what customers build, what reaches a quote request, which equipment appears together, and where people rework or abandon layouts. It does not claim sales lift until your real activity supports it.</span><em>Learning confidence: '+esc(confidence)+'</em></div>'+
+       '<div class="tw-analytics-grid tw-owner-grid">'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>What customers keep putting together</h2><p>Repeated combinations can reveal package and add-on opportunities.</p></div></div><div class="tw-panel-body">'+insightRows(topPairs,'No repeated combinations yet. More real designs will strengthen this signal.')+'</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Most-used equipment signals</h2><p>What appears most often in meaningful saved layouts.</p></div></div><div class="tw-panel-body">'+insightRows(topFeatures.length?topFeatures:topKinds,'No repeated equipment pattern yet.')+'</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Where customers may be getting stuck</h2><p>Use these signals to improve defaults, templates and the designer flow.</p></div></div><div class="tw-panel-body">'+
+           frictionRow('Missing guest count',friction.missingGuest,true)+
+           frictionRow('No recognized tent / starting structure',friction.missingTent,true)+
+           frictionRow('Sparse layout · 0–1 objects',friction.sparse,true)+
+           frictionRow('5+ saved revisions',friction.highRevision,true)+
+         '</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>What RentSketch recommends next</h2><p>Generated from this business’s current design patterns.</p></div></div><div class="tw-panel-body">'+
+           (recs.length?'<div class="tw-recommend-list">'+recs.map(function(r){return '<div class="tw-recommend"><span class="tw-priority '+esc(r.priority||'medium')+'">'+esc(r.priority||'medium')+'</span><div><strong>'+esc(r.title)+'</strong><p>'+esc(r.detail)+'</p><small>'+esc(r.signal||'')+'</small></div></div>';}).join('')+'</div>':emptyAnalytics('More real customer layouts are needed before recommendations become useful.'))+
+         '</div></section>'+
+       '</div>'+
+       '<section class="tw-panel" style="margin-top:16px"><div class="tw-panel-head"><div><h2>Customer planning activity</h2><p>Demand and request status from your RentSketch customer workflow.</p></div></div><div class="tw-panel-body"><section class="tw-metrics compact">'+
+         '<article class="tw-metric"><div class="tw-metric-label">Requests · 30 days</div><div class="tw-metric-value">'+recentReq.length+'</div><div class="tw-metric-detail">'+reqs.length+' all-time requests</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Designs · 30 days</div><div class="tw-metric-value">'+recentDesigns.length+'</div><div class="tw-metric-detail">'+Number(sample.learning||0)+' meaningful layouts currently learning</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Catalog active</div><div class="tw-metric-value">'+activeProducts+'</div><div class="tw-metric-detail">'+visualProducts+' products have a visual mapping</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Learning confidence</div><div class="tw-metric-value">'+esc(confidence.toUpperCase())+'</div><div class="tw-metric-detail">'+Number(sample.ignoredSynthetic||0)+' QA/test and '+Number(sample.ignoredEmpty||0)+' empty layouts excluded</div></article>'+
+       '</section></div></section>'+
+       '<div class="tw-analytics-grid" style="margin-top:16px">'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Request pipeline</h2><p>Status distribution across customer requests.</p></div></div><div class="tw-panel-body">'+Object.keys(statuses).map(function(k){return '<div class="tw-list-row"><span>'+esc(k)+'</span><strong>'+statuses[k]+'</strong></div><div class="tw-bar"><span style="width:'+Math.round(statuses[k]/maxStatus*100)+'%"></span></div>';}).join('')+(Object.keys(statuses).length?'':emptyAnalytics('No requests yet'))+'</div></section>'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Event types</h2><p>What customers are planning.</p></div></div><div class="tw-panel-body">'+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(x){return '<div class="tw-list-row"><span>'+esc(x[0])+'</span><strong>'+x[1]+'</strong></div>';}).join('')+(Object.keys(types).length?'':emptyAnalytics('No event-type data yet'))+'</div></section>'+
-         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Catalog readiness</h2><p>How much of your equipment is customer-ready.</p></div></div><div class="tw-panel-body"><div class="tw-list-row"><span>Total products</span><strong>'+products.length+'</strong></div><div class="tw-list-row"><span>Active</span><strong>'+products.filter(function(p){return p.active;}).length+'</strong></div><div class="tw-list-row"><span>Priced</span><strong>'+products.filter(function(p){return Number(p.price_per_day)>0;}).length+'</strong></div><div class="tw-list-row"><span>Visual model assigned</span><strong>'+products.filter(function(p){return p.visual_model_id;}).length+'</strong></div></div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Catalog readiness</h2><p>How much of your equipment is customer-ready.</p></div></div><div class="tw-panel-body"><div class="tw-list-row"><span>Total products</span><strong>'+products.length+'</strong></div><div class="tw-list-row"><span>Active</span><strong>'+activeProducts+'</strong></div><div class="tw-list-row"><span>Priced</span><strong>'+products.filter(function(p){return Number(p.price_per_day)>0;}).length+'</strong></div><div class="tw-list-row"><span>Visual model assigned</span><strong>'+visualProducts+'</strong></div></div></section>'+
        '</div>';
    }catch(err){mainEl().innerHTML=errorHtml(err);}
  }
