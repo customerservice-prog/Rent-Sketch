@@ -10,7 +10,12 @@ test('shared visual mappings remain native',()=>{
 });
 
 test('exact Friendly reviewed source profiles count as native without a visual_model_id',()=>{
- for(const slug of ['hot-dog-roller-grill','chess-set','audio-guest-book','greenery-and-floral-wall-8x8','tidal-wave-inflatable-water-slide']){
+ for(const tenant of ['friendly','friendly-nyc','friendly-sc']){
+  const c=visualCoverage({active:true,external_id:'fpr:hot-dog-roller-grill',name:'Hot Dog Roller Grill'},tenant);
+  assert.equal(c.level,'source');assert.equal(c.native,true);assert.equal(c.renderable,true);
+ }
+
+ for(const slug of ['chess-set','audio-guest-book','greenery-and-floral-wall-8x8','tidal-wave-inflatable-water-slide']){
   assert.equal(FRIENDLY_SOURCE_VISUALS.has(slug),true);
   const c=visualCoverage({active:true,external_id:'fpr:'+slug,name:slug},'friendly');
   assert.equal(c.level,'source');assert.equal(c.native,true);assert.equal(c.renderable,true);
