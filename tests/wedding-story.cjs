@@ -92,11 +92,12 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   assert.equal(home.metrics().imports,0,'initial homepage must not import Three.js');
   assert.ok(home.d.querySelector('[data-story-explore]'),'homepage exposes explicit 3D handoff');
   home.intersect();
-  assert.equal(await waitFor(()=>home.d.querySelector('[data-story-count]').textContent==='18 / 18'),true,'homepage build reaches the final stage');
-  assert.equal(home.metrics().imports,0,'homepage autoplay must remain WebGL-free');
-  assert.equal(home.metrics().created,0,'homepage autoplay creates no renderer');
+  assert.equal(await waitFor(()=>home.metrics().created===1),true,'homepage autoplay starts the real 3D renderer when visible');
+  assert.equal(await waitFor(()=>home.d.querySelector('[data-story-count]').textContent==='18 / 18'),true,'homepage 3D build reaches the final stage');
+  assert.equal(home.metrics().imports,1,'homepage autoplay imports the renderer once');
+  assert.equal(home.metrics().created,1,'homepage autoplay creates one renderer');
   const plan=home.d.querySelector('.story-build-plan');
-  assert.ok(plan,'homepage creates the staged SVG wedding plan');
+  assert.ok(plan,'homepage keeps a 2D fallback/alternate wedding plan');
   assert.equal(plan.querySelectorAll('[data-story-layer="chairs"] rect').length,64,'all 64 guest chairs are represented');
   assert.equal(plan.querySelectorAll('[data-story-layer="dance"] rect').length,16,'all 16 dance-floor sections are represented');
   assert.ok(plan.querySelectorAll('[data-story-layer="sweetheart"] > *').length>=1,'sweetheart table is represented');
@@ -109,19 +110,19 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   assert.ok(plan.querySelectorAll('[data-story-layer="waterslide"] > *').length>=1,'waterslide is represented beside the wedding');
   assert.equal(home.d.querySelector('[data-story-count]').textContent,'18 / 18');
   assert.match(home.d.querySelector('[data-story-label]').textContent,/Wedding \+ waterslide ready/);
-  assert.ok(plan.classList.contains('is-finished'),'finished build keeps the complete wedding and waterslide plan visible');
+  assert.ok(plan.classList.contains('is-hidden'),'2D plan stays hidden while the real 3D autoplay is active');
 
   home.d.querySelector('[data-story-replay]').click();
   await settle(20);
-  assert.equal(home.metrics().imports,0,'Replay stays lightweight');
+  assert.equal(home.metrics().imports,1,'Replay reuses the existing 3D renderer');
   home.d.querySelector('[data-story-pause]').click();
   home.d.querySelector('[data-view="2d"]').click();
-  assert.equal(home.metrics().imports,0,'2D floor plan never imports Three.js');
+  assert.equal(home.metrics().imports,1,'2D floor plan reuses the already-loaded renderer without another import');
   assert.ok(plan.classList.contains('show-plan'));
 
   home.d.querySelector('[data-story-explore]').click();
   await settle(50);
-  assert.equal(home.metrics().imports,1,'Explore 3D imports the renderer once');
+  assert.equal(home.metrics().imports,1,'Explore freely reuses the autoplay renderer');
   assert.equal(home.metrics().created,1);
   assert.equal(home.metrics().rebuilds.length,1);
   assert.ok(home.metrics().rebuilds[0].objects.length>20,'interactive 3D uses the complete wedding scene');
@@ -148,17 +149,18 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
 
   const demo=await fixture({page:'demo/index.html'});
   demo.intersect();
-  assert.equal(await waitFor(()=>demo.d.querySelector('[data-story-count]').textContent==='18 / 18',{timeout:1100}),true,'demo build reaches the final stage');
-  assert.equal(demo.metrics().imports,0,'dedicated demo must keep Three.js off the critical path');
-  assert.equal(demo.metrics().created,0,'dedicated demo starts with the lightweight staged plan');
+  assert.equal(await waitFor(()=>demo.metrics().created===1),true,'demo autoplay starts the real 3D renderer');
+  assert.equal(await waitFor(()=>demo.d.querySelector('[data-story-count]').textContent==='18 / 18',{timeout:1100}),true,'demo 3D build reaches the final stage');
+  assert.equal(demo.metrics().imports,1,'demo imports Three.js once when visible');
+  assert.equal(demo.metrics().created,1);
   assert.equal(demo.d.querySelector('[data-story-count]').textContent,'18 / 18');
   demo.d.querySelector('[data-view="3d"]').click();
   await settle(50);
-  assert.equal(demo.metrics().imports,1,'demo imports Three.js only after an explicit 3D request');
+  assert.equal(demo.metrics().imports,1,'demo reuses the same 3D renderer');
   assert.equal(demo.metrics().created,1);
   assert.equal(demo.metrics().rebuilds.length,1);
   assert.ok(demo.metrics().cameras.includes('outside'));
   demo.dom.window.close();
 
-  console.log('PASS wedding story: complete staged wedding, zero autoplay WebGL, explicit 3D handoff, reduced-motion fallback, and on-demand interactive demo.');
+  console.log('PASS wedding story: real 3D autoplay wedding + waterslide, 2D alternate view, reduced-motion fallback, and reusable interactive renderer.');
 })().catch(err=>{console.error(err);process.exitCode=1;});
