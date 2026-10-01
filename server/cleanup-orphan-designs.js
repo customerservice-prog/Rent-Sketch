@@ -4,71 +4,46 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 (async()=>{
-  const c=await pool.connect();
   try{
-    await c.query('BEGIN');
-    const candidates=(await c.query(`
-      SELECT d.id,d.tenant_id,COALESCE(t.slug,'generic') AS tenant_slug,d.event_type,d.project_name,d.created_at,
+    const rows=(await pool.query(`
+      SELECT d.id,COALESCE(t.slug,'generic') AS tenant_slug,d.created_at,d.updated_at,
+             d.owner_user_id IS NOT NULL AS staff_owned,d.event_type,d.guest_count,d.estimate_total,d.project_name,
              d.scene->>'eventName' AS event_name,
-             d.scene->>'qaProof' AS qa_proof,
-             d.scene->>'qaSavedProof' AS qa_saved_proof
+             d.scene->>'tentId' AS tent_id,
+             d.scene->'tent'->>'id' AS tent_object_id,
+             jsonb_array_length(CASE WHEN jsonb_typeof(d.scene->'objects')='array' THEN d.scene->'objects' ELSE '[]'::jsonb END)::int AS object_count,
+             (SELECT COUNT(*)::int FROM quote_requests q WHERE q.design_id=d.id) AS quotes,
+             (SELECT COUNT(*)::int FROM entitlements e WHERE e.design_id=d.id) AS entitlements,
+             (SELECT COUNT(*)::int FROM consumer_payments p WHERE p.design_id=d.id) AS payments,
+             (SELECT COUNT(*)::int FROM design_share_links s WHERE s.design_id=d.id) AS shares,
+             (SELECT COUNT(*)::int FROM design_revisions r WHERE r.design_id=d.id) AS revisions,
+             (SELECT COUNT(*)::int FROM design_background_photos b WHERE b.design_id=d.id) AS photos,
+             (SELECT COUNT(*)::int FROM designs child WHERE child.project_root_id=d.id) AS alternatives
       FROM designs d
       LEFT JOIN tenants t ON t.id=d.tenant_id
-      WHERE (
-        lower(COALESCE(d.event_type,''))='qa'
-        OR lower(COALESCE(d.project_name,'')) ~ '(^|[^a-z0-9])(qa|test|fake|fixture|regression|claude)([^a-z0-9]|$)'
-        OR lower(COALESCE(d.scene->>'eventName','')) ~ '(^|[^a-z0-9])(qa|test|fake|fixture|regression|claude)([^a-z0-9]|$)'
-        OR d.scene ? 'qaProof'
-        OR d.scene ? 'qaSavedProof'
-        OR (
-          d.created_at <= now()-interval '2 hours'
-          AND d.owner_user_id IS NULL
-          AND COALESCE(d.project_name,'')=''
-          AND d.event_type IS NULL
-          AND d.guest_count IS NULL
-          AND d.estimate_total IS NULL
-          AND COALESCE(d.scene->>'eventName','') IN ('','My Event')
-          AND NOT (d.scene ? 'tentId')
-          AND NOT (d.scene ? 'tent')
-          AND jsonb_array_length(CASE WHEN jsonb_typeof(d.scene->'objects')='array' THEN d.scene->'objects' ELSE '[]'::jsonb END)=0
-        )
-      )
-      AND NOT EXISTS (SELECT 1 FROM quote_requests q WHERE q.design_id=d.id)
-      AND NOT EXISTS (SELECT 1 FROM entitlements e WHERE e.design_id=d.id)
-      AND NOT EXISTS (SELECT 1 FROM consumer_payments p WHERE p.design_id=d.id)
-      AND NOT EXISTS (SELECT 1 FROM design_share_links s WHERE s.design_id=d.id)
-      AND NOT EXISTS (SELECT 1 FROM design_revisions r WHERE r.design_id=d.id)
-      AND NOT EXISTS (SELECT 1 FROM design_background_photos b WHERE b.design_id=d.id)
-      AND NOT EXISTS (SELECT 1 FROM designs child WHERE child.project_root_id=d.id)
+      WHERE COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(d.scene->'objects')='array' THEN d.scene->'objects' ELSE '[]'::jsonb END),0)=0
+        AND COALESCE(d.scene->>'tentId','')=''
+        AND COALESCE(d.scene->'tent'->>'id','')=''
+        AND d.guest_count IS NULL
+        AND d.event_type IS NULL
+        AND d.estimate_total IS NULL
+        AND COALESCE(d.project_name,'')=''
+        AND d.owner_user_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM quote_requests q WHERE q.design_id=d.id)
       ORDER BY d.created_at
     `)).rows;
-
-    const ids=candidates.map(x=>x.id);
-    const deleted=ids.length?(await c.query(
-      'DELETE FROM designs WHERE id=ANY($1::uuid[]) RETURNING id',
-      [ids]
-    )).rowCount:0;
-
-    const remaining=(await c.query(`
-      SELECT COUNT(*)::int AS total,
-             COUNT(*) FILTER (
-               WHERE COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(scene->'objects')='array' THEN scene->'objects' ELSE '[]'::jsonb END),0)>0
-                  OR guest_count IS NOT NULL OR event_type IS NOT NULL OR estimate_total IS NOT NULL OR project_name<>''
-             )::int AS meaningful
-      FROM designs
-    `)).rows[0];
-
-    await c.query('COMMIT');
-    console.log('ORPHAN_DESIGN_CLEANUP '+JSON.stringify({
-      candidates:candidates.length,
-      deleted,
-      deletedByTenant:candidates.reduce((a,x)=>{a[x.tenant_slug]=(a[x.tenant_slug]||0)+1;return a;},{}),
-      remaining
-    }));
-  }catch(e){
-    try{await c.query('ROLLBACK')}catch(_){}
-    throw e;
-  }finally{
-    c.release();await pool.end();
-  }
-})().catch(e=>{console.error('ORPHAN_DESIGN_CLEANUP_ERROR',e.message);process.exit(1)});
+    const now=Date.now();
+    const summary={
+      count:rows.length,
+      older24h:rows.filter(r=>now-new Date(r.created_at).getTime()>86400000).length,
+      older7d:rows.filter(r=>now-new Date(r.created_at).getTime()>7*86400000).length,
+      withDependencies:rows.filter(r=>Number(r.entitlements)+Number(r.payments)+Number(r.shares)+Number(r.revisions)+Number(r.photos)+Number(r.alternatives)>0).length,
+      rows:rows.map(r=>({
+        id:r.id,tenant:r.tenant_slug,createdAt:r.created_at,eventName:r.event_name||'',
+        entitlements:Number(r.entitlements),payments:Number(r.payments),shares:Number(r.shares),
+        revisions:Number(r.revisions),photos:Number(r.photos),alternatives:Number(r.alternatives)
+      }))
+    };
+    console.log('ORPHAN_DESIGN_AUDIT '+JSON.stringify(summary));
+  }finally{await pool.end();}
+})().catch(e=>{console.error('ORPHAN_DESIGN_AUDIT_ERROR',e.message);process.exit(1)});
