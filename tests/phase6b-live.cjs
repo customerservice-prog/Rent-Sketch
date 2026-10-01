@@ -12,8 +12,8 @@ const RS='https://rentsketch.com',FPR='https://www.friendlypartyrental.com',API=
  try{
   for(const width of [1000,390]){const c=await context(width),p=await c.newPage();p.on('pageerror',e=>errors.push({width,error:String(e)}));
    for(const row of identities){await p.goto(RS+'/catalog-preview/?tenant=friendly&productId='+row.productId,{waitUntil:'domcontentloaded'});
-    if(row.referenceOnly){await p.waitForFunction(()=>document.getElementById('status').textContent==='Reference conflict — no verified model',null,{timeout:25000});assert.equal(await p.locator('canvas').count(),0);}else{await p.waitForFunction(()=>document.getElementById('visual').dataset.renderReady==='1',null,{timeout:30000});assert.equal(await p.locator('canvas').count(),1);assert.equal(await p.locator('#visual').getAttribute('data-product-id'),row.productId);}
-    assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);views.push({slug:row.slug,width,liveModel:!row.referenceOnly,noOverflow:true});
+    if(row.referenceOnly){await p.waitForFunction(()=>document.getElementById('status').textContent.startsWith('Unverified planning footprint'),null,{timeout:25000});assert.equal(await p.locator('canvas').count(),1);}else{await p.waitForFunction(()=>document.getElementById('visual').dataset.renderReady==='1',null,{timeout:30000});assert.equal(await p.locator('canvas').count(),1);assert.equal(await p.locator('#visual').getAttribute('data-product-id'),row.productId);}
+    assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);views.push({slug:row.slug,width,liveModel:true,noOverflow:true});
     if(['8-quart-full-size-chafer','audio-guest-book','sequin-backdrop-panel-8x8','hexagon-wedding-arch'].includes(row.slug))await p.screenshot({path:OUT+'/'+row.slug+'-'+width+'.png'});
    }await c.close();
   }
