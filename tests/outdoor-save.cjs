@@ -5,8 +5,8 @@ const root=path.resolve(__dirname,'..'),pg=new PGlite();
 const db={query:(sql,args)=>pg.query(sql,args),pool:{connect:async()=>({query:(sql,args)=>pg.query(sql,args),release(){}})}};
 function load(file,deps){const module={exports:{}};vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),{module,exports:module.exports,require:id=>{if(!(id in deps))throw Error('Unexpected dependency '+id);return deps[id];},Buffer,URL,console},{filename:file});return module.exports;}
 const authz={requireTenantAccess:(req,res,next)=>next()};
-const projects=load('server/src/designProjects.js',{crypto,'./db':db,'./dashboardHttpSession':{getDashboardToken:()=>null},'./dashboardSessions':{},'./middleware/requireAuth':authz,'./eventPassAccess':{savePermission:async()=>null,permissionDesign:async d=>d},'./auth':{}});
-const routes=load('server/src/routes/designs.js',{express,'../db':db,'../clientIp':require('../server/src/clientIp'),'../middleware/requireAuth':authz,'../designProjects':projects});
+const projects=load('server/src/designProjects.js',{'./designIntelligence':{scheduleDesignIntelligenceRefresh:()=>{}},'./integrationEvents':{emitTenantEvent:async()=>({})},crypto,'./db':db,'./dashboardHttpSession':{getDashboardToken:()=>null},'./dashboardSessions':{},'./middleware/requireAuth':authz,'./eventPassAccess':{savePermission:async()=>null,permissionDesign:async d=>d},'./auth':{}});
+const routes=load('server/src/routes/designs.js',{'../designIntelligence':{getDesignIntelligence:async()=>({sample:{learning:0},patterns:{},conversion:{},friction:{},recommendations:[]}),getTenantDesignIntelligenceHistory:async()=>({points:[],periods:{}})},express,'../db':db,'../clientIp':require('../server/src/clientIp'),'../middleware/requireAuth':authz,'../designProjects':projects});
 const app=express();app.use(express.json());app.use('/api/tenants',routes);app.use((error,req,res,next)=>res.status(error.status||500).json({error:error.message}));
 let server,base;
 async function request(url,method,body){const r=await fetch(base+url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return{status:r.status,body:await r.json()};}
