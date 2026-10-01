@@ -275,12 +275,13 @@ body{background:#fff;color:var(--ink)}
 }
 .story-build-plan [data-story-layer="linens"],
 .story-build-plan [data-story-layer="centerpieces"],
-.story-build-plan [data-story-layer="lighting"]{
+.story-build-plan [data-story-layer="lighting"],
+.story-build-plan [data-story-layer="waterslide"]{
   transition-duration:.7s;
 }
 .story-build-plan.is-finished{
-  opacity:0;
-  filter:blur(1.6px) saturate(.9);
+  opacity:1;
+  filter:none;
 }
 .story-build-plan.is-hidden{
   opacity:0;
