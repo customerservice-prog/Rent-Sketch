@@ -46,6 +46,12 @@ test('runtime-inferred Friendly furniture is counted as native and known equipme
  }
 });
 
+test('stage ramp stays illustrative, not falsely native, while remaining customer-renderable',()=>{
+ const c=visualCoverage({active:true,external_id:'fpr:stage-ramp',name:'Stage Ramp',category:'dance_floor'},'friendly');
+ assert.equal(c.level,'illustrative');assert.equal(c.native,false);assert.equal(c.renderable,true);
+ assert.equal(FRIENDLY_SOURCE_VISUALS.has('stage-ramp'),false);
+});
+
 test('configuration-only rows are not counted as customer-placeable visuals',()=>{
  const c=visualCoverage({active:true,name:'Snow Cone Syrup - Cherry',category:'concession'},'friendly');
  assert.equal(c.level,'configuration');assert.equal(c.renderable,false);
