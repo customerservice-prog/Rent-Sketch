@@ -40,8 +40,8 @@ async function requireBillingAccess(req, res, next) {
         [tenant.id, payload.userId]
       );
       if (!membership.rows[0]) return res.status(403).json({ error: 'You do not have access to this tenant' });
-      if (!['owner', 'admin'].includes(membership.rows[0].role)) {
-        return res.status(403).json({ error: 'Only a tenant owner or admin can manage billing' });
+      if (String(membership.rows[0].role||'').toLowerCase() !== 'owner') {
+        return res.status(403).json({ error: 'Only the tenant owner can manage billing' });
       }
     }
     req.tenant = tenant;
