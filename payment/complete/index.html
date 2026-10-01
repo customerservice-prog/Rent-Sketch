@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Rental Deposit | RentSketch</title>
+<link rel="icon" type="image/svg+xml" href="/assets/brand-mark.svg">
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at 80% 10%,rgba(47,111,237,.18),transparent 30%),linear-gradient(145deg,#071421,#12365f);font:15px/1.6 Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#17304e}
+.card{width:min(650px,100%);padding:9px;border-radius:25px;background:linear-gradient(145deg,#bcd1ef,#fff);box-shadow:0 30px 85px rgba(0,0,0,.3)}
+.inner{padding:42px;border-radius:19px;background:#fff;border:1px solid #dce5ef;text-align:center}
+.mark{width:56px;height:56px;margin:0 auto 18px;display:grid;place-items:center;border-radius:17px;background:#edf4ff;color:#2f6fed;font-size:25px;font-weight:900}
+h1{margin:0 0 13px;font-size:clamp(34px,6vw,52px);line-height:1;letter-spacing:-.055em;color:#11243e}
+p{margin:0 auto;color:#68788c;max-width:510px}.actions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+a{display:inline-flex;padding:11px 15px;border-radius:10px;text-decoration:none;font-weight:800;font-size:12px;border:1px solid #d4deea;color:#31506f;background:#fff}
+a.primary{background:#2f6fed;color:#fff;border-color:#2f6fed}.note{margin-top:20px;font-size:10px;color:#8997a8}
+</style></head><body><main class="card"><div class="inner"><div class="mark" id="mark">✓</div><h1 id="title">Payment received.</h1><p id="copy">Your payment is being confirmed. The rental company remains responsible for the final rental order, delivery, installation, and any remaining balance.</p><div class="actions"><a class="primary" href="/" id="home">Return to RentSketch</a><a href="/my-event/">Open a saved event</a></div><p class="note">RentSketch does not treat a layout estimate as charge authority. Deposit checkout is created only from a rental-company-approved quote.</p></div></main>
+<script>
+(function(){var q=new URLSearchParams(location.search),status=q.get('status'),title=document.getElementById('title'),copy=document.getElementById('copy'),mark=document.getElementById('mark');
+if(status==='cancel'){mark.textContent='×';title.textContent='Payment was not completed.';copy.textContent='No successful deposit was recorded from this checkout. You can use the approved payment link again while it remains valid, or contact the rental company for help.';}
+else if(status==='paid'){title.textContent='This deposit is already paid.';copy.textContent='RentSketch already has a successful payment recorded for this approved quote. Contact the rental company if you have questions about the order or remaining balance.';}
+else{title.textContent='Deposit submitted.';copy.textContent='Stripe returned your payment successfully. RentSketch will confirm the signed payment webhook before the request is marked paid/booked. The rental company will handle the final rental order and remaining details.';}
+})();
+</script></body></html>
