@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {structuralProfile} from '../data/tentStructure.js';
+import {structuralProfile,computeCenterPoles} from '../data/tentStructure.js';
 import {phase5Reference} from '../data/phase5-reference.js';
 import {shapes,material,mergeStatic} from './phase5-shapes3d.js';
 export function lightingReference(option={}){return option.reference||phase5Reference(option);}
@@ -51,18 +51,36 @@ export function createStringFixture(type='c7',m=lampMaterials()){
 export function makeReferenceLighting(tent,option){
  const group=new THREE.Group();if(!option||option.visual==='none'||option.available===false)return group;
  const ref=lightingReference(option),type=ref?.type||(option.visual==='chandelier'?'chandelier':option.visual?.startsWith('uplight')?'uplight':option.visual==='bistro-cross-runs'?'bistro':'c7');
- const profile=structuralProfile(tent.type||'frame',tent.widthFt,tent.lengthFt),m=lampMaterials(),s=shapes(group),h=profile.eaveHeightFt-.35,hw=tent.widthFt/2,hl=tent.lengthFt/2;
+ const profile=structuralProfile(tent.type||'frame',tent.widthFt,tent.lengthFt),m=lampMaterials(),s=shapes(group),eaveMountHeight=profile.eaveHeightFt-.35,hw=tent.widthFt/2,hl=tent.lengthFt/2;
  group.name=option.name||'Event lighting';group.userData.reference=ref;group.userData.installationVerified=false;
  const lights=[];
  if(type==='chandelier'){
-  const q=createChandelier(m),x=tent.type==='pole'?2.4:0;q.position.set(x,h-2.25,0);group.add(q);s.rod([x,h+.30,0],[x,profile.peakHeightFt-.4,0],.018,m.silver);group.userData.fixtureCount=1;
+  const q=createChandelier(m),x=tent.type==='pole'?2.4:0;q.position.set(x,eaveMountHeight-2.25,0);group.add(q);s.rod([x,eaveMountHeight+.30,0],[x,profile.peakHeightFt-.4,0],.018,m.silver);group.userData.fixtureCount=1;
  }else if(type==='uplight'){
   const count=ref?.fixtureCount||(option.visual==='uplight-single'?1:12);group.userData.fixtureCount=count;group.userData.lensesPerFixture=6;
   for(let i=0;i<count;i++){const a=i/count*Math.PI*2,x=Math.sin(a)*Math.max(.5,hw-.6),z=Math.cos(a)*Math.max(.5,hl-.6),q=createUplight(m);q.position.set(x,0,z);q.rotation.y=a;group.add(q);if(count<=6||i%2===0){const glow=new THREE.PointLight('#7662ff',0,10,1.5);glow.position.set(x,1.3,z);lights.push(glow);}}
  }else{
   const lines=type==='bistro'?profile.lighting.bistro:profile.lighting.perimeter;group.userData.fixtureType=type;let routeLength=0,bulbs=0;
-  for(const line of lines){const a=new THREE.Vector3(line.from.x-hw,h,line.from.y-hl),b=new THREE.Vector3(line.to.x-hw,h,line.to.y-hl),length=a.distanceTo(b),points=[];routeLength+=length;
-   const point=f=>{const p=a.clone().lerp(b,f);p.y-=Math.sin(f*Math.PI)*(type==='rope'?.06:type==='bistro'?.45:.08);return p;};
+  const centerPoles=type==='bistro'?(Array.isArray(tent.centerPoles)&&tent.centerPoles.length?tent.centerPoles:computeCenterPoles(tent.type||'frame',tent.widthFt,tent.lengthFt)):[];
+  const bistroEdgeInset=Math.min(1.1,Math.max(.75,tent.widthFt*.035));
+  const bistroMountHeight=profile.eaveHeightFt-.30;
+  const poleClearance=1.35;
+  for(const sourceLine of lines){
+   const line={from:{...sourceLine.from},to:{...sourceLine.to}};
+   if(type==='bistro'&&Math.abs(line.from.y-line.to.y)<.001&&centerPoles.length){
+    let runY=(line.from.y+line.to.y)/2;
+    for(const pole of centerPoles){
+     if(Math.abs(Number(pole.y)-runY)>=poleClearance)continue;
+     const before=runY-poleClearance>=1.5,after=runY+poleClearance<=tent.lengthFt-1.5;
+     runY=after&&(!before||Number(pole.y)<=tent.lengthFt/2)?runY+poleClearance:runY-poleClearance;
+    }
+    line.from.y=line.to.y=runY;
+   }
+   const mountHeight=type==='bistro'?bistroMountHeight:eaveMountHeight;
+   const a=new THREE.Vector3(line.from.x-hw,mountHeight,line.from.y-hl),b=new THREE.Vector3(line.to.x-hw,mountHeight,line.to.y-hl),axis=b.clone().sub(a),span=axis.length(),points=[];
+   if(type==='bistro'&&span>bistroEdgeInset*2+.5){const dir=axis.clone().normalize();a.addScaledVector(dir,bistroEdgeInset);b.addScaledVector(dir,-bistroEdgeInset);}
+   const length=a.distanceTo(b);routeLength+=length;
+   const point=f=>{const p=a.clone().lerp(b,f);p.y-=Math.sin(f*Math.PI)*(type==='rope'?.06:type==='bistro'?.24:.08);return p;};
    for(let i=0;i<=24;i++)points.push(point(i/24).toArray());s.curve(points,type==='rope'?.018:.009,type==='bistro'?m.dark:m.white);
    if(type==='rope'){
     // LED rope has integral diodes, not hanging bulbs. Bounded density avoids huge scenes.
@@ -71,12 +89,12 @@ export function makeReferenceLighting(tent,option){
     const count=Math.max(1,Math.ceil(length/(type==='c7'?1:2.5)));for(let i=0;i<count;i++){const q=createStringFixture(type,m);q.position.copy(point((i+.5)/count));group.add(q);}bulbs+=count;
    }
   }
-  group.userData.lightSources=bulbs;group.userData.routeLengthFt=routeLength;group.userData.fullRunInstalled=type==='rope'?false:null;
+  group.userData.lightSources=bulbs;group.userData.routeLengthFt=routeLength;group.userData.fullRunInstalled=type==='rope'?false:null;if(type==='bistro'){group.userData.edgeInsetFt=bistroEdgeInset;group.userData.mountHeightFt=bistroMountHeight;group.userData.valanceBottomFt=profile.eaveHeightFt-profile.valanceDropFt;group.userData.centerPoleClearanceFt=poleClearance;}
  }
  mergeStatic(group);
  if(type!=='uplight'){
   const count=type==='chandelier'?1:Math.min(6,Math.max(2,Math.ceil(tent.lengthFt/12)));
-  for(let i=0;i<count;i++){const light=new THREE.PointLight('#ffe2b5',0,Math.max(18,tent.widthFt),1.5);light.position.set(type==='chandelier'&&tent.type==='pole'?2.4:(i%2?.45:-.45)*hw,h-1.2,type==='chandelier'?0:((i+.5)/count-.5)*tent.lengthFt*.8);lights.push(light);}
+  for(let i=0;i<count;i++){const light=new THREE.PointLight('#ffe2b5',0,Math.max(18,tent.widthFt),1.5);light.position.set(type==='chandelier'&&tent.type==='pole'?2.4:(i%2?.45:-.45)*hw,(type==='bistro'?bistroMountHeight:eaveMountHeight)-1.2,type==='chandelier'?0:((i+.5)/count-.5)*tent.lengthFt*.8);lights.push(light);}
  }
  lights.forEach(l=>group.add(l));group.userData.setNight=night=>{m.warm.emissiveIntensity=night?3.5:.6;m.led.emissiveIntensity=night?2.5:.7;lights.forEach(l=>{l.intensity=night?(type==='uplight'?28:65):0;});};group.userData.setNight(false);
  return group;
