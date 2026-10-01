@@ -4,7 +4,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   var slug = params.get('tenant') || 'generic';
-  if (!['friendly', 'generic'].includes(slug)) return;
+  if (!['friendly', 'friendly-nyc', 'generic'].includes(slug)) return;
   var fragment = new URLSearchParams(location.hash.slice(1));
   var checkoutId = params.get('checkout_session_id') || fragment.get('eventPass');
   var draftToken = fragment.get('draft');
