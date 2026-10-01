@@ -2,6 +2,7 @@ const express = require('express');
 const { query, pool } = require('../db');
 const { fulfillEventPass, PASS_KINDS } = require('../eventPass');
 const { syncOrderEntitlement } = require('../orderProviders/quoteRequestOrderProvider');
+const { scheduleDesignIntelligenceRefresh } = require('../designIntelligence');
 
 const router = express.Router();
 
@@ -144,6 +145,7 @@ router.post('/', async (req, res) => {
         await syncOrderEntitlement(updated, tenant, (sql, args) => client.query(sql, args));
       }
       await client.query('COMMIT');
+      if (marker.rows.length && !alreadyPaid) scheduleDesignIntelligenceRefresh();
       return res.json({ received: true, ...(!marker.rows.length || alreadyPaid ? { duplicate: true } : {}) });
     } catch (err) {
       if (client) await client.query('ROLLBACK');
